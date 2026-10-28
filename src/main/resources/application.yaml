@@ -1,3 +1,6 @@
 spring:
   application:
     name: autedi
+  jpa:
+    hibernate:
+      ddl-auto: update
