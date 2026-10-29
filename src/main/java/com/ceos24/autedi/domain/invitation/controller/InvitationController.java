@@ -4,6 +4,7 @@ import com.ceos24.autedi.domain.invitation.dto.request.InvitationCreateRequest;
 import com.ceos24.autedi.domain.invitation.dto.response.InvitationResponse;
 import com.ceos24.autedi.domain.invitation.dto.response.InvitationValidateResponse;
 import com.ceos24.autedi.domain.invitation.service.InvitationService;
+import com.ceos24.autedi.global.response.ApiResponse;
 import com.ceos24.autedi.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,19 +28,20 @@ public class InvitationController {
 
     @PreAuthorize("hasRole('DIRECTOR')")
     @PostMapping
-    public ResponseEntity<InvitationResponse> createInvitation(
+    public ResponseEntity<ApiResponse<InvitationResponse>> createInvitation(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @RequestBody InvitationCreateRequest request
     ) {
         InvitationResponse response = invitationService.createInvitation(principal.userId(), request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.onSuccess("초대장이 발송되었습니다.", response));
     }
 
     @GetMapping("/validate")
-    public ResponseEntity<InvitationValidateResponse> validateInvitation(
+    public ResponseEntity<ApiResponse<InvitationValidateResponse>> validateInvitation(
             @RequestParam("token") String token
     ) {
         InvitationValidateResponse response = invitationService.validateInvitation(token);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
 }

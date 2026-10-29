@@ -33,6 +33,27 @@
    - 5.2 단방향 ManyToOne(fetch = LAZY) 원칙
    - 5.3 Hibernate 6 네이티브 JSON 매핑 (`@JdbcTypeCode(SqlTypes.JSON)`)
 6. [의사결정 매트릭스 및 향후 구현 가이드](#6-의사결정-매트릭스-및-향후-구현-가이드)
+7. [공통 응답 규격(ApiResponse) 및 학습지 도메인 엔티티 모델링](#7-공통-응답-규격apiresponse-및-학습지-도메인-엔티티-모델링)
+   - 7.1 표준 공통 응답 규격 (`ApiResponse<T>`)
+   - 7.2 학습지 도메인 6종 엔티티 매핑 원칙
+8. [학습지 도메인(F02/F03/F04) 아키텍처 및 라이프사이클 의사결정](#8-학습지-도메인f02f03f04-아키텍처-및-라이프사이클-의사결정)
+   - 8.1 학원(Academy) 단위 멀티 테넌트 데이터 격리 및 구독 검증
+   - 8.2 학습지 상태 머신 (Worksheet State Machine) 및 DRAFT/FAILED 제약 원칙
+   - 8.3 ETag 및 낙관적 락(@Version)을 활용한 동시성 제어 및 조건부 갱신(If-Match)
+   - 8.4 파일 스토리지 추상화 및 SHA-256 해시/메타데이터 산출
+   - 8.5 파일 교체(Replace) 시 OCR 캐시 무효화 및 설정(Settings) 보존 정책
+   - 8.6 첨삭 설정(F03) 전체 교체(PUT) 및 중복 영역 검증 정책
+   - 8.7 AI 첨삭 생성(F04) 멱등성 보장 및 재시도(Retry) 정합성 제약
+   - 8.8 비동기 AI 파이프라인 및 이전 첨삭 소프트 딜리트 정책
+   - 8.9 RESTful HTTP 응답 규격 (201, 202, 200, 412)
+9. [검토 및 코멘트 도메인(F05/F06) 아키텍처 의사결정](#9-검토-및-코멘트-도메인f05f06-아키텍처-의사결정)
+   - 9.1 검토 화면 통합 조회(Review Aggregation) 및 네트워크 워터폴 제거
+   - 9.2 AI 첨삭 원본 불변성(Immutability) 및 교사 수정(is_edited) 추적
+   - 9.3 첨삭 소프트 딜리트(Logical Deletion) 및 편집 보존 복원(Restore) 메커니즘
+   - 9.4 삭제된 첨삭(DELETED)에 대한 수정 차단(409 Conflict) 정책
+   - 9.5 교사 코멘트 영역-페이지 일치성 검증 및 불변 영역 정책
+   - 9.6 코멘트 소프트 딜리트(deleted_at) 및 삭제 자원 404 은닉
+   - 9.7 단위 자원별 ETag(`cor_`, `com_`) 및 If-Match 동시성 제어
 
 ---
 
@@ -337,6 +358,198 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 | **JPA 베이스** | BaseCreatedTimeEntity vs BaseTimeEntity 2단계 분리 | `global.entity.*` | 불변/감사 테이블의 불필요한 `updated_at` 방지 |
 | **JPA 연관관계** | 단방향 ManyToOne(fetch = LAZY) 엄격 적용 | 도메인 엔티티 전반 | 순환 참조 제거, N+1 쿼리 방지 |
 | **JSON 매핑** | Hibernate 6 표준 `@JdbcTypeCode(SqlTypes.JSON)` | `corrections.regions` 등 JSON 컬럼 | 외부 라이브러리 없이 타입 세이프한 JSON 영속화 |
+| **F02 테넌시 보안** | `findByIdAndAcademyId`를 통한 타 학원 학습지 접근 차단 | `WorksheetRepository.java`, `WorksheetService.java` | 타 학원 자원 404 은닉 및 스캐닝 방지 |
+| **F02/F03 상태 제약** | `DRAFT` 또는 `FAILED` 상태에서만 파일 교체 및 설정 수정 허용 | `Worksheet.canModifyOrReplace()`, `WorksheetService.java` | 진행 중(`PROCESSING`) 및 완료(`READY`) 과제 변조 409 차단 |
+| **동시성 제어** | ETag (`ws_`, `settings_`) & `If-Match` 조건부 요청 검증 | `WorksheetController.java`, `WorksheetService.java` | 다중 교사 동시 편집 충돌 방어 (412) |
+| **OCR 무결성** | 파일 교체 시 기존 페이지 OCR 캐시(`ocrResult`, `ocrFileHash`) 무효화 | `WorksheetService.replaceWorksheetFile` | 신규 이미지에 과거 OCR 텍스트 매핑 오염 방지 |
+| **설정 보존/편의성** | 파일 교체 시 기존 첨삭 영역/수준 설정(`WorksheetSetting`) 영속 유지 | `WorksheetService.replaceWorksheetFile` | 파일 재업로드 시 교사의 재설정 UX 번거로움 해소 |
+| **F03 설정 교체** | 단건 추가/삭제 대신 전체 교체(Full Replacement) 및 중복 영역 방지 | `WorksheetService.updateSettings` | 설정 원자성 보장 및 1~4개 영역 중복 등록 방어 |
+| **F04 생성 멱등성** | `Idempotency-Key` 헤더 기반 중복 접수 방어 및 캐시 응답 | `WorksheetGenerationService.requestGeneration` | 네트워크 재시도 시 중복 AI 호출 과금 및 중복 작업 방어 |
+| **F04 재시도 검증** | 대상 작업 `FAILED` 및 원본 파일 해시 일치 시에만 재시도 승인 | `WorksheetGenerationService.retryGeneration` | 변경된 파일에 대한 잘못된 재시도 409 차단 및 실패 작업만 복구 |
+| **F04 결과 불변성** | 신규 생성 시 이전 ACTIVE 첨삭 소프트 딜리트 및 새 첨삭 일괄 저장 | `WorksheetGenerationService.executeAiCorrection` | 재생성 시 기존 첨삭과 혼선 방지 및 이력 보존 |
+| **F05 검토 집계** | `GET /review`를 통한 학습지+생성+첨삭+코멘트 단일 왕복 통합 반환 | `CorrectionService.getReview` | 프론트엔드 네트워크 워터폴 제거 및 초기 렌더링 가속 |
+| **F05 첨삭 불변성** | 교사 수정 시 원본 및 AI 초안 보존, `content`와 `is_edited`만 갱신 | `Correction.editContent` | AI 분석 원본 데이터 추적성 확보 및 수정 경고 표시 |
+| **F05 첨삭 소프트 딜리트** | 물리 삭제 대신 `status='DELETED'` 적용 및 원본 편집 보존 복원 지원 | `Correction.delete`, `restore` | 교사의 조작 실수 방어 및 이전 수정 내용 완전 복구 |
+| **F05 삭제 수정 차단** | `DELETED` 상태 첨삭에 대한 `PATCH` 요청 409 Conflict 차단 | `CorrectionService.updateCorrection` | 삭제된 자원에 대한 비정상 상태 전이 방어 |
+| **F06 코멘트 불변 영역** | 생성 시 `pageId`, `regions` 고정, 수정 시 오직 `content`만 변경 | `CommentService.updateComment` | 프론트엔드 캔버스 자동 배치 레이아웃 일관성 유지 |
+| **F06 코멘트 일관성** | 코멘트 내부 모든 `regions.pageId`와 요청 `pageId` 일치 강제 | `CommentService.createComment` | 페이지 간 교차 좌표 참조 오염 400 차단 |
+| **F05/F06 동시성 제어** | 자원별 ETag(`cor_`, `com_`) 및 `If-Match` 헤더를 통한 낙관적 락 | `CorrectionService`, `CommentService` | 다중 교사 동시 검토 및 코멘트 덮어쓰기 방지 (412) |
 
 ---
 *본 문서는 AUTEDI 백엔드 개발 팀의 공식 아키텍처 의사결정 기록(ADR)이며, 변경 사항 발생 시 PR을 통한 리뷰 후 갱신됩니다.*
+
+
+---
+
+## 7. 공통 응답 규격(ApiResponse) 및 학습지 도메인 엔티티 모델링
+
+### 7.1 표준 공통 응답 규격 (`ApiResponse<T>`)
+- 프론트엔드 연동 일관성을 위해 모든 API 응답을 `ApiResponse<T>` 봉투(Envelope)로 래핑한다:
+  ```json
+  {
+    "isSuccess": true,
+    "code": "COMMON_200",
+    "message": "성공입니다.",
+    "result": { ... },
+    "error": null
+  }
+  ```
+- **실패 응답**: `GlobalExceptionHandler`, `CustomAuthenticationEntryPoint`(401), `CustomAccessDeniedHandler`(403)에서 `ApiResponse.onFailure(errorCode, errorDetails)` 형태로 단일화.
+- **인터페이스 분리**: `BaseErrorCode` 인터페이스를 정의하여 `ErrorCode` enum이 이를 구현하게 함으로써 에러 코드 확장성 보장.
+
+### 7.2 학습지 도메인 6종 엔티티 매핑 원칙
+- **`Worksheet`**: 학습지 마스터 테이블 (`BaseTimeEntity` 상속, 낙관적 락 `@Version` 적용, `status`가 `DRAFT`/`FAILED`일 때만 파일 교체 및 설정 수정 허용)
+- **`WorksheetPage`**: 페이지별 메타데이터 (`BaseCreatedTimeEntity` 상속 - `updated_at` 없음, `ocr_result` JSON 컬럼 nullable, `ocr_file_hash`를 통한 캐시 재사용 키 관리)
+- **`WorksheetSetting`**: 영역(4종) x 수준(2종) 첨삭 기준 (`UK(worksheet_id, area)`)
+- **`WorksheetGeneration`**: 비동기 AI 생성 요청 단위 (`idempotency_key` 중복 요청 방어, `request_settings_snapshot` JSON 스냅샷 보존)
+- **`Correction`**: AI 첨삭 항목 카드 (`regions` 좌표 JSON 매핑, `is_edited` 교사 편집 플래그, `status='DELETED'` 소프트 딜리트)
+- **`Comment`**: 교사 코멘트 및 강조 영역 (`highlight_type`, `regions` JSON 매핑, 공백 내용 저장 차단, `deleted_at` 소프트 딜리트)
+- **영속성 원칙**: 모든 엔티티 연관관계는 단방향 `@ManyToOne(fetch = FetchType.LAZY)`으로 구축하여 불필요한 N+1 쿼리와 순환 참조를 차단.
+
+---
+
+## 8. 학습지 도메인(F02/F03/F04) 아키텍처 및 라이프사이클 의사결정
+
+### 8.1 학원(Academy) 단위 멀티 테넌트 데이터 격리 및 구독 검증
+- **조회 격리 (`findByIdAndAcademyId`)**:
+  - 학습지 마스터 엔티티(`Worksheet`) 및 연관 자식 엔티티는 반드시 Security Context의 `academyId`를 조건절에 포함하여 조회한다.
+  - 타 학원의 `worksheetId`로 접근 시 403 Forbidden 대신 `404 Not Found` (`WORKSHEET_001`)를 응답함으로써 타 테넌트의 자원 식별자 존재 유무조차 노출하지 않는 정보 은닉(Defense in Depth) 원칙을 준수한다.
+- **신규 쓰기 시 유료 구독 검증**:
+  - `POST /api/v1/worksheets` 업로드 시점에 소속 학원의 `academy.isActive()`를 검증하여 미납/만료 학원의 신규 과제 등록을 `403 Forbidden` (`ACADEMY_002`)으로 차단한다.
+  - 반면 단순 상세 조회(`GET`)는 구독 만료 상태에서도 학생 피드백 확인 및 인쇄 등 최소한의 업무 연속성을 위해 허용한다.
+
+### 8.2 학습지 상태 머신 (Worksheet State Machine) 및 DRAFT/FAILED 제약 원칙
+- **상태 정의 (4종)**:
+  - `DRAFT`: 최초 파일 업로드 완료 상태. 첨삭 설정 선택 및 파일 교체가 자유롭게 가능.
+  - `PROCESSING`: AI 비동기 파이프라인(OCR/Vision LLM) 실행 중. 데이터 변조 방지를 위해 전체 수정 차단.
+  - `READY`: AI 첨삭 생성 완료 상태. 교사의 첨삭 검토 및 코멘트 작업 수행 가능.
+  - `FAILED`: AI 파이프라인 처리 실패 상태. 오류 복구를 위한 파일 교체, 설정 수정, 작업 재시도 가능.
+- **수정/교체 가능 제약 (`canModifyOrReplace`)**:
+  ```java
+  public boolean canModifyOrReplace() {
+      return this.status == WorksheetStatus.DRAFT || this.status == WorksheetStatus.FAILED;
+  }
+  ```
+- **정책적 이유**:
+  - 이미 AI 분석이 진행 중이거나(`PROCESSING`), 완료되어 첨삭 카드가 생성된(`READY`) 상태에서 원본 이미지가 교체되거나 첨삭 기준이 변경되면, 기존에 도출된 AI 첨삭 데이터(`corrections`) 및 교사 코멘트(`comments`)와의 정합성이 완전히 붕괴된다.
+  - 따라서 이미 완료된 과제물을 수정해야 하는 경우, 기존 과제 변조를 차단하고 신규 학습지로 등록(`POST`)하도록 강제한다.
+  - `PROCESSING` 또는 `READY` 상태에서 파일 교체 또는 설정 변경 시도시 `409 Conflict` (`WORKSHEET_002`)를 발생시킨다.
+
+### 8.3 ETag 및 낙관적 락(@Version)을 활용한 동시성 제어 및 조건부 갱신(If-Match)
+- **자원별 ETag 네이밍 규약**:
+  - 학습지 마스터 ETag: `"\"ws_{worksheetId}-v{version}\""`
+  - 첨삭 설정 ETag: `"\"settings_{worksheetId}-v{version}\""`
+- **동시 편집 충돌 방지 (Lost Update Defense)**:
+  - 교사 A와 교사 B가 동일한 학습지를 동시에 열어두고 파일을 교체하거나 첨삭 설정을 수정할 때, 나중에 전송된 요청이 이전 교사의 변경 사항을 무단 덮어쓰는 것을 방지한다.
+  - `PUT /worksheets/{id}/file` 및 `PUT /worksheets/{id}/settings` 엔드포인트는 `If-Match` 요청 헤더를 수신하여 현재 서버의 엔티티 버전과 일치하지 않으면 `412 Precondition Failed` (`COMMON_412`)로 중단한다 (`*` 와일드카드 지원).
+- **JPA 낙관적 락 연동**:
+  - `Worksheet` 엔티티의 `@Version private Integer version;` 필드를 기반으로 트랜잭션 커밋 시점에 버전을 원자적으로 증가시키며 새 ETag를 발급한다.
+
+### 8.4 파일 스토리지 추상화 및 SHA-256 해시/메타데이터 산출
+- **스토리지 인터페이스 추상화 (`FileStorageService`)**:
+  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하고, 현재는 로컬 스토리지 구현체(`LocalStorageService`)를 사용하되 추후 AWS S3 등으로 무중단 전환이 가능하도록 설계했다.
+- **SHA-256 파일 해시 (`fileHash`)**:
+  - 파일 업로드 및 교체 시 원본 파일의 바이트 스트림으로부터 SHA-256 Hex 해시를 계산하여 영속화한다.
+  - 이는 향후 동일 파일 재업로드 감지 및 OCR 결과 캐싱(`ocr_file_hash`)의 키 값으로 활용된다.
+- **이미지 캔버스 해상도 영속화 (`width`, `height`)**:
+  - 업로드 즉시 이미지의 가로/세로 픽셀 크기를 추출하여 `WorksheetPage`에 저장한다.
+  - 이는 Gemini Vision 등 AI 모델이 반환하는 정규화 좌표(0~1000)를 프론트엔드 오버레이 픽셀로 변환할 때 필수적인 기준 캔버스 규격이 된다. (PDF의 경우 기본 1000 x 1400 할당)
+
+### 8.5 파일 교체(Replace) 시 OCR 캐시 무효화 및 설정(Settings) 보존 정책
+- **OCR 캐시 완전 무효화**:
+  - `PUT /worksheets/{id}/file` 성공 시 기존 첫 번째 페이지의 `previewImageUrl`, `width`, `height`를 갱신함과 동시에 `page.updateOcrResult(null, null)`을 호출하여 OCR 분석 결과와 해시를 즉시 제거한다.
+  - 이유: 새 파일이 등록되었음에도 과거 이미지의 OCR 단어 좌표가 남아있으면, 이후 생성될 AI 첨삭이 엉뚱한 위치에 바인딩되는 심각한 오류가 발생하기 때문이다.
+- **상태 DRAFT 리셋**:
+  - 이전에 생성 실패(`FAILED`) 상태였던 학습지라도 파일 교체가 완료되면 즉시 `DRAFT` 상태로 회귀하여 새로운 생명주기를 시작한다.
+- **첨삭 설정(Settings) 보존**:
+  - 과제물 재촬영으로 인해 이미지를 교체하더라도, 교사가 미리 공들여 설정해 둔 첨삭 영역(문법, 어휘 등)과 수준(Standard, Advanced)은 삭제하지 않고 보존함으로써 재입력의 피로도를 제거한다.
+
+### 8.6 첨삭 설정(F03) 전체 교체(PUT) 및 중복 영역 검증 정책
+- **전체 교체 (Full Replacement) 전략**:
+  - 첨삭 설정은 개별 영역을 부분 수정(PATCH)하는 복잡성 대신, 선택된 1~4개의 영역 목록 전체를 한 번에 교체(`deleteAllByWorksheetId` -> `saveAll`)하는 PUT 방식을 채택했다.
+- **검증 규칙**:
+  - 최소 1개 이상 (`@NotEmpty`), 최대 4개 이하 (`@Size(max = 4)`).
+  - 중복된 `CorrectionArea` 지정 차단 (스트림 `distinct().count()` 검증 실패 시 `400 Bad Request` 반환).
+- **영역 및 수준 Enum**:
+  - `area`: `GRAMMAR_SPELLING`, `VOCABULARY_EXPRESSION`, `SENTENCE_STRUCTURE`, `CONTENT_SUMMARY`
+  - `level`: `STANDARD` (오류 수정 및 기본 가이드), `ADVANCED` (심화 문장 재구성 및 어휘 확장)
+
+### 8.7 AI 첨삭 생성(F04) 멱등성 보장 및 재시도(Retry) 정합성 제약
+- **멱등성 보장 (`Idempotency-Key`)**:
+  - 네트워크 단절이나 클라이언트의 다중 클릭으로 인한 중복 AI 호출을 방지하기 위해 `Idempotency-Key` 헤더를 지원한다.
+  - 동일한 키로 요청이 인입될 경우 기존에 생성된 `WorksheetGeneration` 엔티티를 조회하여 중복 생성 없이 즉시 반환한다.
+- **재시도(Retry) 정합성 검증**:
+  - `POST /api/v1/worksheets/{worksheetId}/generations/{generationId}/retry`는 오직 상태가 `FAILED`인 작업에 대해서만 허용된다 (`CANNOT_RETRY_GENERATION` 409).
+  - 또한, 실패 당시의 원본 파일 해시(`target.getRequestFileHash()`)와 현재 학습지의 `fileHash`가 일치하는지 엄격히 검증하여, 파일이 바뀐 상태에서의 잘못된 재시도를 차단한다 (파일이 바뀐 경우 신규 생성을 요청해야 함).
+  - 재시도 생성 시 `retryCount`가 1 증가하며, 부모 작업 식별자(`retryOfGenerationId`)를 기록하여 추적성을 확보한다.
+
+### 8.8 비동기 AI 파이프라인 및 이전 첨삭 소프트 딜리트 정책
+- **이전 첨삭 항목 정리**:
+  - 재시도나 재분석 시 기존에 활성 상태(`ACTIVE`)였던 `Correction` 항목들은 즉시 물리 삭제하지 않고 `delete()`를 호출하여 `status='DELETED'`로 소프트 딜리트 처리한다.
+  - 이후 새롭게 도출된 AI 첨삭 카드 리스트를 일괄 영속화(`saveAll`)함으로써 교사의 이전 검토 이력 보존과 데이터 충돌을 동시에 해결한다.
+
+### 8.9 RESTful HTTP 응답 규격 (201, 202, 200, 412)
+- `POST /api/v1/worksheets`: 리소스 생성 완료로 `201 Created` 및 `Location: /api/v1/worksheets/{id}`, `ETag` 반환.
+- `POST /api/v1/worksheets/{id}/generations`: 비동기 생성 접수로 `202 Accepted` 및 `Location: /api/v1/worksheets/{id}/generations/{id}` 반환.
+- `PUT /api/v1/worksheets/{id}/file` & `PUT /settings`: 자원 갱신 완료로 `200 OK` 및 새 `ETag` 반환.
+- 동시성 충돌 발생 시: `412 Precondition Failed` (`COMMON_412`) 표준 준수.
+
+---
+
+## 9. 검토 및 코멘트 도메인(F05/F06) 아키텍처 의사결정
+
+### 9.1 검토 화면 통합 조회(Review Aggregation) 및 네트워크 워터폴 제거
+- **배경**: AI 첨삭 검토 화면 진입 시 학습지 기본 정보, 페이지별 해상도, 최신 생성 작업 상태, AI 첨삭 목록, 교사 코멘트 목록을 각각 별도 API로 호출하면 4~5회의 HTTP 요청이 발생하여 화면 깜빡임과 렌더링 지연이 초래된다.
+- **결정**: `GET /api/v1/worksheets/{worksheetId}/review` 통합 엔드포인트를 제공하여 단 1회의 왕복(Single Round-trip)으로 검토 화면에 필요한 모든 핵심 데이터를 집계(`ReviewResponse`)하여 반환한다.
+- **필수 상태 제약**:
+  - 검토 화면은 AI 분석이 성공적으로 종료된 시점에만 진입해야 하므로, 학습지 상태가 `READY`인지 엄격히 검증한다. `DRAFT`, `PROCESSING`, `FAILED` 상태인 경우 `409 Conflict` (`WORKSHEET_002`)를 반환하여 일관성 없는 데이터 렌더링을 차단한다.
+  - 통합 조회 시 첨삭은 `ACTIVE` 상태인 항목만, 코멘트는 `deleted_at == null`인 활성 항목만 추출하여 프론트엔드의 별도 필터링 부하를 제거한다.
+
+### 9.2 AI 첨삭 원본 불변성(Immutability) 및 교사 수정(is_edited) 추적
+- **불변 원칙**:
+  - AI가 최초 생성한 분석 데이터는 학술적/감사적 목적으로 영구 보존되어야 한다.
+  - 교사가 첨삭 카드 내용을 수정(`PATCH /corrections/{correctionId}`)하더라도, 학생 원문(`originalText`), AI 초기 추천문(`aiInitialContent`), AI 문법/어휘 설명(`explanation`)은 DB 컬럼상에서 절대 덮어쓰거나 변경하지 않는다.
+- **교사 수정 플래그 및 설명 불일치 알림**:
+  - 교사의 수정 요청 시 오직 `content` 컬럼만 갱신하며 `is_edited = true`를 세팅한다.
+  - 응답 DTO(`CorrectionResponse`)에서는 `editedByTeacher = true`와 `explanationStale = true`를 제공하여, 화면에서 "선생님이 직접 수정한 내용이며 AI 설명은 최초 제안 기준입니다"라는 경고 라벨을 프론트엔드가 자연스럽게 표시할 수 있도록 지원한다.
+
+### 9.3 첨삭 소프트 딜리트(Logical Deletion) 및 편집 보존 복원(Restore) 메커니즘
+- **소프트 딜리트 채택**:
+  - 교사가 검토 도중 부적절한 AI 추천 카드를 삭제(`DELETE /corrections/{correctionId}`)할 때 물리적으로 DB 레코드를 제거(`DELETE FROM`)하지 않고, `status = 'DELETED'`, `deleted_at = NOW()`로 논리 삭제 처리한다.
+- **편집 이력 보존 복원 (`POST /restore`)**:
+  - 교사가 실수로 삭제한 항목은 언제든 `restore` 엔드포인트를 통해 `ACTIVE` 상태로 즉시 되돌릴 수 있다.
+  - 특히, 삭제 이전에 교사가 이미 공들여 수정한 `content` 및 `isEdited` 플래그는 복원 시에도 온전히 보존되어 재입력의 수고를 원천 방지한다.
+- **목록 필터링 파라미터 (`status`)**:
+  - `GET /corrections?status=ACTIVE` (기본값): 검토 중인 유효 첨삭만 조회.
+  - `GET /corrections?status=DELETED`: 교사가 삭제한 항목만 조회하여 '휴지통/삭제된 항목 보기' 탭 지원.
+  - `GET /corrections?status=ALL`: 전체 첨삭 이력 조회.
+
+### 9.4 삭제된 첨삭(DELETED)에 대한 수정 차단(409 Conflict) 정책
+- **결정**: `status == DELETED`인 첨삭 항목에 대해 `PATCH /corrections/{correctionId}` 호출이 인입되면 즉시 `409 Conflict` (`CORRECTION_002`, "삭제된 첨삭 항목은 수정할 수 없습니다.")로 차단한다.
+- **이유**: 삭제된 카드를 수정하는 것은 상태 전이 관점에서 비정상 동작이며, 복원(`restore`)을 먼저 명시적으로 수행한 뒤 편집하는 단방향 워크플로우를 강제하여 교사의 의도치 않은 데이터 오염을 방어한다.
+
+### 9.5 교사 코멘트 영역-페이지 일치성 검증 및 불변 영역 정책
+- **단일 페이지 귀속 원칙**:
+  - 교사 코멘트(`POST /comments`) 작성 시 전달되는 모든 하이라이트/밑줄 영역(`regions`)은 반드시 단일 `pageId`에 귀속되어야 한다.
+  - 요청 바디의 `pageId`와 `regions` 내부의 `region.pageId`가 다를 경우 `400 Bad Request` (`COMMENT_002`, "코멘트 영역의 페이지가 대상 페이지와 일치하지 않습니다.")로 거부한다.
+- **불변 영역(Immutable Geometry) 정책**:
+  - 코멘트 내용 수정(`PATCH /comments/{commentId}`) 시 오직 텍스트 내용(`content`)만 변경을 허용하며, 좌표 영역(`regions`)이나 강조 유형(`highlightType`)은 일체 변경할 수 없다.
+  - 영역 좌표를 변경해야 할 경우 기존 코멘트를 삭제하고 새로 작성하도록 유도하여, 프론트엔드의 캔버스 오버레이 자동 배치 및 연결선 렌더링 엔진의 레이아웃 안정성을 보장한다.
+
+### 9.6 코멘트 소프트 딜리트(deleted_at) 및 삭제 자원 404 은닉
+- **논리 삭제 및 영구 은닉**:
+  - 코멘트 삭제(`DELETE /comments/{commentId}`)는 `deleted_at` 타임스탬프를 기록하는 소프트 딜리트로 구현된다.
+  - 첨삭과 달리 교사 코멘트는 '삭제 취소' 개념이 없으므로, 삭제된 코멘트에 대한 단건 조회, 수정, 재삭제 시도는 모두 `404 Not Found` (`COMMENT_001`, "코멘트를 찾을 수 없거나 이미 삭제되었습니다.")를 반환하여 자원의 부재를 명확히 처리한다.
+- **공백 저장 원천 차단**:
+  - 빈 문자열이나 공백만으로 구성된 코멘트 저장을 방지하기 위해 `@NotBlank` 유효성 검증과 서버단 `.trim()` 처리를 강제한다.
+
+### 9.7 단위 자원별 ETag(`cor_`, `com_`) 및 If-Match 동시성 제어
+- **세분화된 ETag 네이밍**:
+  - 개별 첨삭 자원 ETag: `"\"cor_{correctionId}-v{version}\""`
+  - 개별 코멘트 자원 ETag: `"\"com_{commentId}-v{version}\""`
+- **단위 동시성(Fine-Grained Concurrency)**:
+  - 학습지 마스터 전체를 잠그지 않고 개별 첨삭 카드 및 코멘트 단위로 JPA `@Version`을 적용한다.
+  - 두 명 이상의 교사가 동일한 학습지를 검토할 때, 교사 A가 1번 첨삭을 수정하는 동안 교사 B가 2번 첨삭을 수정하거나 코멘트를 달아도 충돌 없이 병행 처리가 가능하다.
+  - 단, 동일한 자원을 동시에 수정/삭제할 때만 `If-Match` 검증을 통해 `412 Precondition Failed` (`COMMON_412`)로 나중 쓰기를 차단한다.
+- **204 No Content 헤더 제공**:
+  - 첨삭 삭제(`204 No Content`) 시에도 응답 헤더로 다음 버전 ETag(`cor_{id}-v{next}`)를 반환하여 RESTful 완전성을 보장한다.
