@@ -198,6 +198,7 @@ public class WorksheetService {
 
         // 기존 설정 전체 교체
         worksheetSettingRepository.deleteAllByWorksheetId(worksheetId);
+        worksheetSettingRepository.flush();
 
         List<WorksheetSetting> newSettings = request.areas().stream()
                 .map(item -> WorksheetSetting.builder()

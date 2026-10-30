@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@Profile("!test")
+@Profile({"local", "dev"})
 @RequiredArgsConstructor
 public class DevDataInitializer implements CommandLineRunner {
 
@@ -45,8 +45,18 @@ public class DevDataInitializer implements CommandLineRunner {
                     .status(UserStatus.ACTIVE)
                     .build());
 
+            User teacher = userRepository.save(User.builder()
+                    .academy(academy)
+                    .email("teacher@autedi.com")
+                    .passwordHash(passwordEncoder.encode("Password123!"))
+                    .name("담당선생님")
+                    .role(Role.TEACHER)
+                    .status(UserStatus.ACTIVE)
+                    .build());
+
             log.info("Initialized Academy: id={}, name={}", academy.getId(), academy.getName());
             log.info("Initialized Director User: id={}, email={}", director.getId(), director.getEmail());
+            log.info("Initialized Teacher User: id={}, email={}", teacher.getId(), teacher.getEmail());
         }
     }
 }
