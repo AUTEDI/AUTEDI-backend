@@ -74,8 +74,7 @@ public class Worksheet extends BaseTimeEntity {
             FileType fileType,
             Long fileSize,
             String fileHash,
-            Integer pageCount
-    ) {
+            Integer pageCount) {
         this.academy = academy;
         this.user = user;
         this.status = WorksheetStatus.DRAFT;
@@ -93,12 +92,7 @@ public class Worksheet extends BaseTimeEntity {
     }
 
     public void replaceFile(
-            String originalFilename,
-            String fileUrl,
-            FileType fileType,
-            Long fileSize,
-            String fileHash
-    ) {
+            String originalFilename, String fileUrl, FileType fileType, Long fileSize, String fileHash) {
         this.originalFilename = originalFilename;
         this.fileUrl = fileUrl;
         this.fileType = fileType;

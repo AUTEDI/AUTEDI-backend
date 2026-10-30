@@ -65,8 +65,7 @@ public class User extends BaseTimeEntity {
             String name,
             Role role,
             UserStatus status,
-            User invitedBy
-    ) {
+            User invitedBy) {
         this.academy = academy;
         this.email = email;
         this.passwordHash = passwordHash;

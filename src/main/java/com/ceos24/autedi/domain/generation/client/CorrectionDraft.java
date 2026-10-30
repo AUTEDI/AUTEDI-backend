@@ -11,6 +11,4 @@ public record CorrectionDraft(
         String originalText,
         String aiInitialContent,
         String explanation,
-        List<RegionPayload> regions
-) {
-}
+        List<RegionPayload> regions) {}

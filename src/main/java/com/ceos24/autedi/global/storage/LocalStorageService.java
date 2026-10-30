@@ -30,8 +30,7 @@ public class LocalStorageService implements FileStorageService {
 
     public LocalStorageService(
             @Value("${app.storage.upload-dir:uploads}") String uploadDir,
-            @Value("${app.backend-url:http://localhost:8080}") String backendUrl
-    ) {
+            @Value("${app.backend-url:http://localhost:8080}") String backendUrl) {
         this.rootLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
         this.baseUrl = backendUrl.endsWith("/") ? backendUrl : backendUrl + "/";
         try {
@@ -47,7 +46,8 @@ public class LocalStorageService implements FileStorageService {
             throw new CustomException(ErrorCode.EMPTY_FILE);
         }
 
-        String originalFilename = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "file");
+        String originalFilename =
+                StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "file");
         String extension = getExtension(originalFilename);
         FileType fileType;
         try {
@@ -90,15 +90,7 @@ public class LocalStorageService implements FileStorageService {
             String fileUrl = baseUrl + "files/" + relativePath;
 
             return new StoredFile(
-                    originalFilename,
-                    storedFilename,
-                    fileUrl,
-                    fileType,
-                    file.getSize(),
-                    fileHash,
-                    width,
-                    height
-            );
+                    originalFilename, storedFilename, fileUrl, fileType, file.getSize(), fileHash, width, height);
 
         } catch (IOException e) {
             log.error("파일 저장 실패: filename={}, error={}", originalFilename, e.getMessage(), e);

@@ -1,0 +1,4 @@
+#!/bin/sh
+echo "🧹 [Spotless] 커밋 전 Palantir Java Format 코드 정렬 중..."
+./gradlew spotlessApply
+git add -u

@@ -73,8 +73,7 @@ public class Comment extends BaseTimeEntity {
             User user,
             HighlightType highlightType,
             List<RegionPayload> regions,
-            String content
-    ) {
+            String content) {
         this.worksheet = worksheet;
         this.page = page;
         this.user = user;

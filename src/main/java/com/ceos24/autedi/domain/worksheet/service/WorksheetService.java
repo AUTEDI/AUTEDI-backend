@@ -42,8 +42,7 @@ public class WorksheetService {
 
     @Transactional
     public WorksheetDetailResponse uploadWorksheet(Long userId, Long academyId, MultipartFile file) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         Academy academy = user.getAcademy();
         if (!academy.getId().equals(academyId)) {
@@ -87,12 +86,14 @@ public class WorksheetService {
     }
 
     public WorksheetDetailResponse getWorksheetDetail(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
-        Long latestGenerationId = worksheetGenerationRepository.findFirstByWorksheetIdOrderByCreatedAtDesc(worksheetId)
+        Long latestGenerationId = worksheetGenerationRepository
+                .findFirstByWorksheetIdOrderByCreatedAtDesc(worksheetId)
                 .map(WorksheetGeneration::getId)
                 .orElse(null);
 
@@ -101,12 +102,9 @@ public class WorksheetService {
 
     @Transactional
     public WorksheetDetailResponse replaceWorksheetFile(
-            Long academyId,
-            Long worksheetId,
-            String ifMatch,
-            MultipartFile file
-    ) {
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+            Long academyId, Long worksheetId, String ifMatch, MultipartFile file) {
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         // If-Match 헤더 검증 (제공된 경우)
@@ -130,8 +128,7 @@ public class WorksheetService {
                 storedFile.fileUrl(),
                 storedFile.fileType(),
                 storedFile.fileSize(),
-                storedFile.fileHash()
-        );
+                storedFile.fileHash());
 
         // 페이지 미리보기 갱신 및 기존 OCR 캐시 무효화
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
@@ -160,7 +157,8 @@ public class WorksheetService {
     }
 
     public WorksheetSettingsResponse getSettings(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
@@ -170,12 +168,9 @@ public class WorksheetService {
 
     @Transactional
     public WorksheetSettingsResponse updateSettings(
-            Long academyId,
-            Long worksheetId,
-            String ifMatch,
-            WorksheetSettingsUpdateRequest request
-    ) {
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+            Long academyId, Long worksheetId, String ifMatch, WorksheetSettingsUpdateRequest request) {
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         // 상태 검증: DRAFT 또는 FAILED 상태에서만 설정 변경 가능
@@ -186,7 +181,8 @@ public class WorksheetService {
         // If-Match 헤더 검증
         String currentSettingsEtag = "\"settings_" + worksheet.getId() + "-v" + worksheet.getVersion() + "\"";
         if (StringUtils.hasText(ifMatch) && !ifMatch.equals("*")) {
-            if (!currentSettingsEtag.equals(ifMatch.trim()) && !worksheet.getEtag().equals(ifMatch.trim())) {
+            if (!currentSettingsEtag.equals(ifMatch.trim())
+                    && !worksheet.getEtag().equals(ifMatch.trim())) {
                 throw new CustomException(ErrorCode.PRECONDITION_FAILED);
             }
         }

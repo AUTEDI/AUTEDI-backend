@@ -92,8 +92,7 @@ public class WorksheetGeneration extends BaseTimeEntity {
             String requestFileHash,
             Object requestSettingsSnapshot,
             Integer retryCount,
-            Long retryOfGenerationId
-    ) {
+            Long retryOfGenerationId) {
         this.worksheet = worksheet;
         this.requestedBy = requestedBy;
         this.idempotencyKey = idempotencyKey;

@@ -22,8 +22,7 @@ public record CorrectionResponse(
         Boolean explanationStale,
         CorrectionStatus status,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
-) {
+        LocalDateTime updatedAt) {
     public static CorrectionResponse from(Correction correction) {
         return of(correction, correction.getEtag());
     }
@@ -44,7 +43,6 @@ public record CorrectionResponse(
                 Boolean.TRUE.equals(correction.getIsEdited()),
                 correction.getStatus(),
                 correction.getCreatedAt(),
-                correction.getUpdatedAt()
-        );
+                correction.getUpdatedAt());
     }
 }

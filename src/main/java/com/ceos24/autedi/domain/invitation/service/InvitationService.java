@@ -36,8 +36,8 @@ public class InvitationService {
 
     @Transactional
     public InvitationResponse createInvitation(Long directorId, InvitationCreateRequest request) {
-        User director = userRepository.findById(directorId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User director =
+                userRepository.findById(directorId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         if (director.getRole() != Role.DIRECTOR) {
             throw new CustomException(ErrorCode.ACCESS_DENIED);
@@ -53,8 +53,8 @@ public class InvitationService {
         }
 
         // 재초대 처리: 동일 이메일에 대기 중인 기존 초대가 있다면 무효화(REVOKED)
-        List<UserInvitation> existingInvitations = userInvitationRepository
-                .findAllByEmailAndStatus(request.email(), InvitationStatus.PENDING);
+        List<UserInvitation> existingInvitations =
+                userInvitationRepository.findAllByEmailAndStatus(request.email(), InvitationStatus.PENDING);
         existingInvitations.forEach(UserInvitation::revoke);
 
         String rawToken = TokenHashUtil.generateRawToken();
@@ -79,7 +79,8 @@ public class InvitationService {
     @Transactional
     public InvitationValidateResponse validateInvitation(String rawToken) {
         String tokenHash = TokenHashUtil.hashToken(rawToken);
-        UserInvitation invitation = userInvitationRepository.findByTokenHash(tokenHash)
+        UserInvitation invitation = userInvitationRepository
+                .findByTokenHash(tokenHash)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_INVITATION_TOKEN));
 
         LocalDateTime now = LocalDateTime.now();
@@ -93,11 +94,7 @@ public class InvitationService {
         }
 
         return new InvitationValidateResponse(
-                true,
-                invitation.getEmail(),
-                invitation.getAcademy().getName(),
-                invitation.getExpiresAt()
-        );
+                true, invitation.getEmail(), invitation.getAcademy().getName(), invitation.getExpiresAt());
     }
 
     @Transactional
@@ -105,7 +102,8 @@ public class InvitationService {
         String tokenHash = TokenHashUtil.hashToken(request.token());
 
         // 동시성 제어를 위한 비관적 락 조회
-        UserInvitation invitation = userInvitationRepository.findByTokenHashWithLock(tokenHash)
+        UserInvitation invitation = userInvitationRepository
+                .findByTokenHashWithLock(tokenHash)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_INVITATION_TOKEN));
 
         LocalDateTime now = LocalDateTime.now();

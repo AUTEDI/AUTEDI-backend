@@ -55,13 +55,7 @@ public class UserInvitation extends BaseCreatedTimeEntity {
     private LocalDateTime acceptedAt;
 
     @Builder
-    public UserInvitation(
-            Academy academy,
-            User invitedBy,
-            String email,
-            String tokenHash,
-            LocalDateTime expiresAt
-    ) {
+    public UserInvitation(Academy academy, User invitedBy, String email, String tokenHash, LocalDateTime expiresAt) {
         this.academy = academy;
         this.invitedBy = invitedBy;
         this.email = email;

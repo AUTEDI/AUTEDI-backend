@@ -30,8 +30,7 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<SignupResponse>> signup(@Valid @RequestBody SignupRequest request) {
         SignupResponse response = invitationService.signup(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.onSuccess("회원가입이 완료되었습니다.", response));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.onSuccess("회원가입이 완료되었습니다.", response));
     }
 
     @PostMapping("/login")

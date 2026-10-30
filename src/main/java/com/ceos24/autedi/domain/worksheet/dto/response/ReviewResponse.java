@@ -9,6 +9,4 @@ public record ReviewResponse(
         WorksheetDetailResponse worksheet,
         GenerationResponse generation,
         List<CorrectionResponse> corrections,
-        List<CommentResponse> comments
-) {
-}
+        List<CommentResponse> comments) {}

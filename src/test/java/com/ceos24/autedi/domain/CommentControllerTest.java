@@ -1,5 +1,14 @@
 package com.ceos24.autedi.domain;
 
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.ceos24.autedi.domain.academy.entity.Academy;
 import com.ceos24.autedi.domain.academy.entity.SubscriptionStatus;
 import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
@@ -34,16 +43,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
-
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @Transactional
@@ -101,12 +100,12 @@ class CommentControllerTest {
                 .status(UserStatus.ACTIVE)
                 .build());
 
-        token = "Bearer " + jwtTokenProvider.createAccessToken(
-                testUser.getId(),
-                testAcademy.getId(),
-                testUser.getEmail(),
-                testUser.getRole().name()
-        );
+        token = "Bearer "
+                + jwtTokenProvider.createAccessToken(
+                        testUser.getId(),
+                        testAcademy.getId(),
+                        testUser.getEmail(),
+                        testUser.getRole().name());
 
         testWorksheet = worksheetRepository.save(Worksheet.builder()
                 .academy(testAcademy)
@@ -137,8 +136,7 @@ class CommentControllerTest {
                 testPage.getId(),
                 HighlightType.HIGHLIGHT,
                 List.of(new RegionPayload(0.1, 0.2, 0.3, 0.05)),
-                "이 부분을 더 자세히 설명해 보세요."
-        );
+                "이 부분을 더 자세히 설명해 보세요.");
 
         mockMvc.perform(post("/api/v1/worksheets/{worksheetId}/comments", testWorksheet.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
@@ -171,8 +169,10 @@ class CommentControllerTest {
                 .andExpect(jsonPath("$.result.items[0].id").value(comment.getId()));
 
         // 단건 조회
-        mockMvc.perform(get("/api/v1/worksheets/{worksheetId}/comments/{commentId}",
-                        testWorksheet.getId(), comment.getId())
+        mockMvc.perform(get(
+                                "/api/v1/worksheets/{worksheetId}/comments/{commentId}",
+                                testWorksheet.getId(),
+                                comment.getId())
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andExpect(header().exists(HttpHeaders.ETAG))
@@ -194,8 +194,10 @@ class CommentControllerTest {
         String etag = comment.getEtag();
         CommentUpdateRequest request = new CommentUpdateRequest("수정된 코멘트 내용입니다.");
 
-        mockMvc.perform(patch("/api/v1/worksheets/{worksheetId}/comments/{commentId}",
-                        testWorksheet.getId(), comment.getId())
+        mockMvc.perform(patch(
+                                "/api/v1/worksheets/{worksheetId}/comments/{commentId}",
+                                testWorksheet.getId(),
+                                comment.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .header(HttpHeaders.IF_MATCH, etag)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -219,15 +221,19 @@ class CommentControllerTest {
         String etag = comment.getEtag();
 
         // 1. DELETE
-        mockMvc.perform(delete("/api/v1/worksheets/{worksheetId}/comments/{commentId}",
-                        testWorksheet.getId(), comment.getId())
+        mockMvc.perform(delete(
+                                "/api/v1/worksheets/{worksheetId}/comments/{commentId}",
+                                testWorksheet.getId(),
+                                comment.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .header(HttpHeaders.IF_MATCH, etag))
                 .andExpect(status().isNoContent());
 
         // 2. 단건 조회 시 404
-        mockMvc.perform(get("/api/v1/worksheets/{worksheetId}/comments/{commentId}",
-                        testWorksheet.getId(), comment.getId())
+        mockMvc.perform(get(
+                                "/api/v1/worksheets/{worksheetId}/comments/{commentId}",
+                                testWorksheet.getId(),
+                                comment.getId())
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isNotFound());
     }

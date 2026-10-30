@@ -36,8 +36,7 @@ public class CommentService {
     public CommentListResponse getComments(Long academyId, Long worksheetId, Long pageId) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
-        List<CommentResponse> items = commentRepository.findAllActiveByWorksheet(worksheetId, pageId)
-                .stream()
+        List<CommentResponse> items = commentRepository.findAllActiveByWorksheet(worksheetId, pageId).stream()
                 .map(CommentResponse::from)
                 .toList();
 
@@ -52,15 +51,11 @@ public class CommentService {
     }
 
     @Transactional
-    public CommentResponse createComment(
-            Long userId,
-            Long academyId,
-            Long worksheetId,
-            CommentCreateRequest request
-    ) {
+    public CommentResponse createComment(Long userId, Long academyId, Long worksheetId, CommentCreateRequest request) {
         Worksheet worksheet = findWorksheetAndValidateReady(academyId, worksheetId);
 
-        WorksheetPage page = worksheetPageRepository.findByIdAndWorksheetId(request.pageId(), worksheetId)
+        WorksheetPage page = worksheetPageRepository
+                .findByIdAndWorksheetId(request.pageId(), worksheetId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAGE_NOT_FOUND));
 
         if (request.regions() == null || request.regions().isEmpty()) {
@@ -73,8 +68,7 @@ public class CommentService {
             }
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         Comment comment = Comment.builder()
                 .worksheet(worksheet)
@@ -86,20 +80,14 @@ public class CommentService {
                 .build();
         commentRepository.save(comment);
 
-        log.info("교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}",
-                comment.getId(), worksheetId, page.getId());
+        log.info("교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}", comment.getId(), worksheetId, page.getId());
 
         return CommentResponse.from(comment);
     }
 
     @Transactional
     public CommentResponse updateComment(
-            Long academyId,
-            Long worksheetId,
-            Long commentId,
-            String ifMatch,
-            CommentUpdateRequest request
-    ) {
+            Long academyId, Long worksheetId, Long commentId, String ifMatch, CommentUpdateRequest request) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         Comment comment = findActiveCommentByIdAndWorksheetId(commentId, worksheetId);
@@ -114,12 +102,7 @@ public class CommentService {
     }
 
     @Transactional
-    public void deleteComment(
-            Long academyId,
-            Long worksheetId,
-            Long commentId,
-            String ifMatch
-    ) {
+    public void deleteComment(Long academyId, Long worksheetId, Long commentId, String ifMatch) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         Comment comment = findActiveCommentByIdAndWorksheetId(commentId, worksheetId);
@@ -131,7 +114,8 @@ public class CommentService {
     }
 
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         if (worksheet.getStatus() != WorksheetStatus.READY) {
@@ -141,7 +125,8 @@ public class CommentService {
     }
 
     private Comment findActiveCommentByIdAndWorksheetId(Long commentId, Long worksheetId) {
-        Comment comment = commentRepository.findById(commentId)
+        Comment comment = commentRepository
+                .findById(commentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.COMMENT_NOT_FOUND));
 
         if (comment.isDeleted() || !comment.getWorksheet().getId().equals(worksheetId)) {

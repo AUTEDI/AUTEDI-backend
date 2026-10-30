@@ -45,12 +45,7 @@ public class WorksheetGenerationService {
     private final CorrectionAiClient correctionAiClient;
 
     @Transactional
-    public GenerationResponse requestGeneration(
-            Long userId,
-            Long academyId,
-            Long worksheetId,
-            String idempotencyKey
-    ) {
+    public GenerationResponse requestGeneration(Long userId, Long academyId, Long worksheetId, String idempotencyKey) {
         // 멱등성 검증: 동일한 키로 이미 요청된 작업이 있다면 기존 작업 응답 반환
         if (StringUtils.hasText(idempotencyKey)) {
             Optional<WorksheetGeneration> existing = worksheetGenerationRepository.findByIdempotencyKey(idempotencyKey);
@@ -62,14 +57,14 @@ public class WorksheetGenerationService {
             idempotencyKey = UUID.randomUUID().toString();
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         if (!user.getAcademy().isActive()) {
             throw new CustomException(ErrorCode.ACADEMY_SUBSCRIPTION_INACTIVE);
         }
 
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         // 상태 제약 검증
@@ -88,7 +83,8 @@ public class WorksheetGenerationService {
 
         // 설정 스냅샷 생성
         List<Map<String, String>> settingsSnapshot = settings.stream()
-                .map(s -> Map.of("area", s.getArea().name(), "level", s.getLevel().name()))
+                .map(s ->
+                        Map.of("area", s.getArea().name(), "level", s.getLevel().name()))
                 .toList();
 
         // 생성 작업 엔티티 생성
@@ -111,10 +107,12 @@ public class WorksheetGenerationService {
     }
 
     public GenerationResponse getGenerationStatus(Long academyId, Long worksheetId, Long generationId) {
-        worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
-        WorksheetGeneration generation = worksheetGenerationRepository.findById(generationId)
+        WorksheetGeneration generation = worksheetGenerationRepository
+                .findById(generationId)
                 .orElseThrow(() -> new CustomException(ErrorCode.GENERATION_NOT_FOUND));
 
         if (!generation.getWorksheet().getId().equals(worksheetId)) {
@@ -126,23 +124,19 @@ public class WorksheetGenerationService {
 
     @Transactional
     public GenerationResponse retryGeneration(
-            Long userId,
-            Long academyId,
-            Long worksheetId,
-            Long generationId,
-            String idempotencyKey
-    ) {
+            Long userId, Long academyId, Long worksheetId, Long generationId, String idempotencyKey) {
         if (!StringUtils.hasText(idempotencyKey)) {
             idempotencyKey = UUID.randomUUID().toString();
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
-        WorksheetGeneration target = worksheetGenerationRepository.findById(generationId)
+        WorksheetGeneration target = worksheetGenerationRepository
+                .findById(generationId)
                 .orElseThrow(() -> new CustomException(ErrorCode.GENERATION_NOT_FOUND));
 
         // 재시도 조건 검증: 실패 작업이어야 함
@@ -157,7 +151,8 @@ public class WorksheetGenerationService {
 
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
         List<Map<String, String>> currentSnapshot = settings.stream()
-                .map(s -> Map.of("area", s.getArea().name(), "level", s.getLevel().name()))
+                .map(s ->
+                        Map.of("area", s.getArea().name(), "level", s.getLevel().name()))
                 .toList();
 
         // 새 작업 생성
@@ -180,10 +175,7 @@ public class WorksheetGenerationService {
     }
 
     private void executeAiCorrection(
-            WorksheetGeneration generation,
-            Worksheet worksheet,
-            List<WorksheetSetting> settings
-    ) {
+            WorksheetGeneration generation, Worksheet worksheet, List<WorksheetSetting> settings) {
         generation.start();
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheet.getId());
 
@@ -194,37 +186,40 @@ public class WorksheetGenerationService {
 
         // 이전 활성 첨삭 항목이 있다면 정리
         List<Correction> oldCorrections = correctionRepository.findAllByWorksheetIdAndStatus(
-                worksheet.getId(),
-                com.ceos24.autedi.domain.correction.entity.CorrectionStatus.ACTIVE
-        );
+                worksheet.getId(), com.ceos24.autedi.domain.correction.entity.CorrectionStatus.ACTIVE);
         oldCorrections.forEach(Correction::delete);
 
         // 생성된 첨삭 항목 영속화
-        List<Correction> newCorrections = drafts.stream().map(d -> {
-            WorksheetPage matchedPage = pages.stream()
-                    .filter(p -> p.getId().equals(d.pageId()))
-                    .findFirst()
-                    .orElse(pages.get(0));
+        List<Correction> newCorrections = drafts.stream()
+                .map(d -> {
+                    WorksheetPage matchedPage = pages.stream()
+                            .filter(p -> p.getId().equals(d.pageId()))
+                            .findFirst()
+                            .orElse(pages.get(0));
 
-            return Correction.builder()
-                    .worksheet(worksheet)
-                    .page(matchedPage)
-                    .generation(generation)
-                    .area(d.area())
-                    .originalText(d.originalText())
-                    .aiInitialContent(d.aiInitialContent())
-                    .content(d.aiInitialContent())
-                    .explanation(d.explanation())
-                    .regions(d.regions())
-                    .build();
-        }).toList();
+                    return Correction.builder()
+                            .worksheet(worksheet)
+                            .page(matchedPage)
+                            .generation(generation)
+                            .area(d.area())
+                            .originalText(d.originalText())
+                            .aiInitialContent(d.aiInitialContent())
+                            .content(d.aiInitialContent())
+                            .explanation(d.explanation())
+                            .regions(d.regions())
+                            .build();
+                })
+                .toList();
         correctionRepository.saveAll(newCorrections);
 
         // 완료 처리 및 학습지 상태 READY(검토 준비 완료) 변경
         generation.succeed();
         worksheet.updateStatus(WorksheetStatus.READY);
 
-        log.info("AI 첨삭 생성 완료: worksheetId={}, generationId={}, correctionsCount={}",
-                worksheet.getId(), generation.getId(), newCorrections.size());
+        log.info(
+                "AI 첨삭 생성 완료: worksheetId={}, generationId={}, correctionsCount={}",
+                worksheet.getId(),
+                generation.getId(),
+                newCorrections.size());
     }
 }

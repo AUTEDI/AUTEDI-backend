@@ -6,12 +6,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-public record CustomUserPrincipal(
-        Long userId,
-        Long academyId,
-        String email,
-        String role
-) implements UserDetails {
+public record CustomUserPrincipal(Long userId, Long academyId, String email, String role) implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

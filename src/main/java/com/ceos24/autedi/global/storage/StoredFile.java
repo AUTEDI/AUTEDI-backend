@@ -10,6 +10,4 @@ public record StoredFile(
         Long fileSize,
         String fileHash,
         Integer width,
-        Integer height
-) {
-}
+        Integer height) {}

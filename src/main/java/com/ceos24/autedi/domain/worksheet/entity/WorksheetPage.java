@@ -22,12 +22,10 @@ import org.hibernate.type.SqlTypes;
 @Table(
         name = "worksheet_pages",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "UK_worksheet_pages_worksheet_id_page_number",
-                        columnNames = {"worksheet_id", "page_number"}
-                )
-        }
-)
+            @UniqueConstraint(
+                    name = "UK_worksheet_pages_worksheet_id_page_number",
+                    columnNames = {"worksheet_id", "page_number"})
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class WorksheetPage extends BaseCreatedTimeEntity {
@@ -67,8 +65,7 @@ public class WorksheetPage extends BaseCreatedTimeEntity {
             Integer width,
             Integer height,
             Object ocrResult,
-            String ocrFileHash
-    ) {
+            String ocrFileHash) {
         this.worksheet = worksheet;
         this.pageNumber = pageNumber;
         this.previewImageUrl = previewImageUrl;

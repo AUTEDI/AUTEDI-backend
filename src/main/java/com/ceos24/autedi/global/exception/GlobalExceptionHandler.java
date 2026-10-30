@@ -21,60 +21,51 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("CustomException: code={}, message={}", errorCode.getCode(), e.getMessage());
-        return ResponseEntity
-                .status(errorCode.getStatus())
-                .body(ApiResponse.onFailure(errorCode, null));
+        return ResponseEntity.status(errorCode.getStatus()).body(ApiResponse.onFailure(errorCode, null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(
-            MethodArgumentNotValidException e
-    ) {
+            MethodArgumentNotValidException e) {
         log.warn("Validation failed: {}", e.getMessage());
         List<String> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
 
-        return ResponseEntity
-                .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
+        return ResponseEntity.status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
                 .body(ApiResponse.onFailure(ErrorCode.INVALID_INPUT_VALUE, errors));
     }
 
     @ExceptionHandler({
-            MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class,
-            HttpMessageNotReadableException.class
+        MissingServletRequestParameterException.class,
+        MethodArgumentTypeMismatchException.class,
+        HttpMessageNotReadableException.class
     })
     public ResponseEntity<ApiResponse<Object>> handleBadRequestException(Exception e) {
         log.warn("Bad request: {}", e.getMessage());
-        return ResponseEntity
-                .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
+        return ResponseEntity.status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
                 .body(ApiResponse.onFailure(ErrorCode.INVALID_INPUT_VALUE));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException e) {
         log.warn("Access denied: {}", e.getMessage());
-        return ResponseEntity
-                .status(ErrorCode.ACCESS_DENIED.getStatus())
+        return ResponseEntity.status(ErrorCode.ACCESS_DENIED.getStatus())
                 .body(ApiResponse.onFailure(ErrorCode.ACCESS_DENIED));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
-            HttpRequestMethodNotSupportedException e
-    ) {
+            HttpRequestMethodNotSupportedException e) {
         log.warn("Method not allowed: {}", e.getMessage());
-        return ResponseEntity
-                .status(ErrorCode.METHOD_NOT_ALLOWED.getStatus())
+        return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.getStatus())
                 .body(ApiResponse.onFailure(ErrorCode.METHOD_NOT_ALLOWED));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleException(Exception e) {
         log.error("Unhandled exception occurred", e);
-        return ResponseEntity
-                .status(ErrorCode.INTERNAL_SERVER_ERROR.getStatus())
+        return ResponseEntity.status(ErrorCode.INTERNAL_SERVER_ERROR.getStatus())
                 .body(ApiResponse.onFailure(ErrorCode.INTERNAL_SERVER_ERROR));
     }
 }
