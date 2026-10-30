@@ -1056,6 +1056,16 @@ flowchart LR
 
 ---
 
+#### 11.9.4 브랜치별 머지 전략 표준 (Merge Strategy Guidelines)
+GitHub PR 머지 시 브랜치 특성에 따라 허용되는 머지 방식을 엄격히 구분한다:
+
+| 머지 경로 | 허용 머지 방식 | 상세 이유 및 목적 |
+| :--- | :---: | :--- |
+| **`feature/* ➡️ develop`** | **Squash and Merge** | 기능 개발 중에 발생한 자잘한 작업 커밋(오타 수정, 시도 등)을 1개의 기능 단위 커밋으로 압축하여 `develop`의 히스토리를 선형적이고 깔끔하게 유지한다. |
+| **`develop ➡️ main`** | **Create a Merge Commit<br>(일반 머지 - 필수)** | • `develop`에서 검증된 여러 기능 커밋들의 전체 타임라인과 이력을 원본 그대로 보존한다.<br>• **주의**: 만약 여기서 Squash 머지를 수행할 경우 `develop`과 `main`의 커밋 해시 트리가 분기되어, **차후 `develop ➡️ main` 머지 시 대규모 충돌(Conflict)과 히스토리 왜곡이 발생**하므로 절대 금지한다. |
+
+---
+
 ### 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
 
 #### 11.10.1 Dockerfile 멀티 스테이지 빌드 전환 원리
