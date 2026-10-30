@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "02. Invitation", description = "선생님 이메일 초대 발송 및 토큰 검증 API")
 @RestController
-@RequestMapping("/api/invitations")
+@RequestMapping("/api/v1/invitations")
 @RequiredArgsConstructor
 public class InvitationController {
 

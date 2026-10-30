@@ -33,6 +33,7 @@ public class OpenApiConfig {
                                         .bearerFormat("JWT")
                                         .description("로그인 후 발급받은 Access Token을 입력해주세요. (Bearer 접두사 불필요)")))
                 .servers(List.of(
+                        new Server().url("/").description("현재 호스트 서버 (기본값)"),
                         new Server().url("http://localhost:8080").description("로컬 개발 서버"),
                         new Server().url("https://api.autedi.com").description("운영 서버")));
     }
