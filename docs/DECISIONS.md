@@ -69,6 +69,7 @@
    - 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
    - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
    - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
+   - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
 
 ---
 
@@ -1052,3 +1053,59 @@ flowchart LR
 3. **PR 생성 및 CI 통과**: `develop`을 대상으로 PR을 열고, GitHub Actions의 `Spotless & Unit Tests`가 성공해야 머지 버튼이 활성화된다.
 4. **개발 서버 검증**: `develop` 머지 즉시 Railway에 자동 배포되어 API 및 비즈니스 로직을 검증한다.
 5. **운영 릴리즈**: 검증 완료된 `develop` 브랜치를 `main`으로 PR 요청하여 최종 배포를 진행한다.
+
+---
+
+### 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
+
+#### 11.10.1 Dockerfile 멀티 스테이지 빌드 전환 원리
+초기 런타임 전용 Dockerfile(`COPY build/libs/*SNAPSHOT.jar app.jar`)은 로컬 또는 GitHub Actions 가상머신에서 사전에 Gradle 빌드가 선행되었다는 전제 하에 작성되었다. 그러나 Railway 등 클라우드 PaaS는 소스코드를 직접 내려받아 `docker build`를 즉시 실행하므로, `build/libs` 디렉터리가 없어 배포가 중단되는 문제(`lstat /build/libs: no such file or directory`)가 발생했다.
+
+이를 해결하기 위해 **도커 자체에서 빌드와 실행을 완전히 캡슐화하는 2단계 멀티 스테이지 빌드**를 표준으로 확정했다:
+```dockerfile
+# 1단계: 빌드 환경 (JDK 21) - 컨테이너 내부에서 안전하게 bootJar 생성
+FROM eclipse-temurin:21-jdk-jammy AS builder
+WORKDIR /app
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle settings.gradle ./
+RUN chmod +x ./gradlew
+COPY src src
+RUN ./gradlew clean bootJar -x test
+
+# 2단계: 실행 환경 (가벼운 JRE 21) - 최종 경량 실행 이미지 생성
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY --from=builder /app/build/libs/*SNAPSHOT.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+* **도입 효과**:
+  - Railway는 물론 로컬 PC, GitHub Actions, EC2 등 Docker가 설치된 모든 환경에서 호스트 OS 종속성 없이 동일한 이미지 빌드 및 실행을 100% 보장한다.
+  - `.dockerignore`를 통해 `.git`, `.gradle`, `build`, `docs`를 제외하여 빌드 컨텍스트 전송 속도를 극대화했다.
+
+---
+
+#### 11.10.2 Railway 대시보드 3대 필수 설정 규칙 (Troubleshooting Runbook)
+Railway 대시보드 설정과 Dockerfile 설정 간의 충돌로 인해 발생하는 배포 장애를 방지하기 위해 다음 3대 규칙을 강제한다:
+
+1. **Custom Start Command는 반드시 비워둘 것 (Empty / Clear)**:
+   - **발생했던 문제**: 과거 Nixpacks 빌드 시절 대시보드에 설정된 `java -jar build/libs/autedi-0.0.1-SNAPSHOT.jar` 명령어가 Dockerfile의 `ENTRYPOINT`를 강제 덮어쓰기하여 `Error: Unable to access jarfile build/libs/...` 에러 발생.
+   - **해결 원칙**: Railway는 Custom Start Command가 설정되어 있으면 Dockerfile의 `ENTRYPOINT/CMD`를 무시한다. 멀티 스테이지 컨테이너의 실행 파일은 `/app/app.jar`이므로, **Start Command를 완전히 빈 칸으로 비워두어 Dockerfile의 `ENTRYPOINT ["java", "-jar", "app.jar"]`를 그대로 따르도록 한다.**
+2. **`Wait for CI` 옵션 비활성화 (OFF)**:
+   - **발생했던 문제**: `Wait for CI`가 켜져 있으면 Railway가 GitHub Actions 검사 완료 웹훅을 무한 대기한다. 하지만 `ci.yml`이 `on: pull_request`로만 동작하고 `push to develop` 트리거가 없으므로, PR 머지 시 배포가 트리거되지 않고 Skip되는 현상 발생.
+   - **해결 원칙**: PR 단계에서 이미 CI 검증이 100% 완료된 후 `develop`에 머지되므로, 불필요한 대기 없이 즉각 배포되도록 **`Wait for CI`는 상시 OFF로 유지**한다.
+3. **`PR Environments` (임시 프리뷰) 비활성화 (OFF)**:
+   - **해결 원칙**: 개발 서버 QC는 `develop` 브랜치 본체 배포 하나로 충분하며, PR이 열릴 때마다 불필요한 임시 DB/컨테이너가 복제 생성되어 자원이 낭비되는 것을 방지하기 위해 PR Environments는 OFF로 관리한다.
+
+---
+
+#### 11.10.3 Railway 개발 배포 환경변수 주입 규격
+Railway 대시보드의 **Variables** 탭에 아래 환경변수가 누락 없이 등록되어 있어야 한다:
+* **Database (Railway 관리형 MySQL)**: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`
+* **Server Port**: `PORT` (Railway가 동적 바인딩)
+* **AWS S3 자격증명 (QC 이미지 저장용)**:
+  - `AWS_REGION`: `ap-northeast-2`
+  - `AWS_S3_BUCKET`: `autedi-mvp-develop-bucket`
+  - `AWS_ACCESS_KEY_ID`: IAM 발급 키
+  - `AWS_SECRET_ACCESS_KEY`: IAM 발급 시크릿
+
