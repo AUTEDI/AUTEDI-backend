@@ -1,0 +1,14 @@
+{
+  "edits": [
+    {
+      "kind": "grammar",
+      "line_id": 1,
+      "original": "go",
+      "occurrence": 1,
+      "replacement": "went",
+      "reason": "yesterday에 맞춰 과거형으로 수정합니다.",
+      "location_uncertain": false,
+      "boxes": [[0.30, 0.37, 0.34, 0.52]]
+    }
+  ]
+}
