@@ -1,10 +1,6 @@
 package com.ceos24.autedi.aiexperiments;
 
 import io.github.cdimascio.dotenv.Dotenv;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
-
-import javax.imageio.ImageIO;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -17,12 +13,16 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import javax.imageio.ImageIO;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Terra 초기 비교 실험: 원본 이미지에서 전사와 모든 단어의 8개 숫자 polygon을 요청합니다. main 실행 시 유료 API 1회. */
 public class TerraOcrExample {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String MODEL = "gpt-6.1-terra";
-    private static final String SCHEMA = """
+    private static final String SCHEMA =
+            """
             {
               "type":"object", "additionalProperties":false,
               "properties":{
@@ -46,19 +46,20 @@ public class TerraOcrExample {
         int pathIndex = checkOnly ? 1 : 0;
 
         Path root = findProjectRoot();
-        Path imagePath = args.length > pathIndex ? Path.of(args[pathIndex])
-                : root.resolve("../test_data/test8.jpg");
+        Path imagePath = args.length > pathIndex ? Path.of(args[pathIndex]) : root.resolve("../test_data/test8.jpg");
         imagePath = imagePath.toAbsolutePath().normalize();
         var image = ImageIO.read(imagePath.toFile());
         if (image == null) throw new IllegalArgumentException("이미지를 읽을 수 없습니다.");
         String name = imagePath.getFileName().toString().toLowerCase(Locale.ROOT);
-        String mime = name.endsWith(".png") ? "image/png"
+        String mime = name.endsWith(".png")
+                ? "image/png"
                 : name.endsWith(".jpg") || name.endsWith(".jpeg") ? "image/jpeg" : null;
         if (mime == null) throw new IllegalArgumentException("이 예제는 JPG/PNG만 지원합니다.");
         if (Files.size(imagePath) > 20 * 1024 * 1024) {
             throw new IllegalArgumentException("실습용 파일 크기 제한: 20MB");
         }
-        Dotenv dotenv = Dotenv.configure().directory(root.toString()).ignoreIfMissing().load();
+        Dotenv dotenv =
+                Dotenv.configure().directory(root.toString()).ignoreIfMissing().load();
         String key = dotenv.get("OPENAI_API_KEY"); // 실제 환경변수가 있으면 .env보다 우선합니다.
         System.out.println("Project: " + root);
         System.out.println("Input image: " + imagePath);
@@ -72,7 +73,8 @@ public class TerraOcrExample {
         }
 
         // 정답 문장이나 Google OCR 결과는 전달하지 않습니다. -> 요청 프롬포트
-        String instructions = """
+        String instructions =
+                """
                 Transcribe the handwritten text in the image exactly as visible.
                 Do not correct grammar, spelling, capitalization or punctuation.
                 Preserve repetitions and line breaks. Do not invent missing words.
@@ -86,19 +88,44 @@ public class TerraOcrExample {
                 If no text is visible, return empty text and an empty words array.
                 """;
 
-        String dataUrl = "data:" + mime + ";base64,"
-                + Base64.getEncoder().encodeToString(Files.readAllBytes(imagePath));
+        String dataUrl =
+                "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(imagePath));
 
         // 요청본문 만들기
         var body = Map.of(
-                "model", MODEL, "store", false, "max_output_tokens", 12000,
-                "instructions", instructions,
-                "input", List.of(Map.of("role", "user", "content", List.of(
-                        Map.of("type", "input_text", "text", "Image dimensions: "
-                                + image.getWidth() + " x " + image.getHeight() + " pixels."),
-                        Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
-                "text", Map.of("format", Map.of("type", "json_schema", "name", "transcription",
-                        "strict", true, "schema", JSON.readTree(SCHEMA))));
+                "model",
+                MODEL,
+                "store",
+                false,
+                "max_output_tokens",
+                12000,
+                "instructions",
+                instructions,
+                "input",
+                List.of(Map.of(
+                        "role",
+                        "user",
+                        "content",
+                        List.of(
+                                Map.of(
+                                        "type",
+                                        "input_text",
+                                        "text",
+                                        "Image dimensions: " + image.getWidth() + " x " + image.getHeight()
+                                                + " pixels."),
+                                Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
+                "text",
+                Map.of(
+                        "format",
+                        Map.of(
+                                "type",
+                                "json_schema",
+                                "name",
+                                "transcription",
+                                "strict",
+                                true,
+                                "schema",
+                                JSON.readTree(SCHEMA))));
 
         // 인증 헤더
         HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.openai.com/v1/responses"))
@@ -109,7 +136,8 @@ public class TerraOcrExample {
                 .build();
         System.out.println("Calling " + MODEL + " (one API request; no automatic retry)...");
         long start = System.nanoTime();
-        try (HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build()) {
+        try (HttpClient client =
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build()) {
             // 실제 요청 보내기
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.printf("API elapsed: %d ms%n", (System.nanoTime() - start) / 1_000_000);
@@ -124,20 +152,23 @@ public class TerraOcrExample {
                 } catch (RuntimeException ignored) {
                     // JSON이 아닌 오류도 HTTP 상태와 request-id는 유지합니다.
                 }
-                String hint = switch (code) {
-                    case "insufficient_quota" -> "API 크레딧·결제 상태와 사용 한도를 확인하세요. 반복 호출로 해결되지 않습니다.";
-                    case "rate_limit_exceeded" -> "요청/토큰 속도 제한입니다. 잠시 기다리고 프로젝트·모델별 제한을 확인하세요.";
-                    default -> "401: 키, 403/404: 권한·모델, 429: API 크레딧 또는 호출량 제한을 확인하세요.";
-                };
+                String hint =
+                        switch (code) {
+                            case "insufficient_quota" -> "API 크레딧·결제 상태와 사용 한도를 확인하세요. 반복 호출로 해결되지 않습니다.";
+                            case "rate_limit_exceeded" -> "요청/토큰 속도 제한입니다. 잠시 기다리고 프로젝트·모델별 제한을 확인하세요.";
+                            default -> "401: 키, 403/404: 권한·모델, 429: API 크레딧 또는 호출량 제한을 확인하세요.";
+                        };
                 throw new IllegalStateException("OpenAI HTTP " + response.statusCode()
                         + "; code=" + code + "; type=" + type
-                        + "; request-id=" + response.headers().firstValue("x-request-id").orElse("unknown")
+                        + "; request-id="
+                        + response.headers().firstValue("x-request-id").orElse("unknown")
                         + ". " + hint);
             }
             // API 응답의 바깥 구조 읽기
             JsonNode envelope = JSON.readTree(response.body());
             if (!"completed".equals(envelope.path("status").asText())) {
-                throw new IllegalStateException("응답 미완료: " + envelope.path("status").asText());
+                throw new IllegalStateException(
+                        "응답 미완료: " + envelope.path("status").asText());
             }
             StringBuilder output = new StringBuilder();
             // output 안에 실제 text 찾기
@@ -159,16 +190,25 @@ public class TerraOcrExample {
             System.out.println("===== ESTIMATED WORD COORDINATES (not verified) =====");
             int index = 0;
             for (JsonNode word : result.path("words")) {
-                System.out.printf("word_%03d | text=[%s] | uncertain=%s%n",
-                        ++index, word.path("text").asText(), word.path("uncertain").asBoolean());
+                System.out.printf(
+                        "word_%03d | text=[%s] | uncertain=%s%n",
+                        ++index,
+                        word.path("text").asText(),
+                        word.path("uncertain").asBoolean());
                 // API의 숫자 8개를 기존 네 꼭짓점 구조로 복원합니다.
                 List<Point> polygon = parsePolygon(word.path("polygon"));
                 for (int i = 0; i < 4; i++) {
                     Point point = polygon.get(i);
                     double x = point.x();
                     double y = point.y();
-                    System.out.printf(Locale.ROOT, "  corner%d normalized=(%.6f, %.6f) pixels=(%.1f, %.1f)%n",
-                            i + 1, x, y, x * image.getWidth(), y * image.getHeight());
+                    System.out.printf(
+                            Locale.ROOT,
+                            "  corner%d normalized=(%.6f, %.6f) pixels=(%.1f, %.1f)%n",
+                            i + 1,
+                            x,
+                            y,
+                            x * image.getWidth(),
+                            y * image.getHeight());
                 }
             }
             System.out.println("Total words: " + index);
