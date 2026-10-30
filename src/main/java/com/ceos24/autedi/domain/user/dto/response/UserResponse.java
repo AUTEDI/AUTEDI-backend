@@ -11,8 +11,7 @@ public record UserResponse(
         Role role,
         Long academyId,
         String academyName,
-        SubscriptionStatus subscriptionStatus
-) {
+        SubscriptionStatus subscriptionStatus) {
     public static UserResponse from(User user) {
         return new UserResponse(
                 user.getId(),
@@ -21,7 +20,6 @@ public record UserResponse(
                 user.getRole(),
                 user.getAcademy().getId(),
                 user.getAcademy().getName(),
-                user.getAcademy().getSubscriptionStatus()
-        );
+                user.getAcademy().getSubscriptionStatus());
     }
 }

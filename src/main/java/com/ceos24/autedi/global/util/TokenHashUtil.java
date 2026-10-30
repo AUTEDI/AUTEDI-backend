@@ -12,8 +12,7 @@ public final class TokenHashUtil {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTE_LENGTH = 32;
 
-    private TokenHashUtil() {
-    }
+    private TokenHashUtil() {}
 
     public static String generateRawToken() {
         byte[] bytes = new byte[TOKEN_BYTE_LENGTH];

@@ -17,8 +17,5 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             + "AND c.deletedAt IS NULL "
             + "AND (:pageId IS NULL OR c.page.id = :pageId) "
             + "ORDER BY c.page.pageNumber ASC, c.createdAt ASC")
-    List<Comment> findAllActiveByWorksheet(
-            @Param("worksheetId") Long worksheetId,
-            @Param("pageId") Long pageId
-    );
+    List<Comment> findAllActiveByWorksheet(@Param("worksheetId") Long worksheetId, @Param("pageId") Long pageId);
 }

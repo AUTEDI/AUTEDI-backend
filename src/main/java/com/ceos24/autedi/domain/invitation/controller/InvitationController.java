@@ -30,17 +30,14 @@ public class InvitationController {
     @PostMapping
     public ResponseEntity<ApiResponse<InvitationResponse>> createInvitation(
             @AuthenticationPrincipal CustomUserPrincipal principal,
-            @Valid @RequestBody InvitationCreateRequest request
-    ) {
+            @Valid @RequestBody InvitationCreateRequest request) {
         InvitationResponse response = invitationService.createInvitation(principal.userId(), request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.onSuccess("초대장이 발송되었습니다.", response));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.onSuccess("초대장이 발송되었습니다.", response));
     }
 
     @GetMapping("/validate")
     public ResponseEntity<ApiResponse<InvitationValidateResponse>> validateInvitation(
-            @RequestParam("token") String token
-    ) {
+            @RequestParam("token") String token) {
         InvitationValidateResponse response = invitationService.validateInvitation(token);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }

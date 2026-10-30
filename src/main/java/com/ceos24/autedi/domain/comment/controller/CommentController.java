@@ -35,8 +35,7 @@ public class CommentController {
     public ResponseEntity<ApiResponse<CommentListResponse>> getComments(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
-            @RequestParam(value = "pageId", required = false) Long pageId
-    ) {
+            @RequestParam(value = "pageId", required = false) Long pageId) {
         CommentListResponse response = commentService.getComments(principal.academyId(), worksheetId, pageId);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
@@ -45,26 +44,18 @@ public class CommentController {
     public ResponseEntity<ApiResponse<CommentResponse>> getComment(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
-            @PathVariable("commentId") Long commentId
-    ) {
+            @PathVariable("commentId") Long commentId) {
         CommentResponse response = commentService.getComment(principal.academyId(), worksheetId, commentId);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, response.etag())
-                .body(ApiResponse.onSuccess(response));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, response.etag()).body(ApiResponse.onSuccess(response));
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<CommentResponse>> createComment(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
-            @Valid @RequestBody CommentCreateRequest request
-    ) {
-        CommentResponse response = commentService.createComment(
-                principal.userId(),
-                principal.academyId(),
-                worksheetId,
-                request
-        );
+            @Valid @RequestBody CommentCreateRequest request) {
+        CommentResponse response =
+                commentService.createComment(principal.userId(), principal.academyId(), worksheetId, request);
         URI location = URI.create("/api/v1/worksheets/" + worksheetId + "/comments/" + response.id());
         return ResponseEntity.created(location)
                 .header(HttpHeaders.ETAG, response.etag())
@@ -77,15 +68,9 @@ public class CommentController {
             @PathVariable("worksheetId") Long worksheetId,
             @PathVariable("commentId") Long commentId,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @Valid @RequestBody CommentUpdateRequest request
-    ) {
-        CommentResponse response = commentService.updateComment(
-                principal.academyId(),
-                worksheetId,
-                commentId,
-                ifMatch,
-                request
-        );
+            @Valid @RequestBody CommentUpdateRequest request) {
+        CommentResponse response =
+                commentService.updateComment(principal.academyId(), worksheetId, commentId, ifMatch, request);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("코멘트 내용이 수정되었습니다.", response));
@@ -96,14 +81,8 @@ public class CommentController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
             @PathVariable("commentId") Long commentId,
-            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch
-    ) {
-        commentService.deleteComment(
-                principal.academyId(),
-                worksheetId,
-                commentId,
-                ifMatch
-        );
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        commentService.deleteComment(principal.academyId(), worksheetId, commentId, ifMatch);
         return ResponseEntity.noContent().build();
     }
 }

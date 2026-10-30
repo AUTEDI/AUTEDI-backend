@@ -38,7 +38,8 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
+        User user = userRepository
+                .findByEmail(request.email())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_CREDENTIALS));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
@@ -59,8 +60,7 @@ public class AuthService {
                 user.getId(),
                 user.getAcademy().getId(),
                 user.getEmail(),
-                user.getRole().name()
-        );
+                user.getRole().name());
 
         String rawRefreshToken = TokenHashUtil.generateRawToken();
         String tokenHash = TokenHashUtil.hashToken(rawRefreshToken);
@@ -78,7 +78,8 @@ public class AuthService {
     @Transactional
     public TokenRefreshResponse refresh(TokenRefreshRequest request) {
         String tokenHash = TokenHashUtil.hashToken(request.refreshToken());
-        RefreshToken token = refreshTokenRepository.findByTokenHash(tokenHash)
+        RefreshToken token = refreshTokenRepository
+                .findByTokenHash(tokenHash)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_TOKEN));
 
         LocalDateTime now = LocalDateTime.now();
@@ -108,8 +109,7 @@ public class AuthService {
                 user.getId(),
                 user.getAcademy().getId(),
                 user.getEmail(),
-                user.getRole().name()
-        );
+                user.getRole().name());
 
         return new TokenRefreshResponse(newAccessToken, newRawRefreshToken);
     }
@@ -118,14 +118,12 @@ public class AuthService {
     public void logout(LogoutRequest request) {
         if (request != null && StringUtils.hasText(request.refreshToken())) {
             String tokenHash = TokenHashUtil.hashToken(request.refreshToken());
-            refreshTokenRepository.findByTokenHash(tokenHash)
-                    .ifPresent(token -> token.revoke(LocalDateTime.now()));
+            refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token -> token.revoke(LocalDateTime.now()));
         }
     }
 
     public UserResponse getCurrentUser(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         return UserResponse.from(user);
     }
 }

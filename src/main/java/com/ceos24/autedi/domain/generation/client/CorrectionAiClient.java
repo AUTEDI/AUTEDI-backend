@@ -7,9 +7,5 @@ import java.util.List;
 
 public interface CorrectionAiClient {
 
-    List<CorrectionDraft> generate(
-            Worksheet worksheet,
-            List<WorksheetPage> pages,
-            List<WorksheetSetting> settings
-    );
+    List<CorrectionDraft> generate(Worksheet worksheet, List<WorksheetPage> pages, List<WorksheetSetting> settings);
 }

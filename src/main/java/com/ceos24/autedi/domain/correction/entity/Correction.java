@@ -92,8 +92,7 @@ public class Correction extends BaseTimeEntity {
             String aiInitialContent,
             String content,
             String explanation,
-            List<RegionPayload> regions
-    ) {
+            List<RegionPayload> regions) {
         this.worksheet = worksheet;
         this.page = page;
         this.generation = generation;

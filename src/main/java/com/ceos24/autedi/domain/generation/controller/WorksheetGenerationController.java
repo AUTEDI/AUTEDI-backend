@@ -27,14 +27,9 @@ public class WorksheetGenerationController {
     public ResponseEntity<ApiResponse<GenerationResponse>> requestGeneration(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
-    ) {
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         GenerationResponse response = generationService.requestGeneration(
-                principal.userId(),
-                principal.academyId(),
-                worksheetId,
-                idempotencyKey
-        );
+                principal.userId(), principal.academyId(), worksheetId, idempotencyKey);
         URI location = URI.create("/api/v1/worksheets/" + worksheetId + "/generations/" + response.id());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .location(location)
@@ -45,13 +40,9 @@ public class WorksheetGenerationController {
     public ResponseEntity<ApiResponse<GenerationResponse>> getGenerationStatus(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
-            @PathVariable("generationId") Long generationId
-    ) {
-        GenerationResponse response = generationService.getGenerationStatus(
-                principal.academyId(),
-                worksheetId,
-                generationId
-        );
+            @PathVariable("generationId") Long generationId) {
+        GenerationResponse response =
+                generationService.getGenerationStatus(principal.academyId(), worksheetId, generationId);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
 
@@ -60,15 +51,9 @@ public class WorksheetGenerationController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
             @PathVariable("generationId") Long generationId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
-    ) {
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         GenerationResponse response = generationService.retryGeneration(
-                principal.userId(),
-                principal.academyId(),
-                worksheetId,
-                generationId,
-                idempotencyKey
-        );
+                principal.userId(), principal.academyId(), worksheetId, generationId, idempotencyKey);
         URI location = URI.create("/api/v1/worksheets/" + worksheetId + "/generations/" + response.id());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .location(location)

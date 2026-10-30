@@ -24,8 +24,7 @@ public interface CorrectionRepository extends JpaRepository<Correction, Long> {
             @Param("worksheetId") Long worksheetId,
             @Param("status") CorrectionStatus status,
             @Param("pageId") Long pageId,
-            @Param("area") CorrectionArea area
-    );
+            @Param("area") CorrectionArea area);
 
     List<Correction> findAllByWorksheetIdAndStatus(Long worksheetId, CorrectionStatus status);
 }

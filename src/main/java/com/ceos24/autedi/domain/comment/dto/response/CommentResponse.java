@@ -15,8 +15,7 @@ public record CommentResponse(
         List<RegionPayload> regions,
         String content,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
-) {
+        LocalDateTime updatedAt) {
     public static CommentResponse from(Comment comment) {
         return of(comment, comment.getEtag());
     }
@@ -31,7 +30,6 @@ public record CommentResponse(
                 comment.getRegions(),
                 comment.getContent(),
                 comment.getCreatedAt(),
-                comment.getUpdatedAt()
-        );
+                comment.getUpdatedAt());
     }
 }

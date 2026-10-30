@@ -33,14 +33,9 @@ public class WorksheetController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<WorksheetDetailResponse>> uploadWorksheet(
-            @AuthenticationPrincipal CustomUserPrincipal principal,
-            @RequestParam("file") MultipartFile file
-    ) {
-        WorksheetDetailResponse response = worksheetService.uploadWorksheet(
-                principal.userId(),
-                principal.academyId(),
-                file
-        );
+            @AuthenticationPrincipal CustomUserPrincipal principal, @RequestParam("file") MultipartFile file) {
+        WorksheetDetailResponse response =
+                worksheetService.uploadWorksheet(principal.userId(), principal.academyId(), file);
         URI location = URI.create("/api/v1/worksheets/" + response.id());
         return ResponseEntity.created(location)
                 .header(HttpHeaders.ETAG, response.etag())
@@ -49,16 +44,9 @@ public class WorksheetController {
 
     @GetMapping("/{worksheetId}")
     public ResponseEntity<ApiResponse<WorksheetDetailResponse>> getWorksheet(
-            @AuthenticationPrincipal CustomUserPrincipal principal,
-            @PathVariable("worksheetId") Long worksheetId
-    ) {
-        WorksheetDetailResponse response = worksheetService.getWorksheetDetail(
-                principal.academyId(),
-                worksheetId
-        );
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, response.etag())
-                .body(ApiResponse.onSuccess(response));
+            @AuthenticationPrincipal CustomUserPrincipal principal, @PathVariable("worksheetId") Long worksheetId) {
+        WorksheetDetailResponse response = worksheetService.getWorksheetDetail(principal.academyId(), worksheetId);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, response.etag()).body(ApiResponse.onSuccess(response));
     }
 
     @PutMapping(value = "/{worksheetId}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -66,14 +54,9 @@ public class WorksheetController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @RequestParam("file") MultipartFile file
-    ) {
-        WorksheetDetailResponse response = worksheetService.replaceWorksheetFile(
-                principal.academyId(),
-                worksheetId,
-                ifMatch,
-                file
-        );
+            @RequestParam("file") MultipartFile file) {
+        WorksheetDetailResponse response =
+                worksheetService.replaceWorksheetFile(principal.academyId(), worksheetId, ifMatch, file);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("학습지 파일이 교체되었습니다.", response));
@@ -81,16 +64,9 @@ public class WorksheetController {
 
     @GetMapping("/{worksheetId}/settings")
     public ResponseEntity<ApiResponse<WorksheetSettingsResponse>> getSettings(
-            @AuthenticationPrincipal CustomUserPrincipal principal,
-            @PathVariable("worksheetId") Long worksheetId
-    ) {
-        WorksheetSettingsResponse response = worksheetService.getSettings(
-                principal.academyId(),
-                worksheetId
-        );
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, response.etag())
-                .body(ApiResponse.onSuccess(response));
+            @AuthenticationPrincipal CustomUserPrincipal principal, @PathVariable("worksheetId") Long worksheetId) {
+        WorksheetSettingsResponse response = worksheetService.getSettings(principal.academyId(), worksheetId);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, response.etag()).body(ApiResponse.onSuccess(response));
     }
 
     @PutMapping("/{worksheetId}/settings")
@@ -98,14 +74,9 @@ public class WorksheetController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @Valid @RequestBody WorksheetSettingsUpdateRequest request
-    ) {
-        WorksheetSettingsResponse response = worksheetService.updateSettings(
-                principal.academyId(),
-                worksheetId,
-                ifMatch,
-                request
-        );
+            @Valid @RequestBody WorksheetSettingsUpdateRequest request) {
+        WorksheetSettingsResponse response =
+                worksheetService.updateSettings(principal.academyId(), worksheetId, ifMatch, request);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("첨삭 설정이 저장되었습니다.", response));

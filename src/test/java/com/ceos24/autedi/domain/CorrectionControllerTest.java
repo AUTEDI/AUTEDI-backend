@@ -1,5 +1,14 @@
 package com.ceos24.autedi.domain;
 
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.ceos24.autedi.domain.academy.entity.Academy;
 import com.ceos24.autedi.domain.academy.entity.SubscriptionStatus;
 import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
@@ -10,8 +19,6 @@ import com.ceos24.autedi.domain.correction.dto.request.CorrectionUpdateRequest;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
-import com.ceos24.autedi.domain.generation.entity.GenerationStage;
-import com.ceos24.autedi.domain.generation.entity.GenerationStatus;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
 import com.ceos24.autedi.domain.user.entity.Role;
@@ -40,16 +47,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
-
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @Transactional
@@ -115,12 +112,12 @@ class CorrectionControllerTest {
                 .status(UserStatus.ACTIVE)
                 .build());
 
-        token = "Bearer " + jwtTokenProvider.createAccessToken(
-                testUser.getId(),
-                testAcademy.getId(),
-                testUser.getEmail(),
-                testUser.getRole().name()
-        );
+        token = "Bearer "
+                + jwtTokenProvider.createAccessToken(
+                        testUser.getId(),
+                        testAcademy.getId(),
+                        testUser.getEmail(),
+                        testUser.getRole().name());
 
         testWorksheet = worksheetRepository.save(Worksheet.builder()
                 .academy(testAcademy)
@@ -206,8 +203,10 @@ class CorrectionControllerTest {
     @Test
     @DisplayName("GET /corrections/{correctionId} - 첨삭 단건 조회 및 ETag 헤더 반환")
     void getCorrection_success() throws Exception {
-        mockMvc.perform(get("/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
-                        testWorksheet.getId(), testCorrection.getId())
+        mockMvc.perform(get(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andExpect(header().exists(HttpHeaders.ETAG))
@@ -220,8 +219,10 @@ class CorrectionControllerTest {
         String etag = testCorrection.getEtag();
         CorrectionUpdateRequest request = new CorrectionUpdateRequest("He went to school");
 
-        mockMvc.perform(patch("/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
-                        testWorksheet.getId(), testCorrection.getId())
+        mockMvc.perform(patch(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .header(HttpHeaders.IF_MATCH, etag)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -236,8 +237,10 @@ class CorrectionControllerTest {
     void updateCorrection_preconditionFailed() throws Exception {
         CorrectionUpdateRequest request = new CorrectionUpdateRequest("He went to school");
 
-        mockMvc.perform(patch("/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
-                        testWorksheet.getId(), testCorrection.getId())
+        mockMvc.perform(patch(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .header(HttpHeaders.IF_MATCH, "\"wrong-etag\"")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -251,8 +254,10 @@ class CorrectionControllerTest {
         String etag = testCorrection.getEtag();
 
         // 1. DELETE
-        var deleteResult = mockMvc.perform(delete("/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
-                        testWorksheet.getId(), testCorrection.getId())
+        var deleteResult = mockMvc.perform(delete(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .header(HttpHeaders.IF_MATCH, etag))
                 .andExpect(status().isNoContent())
@@ -262,8 +267,10 @@ class CorrectionControllerTest {
         String deleteEtag = deleteResult.getResponse().getHeader(HttpHeaders.ETAG);
 
         // 2. RESTORE
-        mockMvc.perform(post("/api/v1/worksheets/{worksheetId}/corrections/{correctionId}/restore",
-                        testWorksheet.getId(), testCorrection.getId())
+        mockMvc.perform(post(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}/restore",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .header(HttpHeaders.IF_MATCH, deleteEtag))
                 .andExpect(status().isOk())

@@ -16,16 +16,11 @@ public record GenerationResponse(
         LocalDateTime createdAt,
         LocalDateTime startedAt,
         LocalDateTime finishedAt,
-        GenerationErrorResponse error
-) {
+        GenerationErrorResponse error) {
     public static GenerationResponse from(WorksheetGeneration gen) {
         GenerationErrorResponse error = null;
         if (gen.getErrorCode() != null) {
-            error = new GenerationErrorResponse(
-                    gen.getErrorCode(),
-                    gen.getErrorMessage(),
-                    gen.getIsRetryable()
-            );
+            error = new GenerationErrorResponse(gen.getErrorCode(), gen.getErrorMessage(), gen.getIsRetryable());
         }
 
         return new GenerationResponse(
@@ -39,7 +34,6 @@ public record GenerationResponse(
                 gen.getCreatedAt(),
                 gen.getStartedAt(),
                 gen.getCompletedAt(),
-                error
-        );
+                error);
     }
 }

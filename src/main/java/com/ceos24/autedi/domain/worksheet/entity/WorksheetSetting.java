@@ -22,12 +22,10 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "worksheet_settings",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "UK_worksheet_settings_worksheet_id_area",
-                        columnNames = {"worksheet_id", "area"}
-                )
-        }
-)
+            @UniqueConstraint(
+                    name = "UK_worksheet_settings_worksheet_id_area",
+                    columnNames = {"worksheet_id", "area"})
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class WorksheetSetting extends BaseTimeEntity {

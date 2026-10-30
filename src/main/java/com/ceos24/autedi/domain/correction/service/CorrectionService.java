@@ -47,20 +47,20 @@ public class CorrectionService {
 
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
-        WorksheetGeneration latestGen = worksheetGenerationRepository.findFirstByWorksheetIdOrderByCreatedAtDesc(worksheetId)
+        WorksheetGeneration latestGen = worksheetGenerationRepository
+                .findFirstByWorksheetIdOrderByCreatedAtDesc(worksheetId)
                 .orElse(null);
 
         Long latestGenId = latestGen != null ? latestGen.getId() : null;
         WorksheetDetailResponse worksheetDetail = WorksheetDetailResponse.of(worksheet, pages, settings, latestGenId);
         GenerationResponse generationResponse = latestGen != null ? GenerationResponse.from(latestGen) : null;
 
-        List<CorrectionResponse> corrections = correctionRepository.findAllByWorksheetIdAndStatus(worksheetId, CorrectionStatus.ACTIVE)
-                .stream()
-                .map(CorrectionResponse::from)
-                .toList();
+        List<CorrectionResponse> corrections =
+                correctionRepository.findAllByWorksheetIdAndStatus(worksheetId, CorrectionStatus.ACTIVE).stream()
+                        .map(CorrectionResponse::from)
+                        .toList();
 
-        List<CommentResponse> comments = commentRepository.findAllActiveByWorksheet(worksheetId, null)
-                .stream()
+        List<CommentResponse> comments = commentRepository.findAllActiveByWorksheet(worksheetId, null).stream()
                 .map(CommentResponse::from)
                 .toList();
 
@@ -68,20 +68,15 @@ public class CorrectionService {
     }
 
     public CorrectionListResponse getCorrections(
-            Long academyId,
-            Long worksheetId,
-            String statusParam,
-            Long pageId,
-            CorrectionArea area
-    ) {
+            Long academyId, Long worksheetId, String statusParam, Long pageId, CorrectionArea area) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
-        List<CorrectionResponse> items = correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area)
-                .stream()
-                .map(CorrectionResponse::from)
-                .toList();
+        List<CorrectionResponse> items =
+                correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area).stream()
+                        .map(CorrectionResponse::from)
+                        .toList();
 
         return CorrectionListResponse.of(items);
     }
@@ -95,12 +90,7 @@ public class CorrectionService {
 
     @Transactional
     public CorrectionResponse updateCorrection(
-            Long academyId,
-            Long worksheetId,
-            Long correctionId,
-            String ifMatch,
-            CorrectionUpdateRequest request
-    ) {
+            Long academyId, Long worksheetId, Long correctionId, String ifMatch, CorrectionUpdateRequest request) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
@@ -158,7 +148,8 @@ public class CorrectionService {
     }
 
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository.findByIdAndAcademyId(worksheetId, academyId)
+        Worksheet worksheet = worksheetRepository
+                .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         if (worksheet.getStatus() != WorksheetStatus.READY) {
@@ -168,7 +159,8 @@ public class CorrectionService {
     }
 
     private Correction findCorrectionByIdAndWorksheetId(Long correctionId, Long worksheetId) {
-        Correction correction = correctionRepository.findById(correctionId)
+        Correction correction = correctionRepository
+                .findById(correctionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CORRECTION_NOT_FOUND));
 
         if (!correction.getWorksheet().getId().equals(worksheetId)) {

@@ -16,40 +16,30 @@ public record WorksheetDetailResponse(
         WorksheetSettingsResponse settings,
         Long latestGenerationId,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
-) {
+        LocalDateTime updatedAt) {
 
     public static WorksheetDetailResponse of(
-            Worksheet worksheet,
-            List<WorksheetPage> pages,
-            List<WorksheetSetting> settings,
-            Long latestGenerationId
-    ) {
-        String mediaType = switch (worksheet.getFileType()) {
-            case JPG, JPEG -> "image/jpeg";
-            case PNG -> "image/png";
-            case PDF -> "application/pdf";
-        };
+            Worksheet worksheet, List<WorksheetPage> pages, List<WorksheetSetting> settings, Long latestGenerationId) {
+        String mediaType =
+                switch (worksheet.getFileType()) {
+                    case JPG, JPEG -> "image/jpeg";
+                    case PNG -> "image/png";
+                    case PDF -> "application/pdf";
+                };
 
         FileDetailResponse fileDetail = new FileDetailResponse(
-                worksheet.getOriginalFilename(),
-                mediaType,
-                worksheet.getFileSize(),
-                worksheet.getFileUrl(),
-                null
-        );
+                worksheet.getOriginalFilename(), mediaType, worksheet.getFileSize(), worksheet.getFileUrl(), null);
 
         List<PageDetailResponse> pageDetails = pages != null
                 ? pages.stream()
-                .map(p -> new PageDetailResponse(
-                        p.getId(),
-                        p.getPageNumber(),
-                        p.getWidth(),
-                        p.getHeight(),
-                        p.getPreviewImageUrl(),
-                        null
-                ))
-                .toList()
+                        .map(p -> new PageDetailResponse(
+                                p.getId(),
+                                p.getPageNumber(),
+                                p.getWidth(),
+                                p.getHeight(),
+                                p.getPreviewImageUrl(),
+                                null))
+                        .toList()
                 : List.of();
 
         String settingsEtag = "\"settings_" + worksheet.getId() + "-v" + worksheet.getVersion() + "\"";
@@ -64,7 +54,6 @@ public record WorksheetDetailResponse(
                 settingsResponse,
                 latestGenerationId,
                 worksheet.getCreatedAt(),
-                worksheet.getUpdatedAt()
-        );
+                worksheet.getUpdatedAt());
     }
 }

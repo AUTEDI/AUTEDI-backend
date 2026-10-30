@@ -33,9 +33,7 @@ public class CorrectionController {
 
     @GetMapping("/review")
     public ResponseEntity<ApiResponse<ReviewResponse>> getReview(
-            @AuthenticationPrincipal CustomUserPrincipal principal,
-            @PathVariable("worksheetId") Long worksheetId
-    ) {
+            @AuthenticationPrincipal CustomUserPrincipal principal, @PathVariable("worksheetId") Long worksheetId) {
         ReviewResponse response = correctionService.getReview(principal.academyId(), worksheetId);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
@@ -46,15 +44,9 @@ public class CorrectionController {
             @PathVariable("worksheetId") Long worksheetId,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "pageId", required = false) Long pageId,
-            @RequestParam(value = "area", required = false) CorrectionArea area
-    ) {
-        CorrectionListResponse response = correctionService.getCorrections(
-                principal.academyId(),
-                worksheetId,
-                status,
-                pageId,
-                area
-        );
+            @RequestParam(value = "area", required = false) CorrectionArea area) {
+        CorrectionListResponse response =
+                correctionService.getCorrections(principal.academyId(), worksheetId, status, pageId, area);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
 
@@ -62,16 +54,9 @@ public class CorrectionController {
     public ResponseEntity<ApiResponse<CorrectionResponse>> getCorrection(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
-            @PathVariable("correctionId") Long correctionId
-    ) {
-        CorrectionResponse response = correctionService.getCorrection(
-                principal.academyId(),
-                worksheetId,
-                correctionId
-        );
-        return ResponseEntity.ok()
-                .header(HttpHeaders.ETAG, response.etag())
-                .body(ApiResponse.onSuccess(response));
+            @PathVariable("correctionId") Long correctionId) {
+        CorrectionResponse response = correctionService.getCorrection(principal.academyId(), worksheetId, correctionId);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, response.etag()).body(ApiResponse.onSuccess(response));
     }
 
     @PatchMapping("/corrections/{correctionId}")
@@ -80,15 +65,9 @@ public class CorrectionController {
             @PathVariable("worksheetId") Long worksheetId,
             @PathVariable("correctionId") Long correctionId,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @Valid @RequestBody CorrectionUpdateRequest request
-    ) {
-        CorrectionResponse response = correctionService.updateCorrection(
-                principal.academyId(),
-                worksheetId,
-                correctionId,
-                ifMatch,
-                request
-        );
+            @Valid @RequestBody CorrectionUpdateRequest request) {
+        CorrectionResponse response =
+                correctionService.updateCorrection(principal.academyId(), worksheetId, correctionId, ifMatch, request);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("첨삭 내용이 수정되었습니다.", response));
@@ -99,17 +78,9 @@ public class CorrectionController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
             @PathVariable("correctionId") Long correctionId,
-            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch
-    ) {
-        String nextEtag = correctionService.deleteCorrection(
-                principal.academyId(),
-                worksheetId,
-                correctionId,
-                ifMatch
-        );
-        return ResponseEntity.noContent()
-                .header(HttpHeaders.ETAG, nextEtag)
-                .build();
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        String nextEtag = correctionService.deleteCorrection(principal.academyId(), worksheetId, correctionId, ifMatch);
+        return ResponseEntity.noContent().header(HttpHeaders.ETAG, nextEtag).build();
     }
 
     @PostMapping("/corrections/{correctionId}/restore")
@@ -117,14 +88,9 @@ public class CorrectionController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable("worksheetId") Long worksheetId,
             @PathVariable("correctionId") Long correctionId,
-            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch
-    ) {
-        CorrectionResponse response = correctionService.restoreCorrection(
-                principal.academyId(),
-                worksheetId,
-                correctionId,
-                ifMatch
-        );
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        CorrectionResponse response =
+                correctionService.restoreCorrection(principal.academyId(), worksheetId, correctionId, ifMatch);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("첨삭 삭제가 취소되었습니다.", response));
