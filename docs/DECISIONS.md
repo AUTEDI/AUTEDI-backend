@@ -54,6 +54,11 @@
    - 9.5 교사 코멘트 영역-페이지 일치성 검증 및 불변 영역 정책
    - 9.6 코멘트 소프트 딜리트(deleted_at) 및 삭제 자원 404 은닉
    - 9.7 단위 자원별 ETag(`cor_`, `com_`) 및 If-Match 동시성 제어
+10. [코드 품질 및 포맷터 표준화 의사결정 (Code Formatting & Spotless)](#10-코드-품질-및-포맷터-표준화-의사결정-code-formatting--spotless)
+   - 10.1 도입 배경 및 철학 (Review Fatigue & Dirty Diff 제거)
+   - 10.2 포맷터 엔진 선정 비교: Google Java Format vs Palantir Java Format
+   - 10.3 2단계 품질 강제 파이프라인 (Local Hook & Remote CI)
+   - 10.4 팀원 환경 설정 및 실행 명령어 가이드
 
 ---
 
@@ -553,3 +558,62 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
   - 단, 동일한 자원을 동시에 수정/삭제할 때만 `If-Match` 검증을 통해 `412 Precondition Failed` (`COMMON_412`)로 나중 쓰기를 차단한다.
 - **204 No Content 헤더 제공**:
   - 첨삭 삭제(`204 No Content`) 시에도 응답 헤더로 다음 버전 ETag(`cor_{id}-v{next}`)를 반환하여 RESTful 완전성을 보장한다.
+
+---
+
+## 10. 코드 품질 및 포맷터 표준화 의사결정 (Code Formatting & Spotless)
+
+### 10.1 도입 배경 및 철학 (Review Fatigue & Dirty Diff 제거)
+- **코드 리뷰 피로도(Review Fatigue) 제거**:
+  - 들여쓰기, 괄호 위치, 공백, 미사용 import 등 서식 관련 코멘트는 리뷰어와 리뷰이 모두에게 불필요한 피로를 준다.
+  - 서식 검사는 100% 빌드 도구에 위임하고, 코드 리뷰는 **도메인 설계, 아키텍처, 성능, 보안, 예외 처리** 등 본질에만 집중한다.
+- **Git Diff 오염(Dirty Diff) 원천 차단**:
+  - 개발자별 IDE(IntelliJ, VS Code 등)나 OS(macOS, Windows) 설정 차이로 인해 단 1줄의 로직 수정 시 수백 줄의 들여쓰기가 변경되는 현상을 방지한다.
+  - `git blame`과 히스토리의 신뢰성을 지키고, 불필요한 서식 충돌(Merge Conflict)을 원천 차단한다.
+- **핵심 원칙**:
+  > 💡 **"코드 컨벤션은 사람이 눈으로 검사하는 것이 아니라, 빌드 파이프라인이 기계적으로 강제하는 것이다."**
+
+### 10.2 포맷터 엔진 선정 비교: Google Java Format vs Palantir Java Format
+- **대안 비교**:
+  | 비교 항목 | Google Java Format (GJF) | Palantir Java Format (채택) | 선정 이유 |
+  | :--- | :--- | :--- | :--- |
+  | **들여쓰기(Indent)** | 2칸 (2-space indent) | **4칸 (4-space indent)** | 자바 및 Spring Boot 생태계의 사실상 표준(de facto standard)인 4칸 들여쓰기 준수 |
+  | **가독성** | 중첩 제네릭, 람다, 긴 메서드 체이닝 시 라인이 과도하게 접힘 | **람다, Stream, Builder 패턴, 메서드 체이닝 가독성 우수** | 도메인 엔티티 빌더 및 JPA 리포지토리/스트림 로직 가독성에 최적화 |
+  | **커스텀 여부** | 설정 커스텀 일체 불가 (엄격한 구글 스타일 강제) | 설정 최소화(Opinionated) 원칙 동일 | 불필요한 설정 논쟁 없이 자바 표준 스타일에 완벽 부합 |
+- **최종 결정**:
+  - **Spotless 6.25.0** 기반에 **Palantir Java Format 2.50.0 (`palantirJavaFormat('2.50.0')`)** 엔진을 채택한다.
+  - 추가 서식 규칙: 사용하지 않는 import문 자동 제거(`removeUnusedImports()`), 파일 끝 개행 보장(`endWithNewline()`), 후행 공백 자동 정리(`trimTrailingWhitespace()`).
+
+### 10.3 2단계 품질 강제 파이프라인 (Local Hook & Remote CI)
+서식 미준수로 인해 CI 빌드가 깨지거나 PR 머지가 차단되는 문제를 방지하기 위해 **로컬 사전 정렬**과 **원격 최종 검증** 2단계 파이프라인을 운영한다.
+
+```mermaid
+flowchart LR
+    A["로컬 작업 (git commit)"] -->|"pre-commit hook<br/>(spotlessApply)"| B["자동 정렬 완료<br/>커밋 생성"]
+    B -->|"git push & PR"| C["GitHub Actions CI<br/>(spotlessCheck)"]
+    C -->|"Pass (100% 검증)"| D["PR 머지 승인"]
+```
+
+1. **로컬 1차 방어 (Git Pre-commit Hook)**:
+   - `git commit` 실행 즉시 `.git/hooks/pre-commit` 스크립트가 동작하여 `./gradlew spotlessApply`를 백그라운드에서 자동 실행한다.
+   - 개발자가 별도로 명령어를 외우거나 수동 실행하지 않아도 모든 커밋이 무조건 Palantir 표준 서식으로 자동 정렬되어 커밋된다.
+2. **원격 2차 방어 (GitHub Actions CI)**:
+   - PR 인입 시 CI 파이프라인에서 `./gradlew spotlessCheck`를 실행한다.
+   - 로컬 훅이 우회된 커밋이 포함된 PR은 빌드가 실패하며 머지가 원천 차단된다.
+
+### 10.4 팀원 환경 설정 및 실행 명령어 가이드
+저장소를 새로 클론받은 팀원은 아래 1줄 명령어로 Git Hook을 활성화한다:
+
+```bash
+# 1. pre-commit 훅 실행 권한 부여 및 활성화 (최초 1회 실행)
+chmod +x scripts/pre-commit && cp scripts/pre-commit .git/hooks/pre-commit
+```
+
+* **수동 서식 정렬이 필요할 때**:
+  ```bash
+  ./gradlew spotlessApply
+  ```
+* **서식 준수 여부만 검사할 때 (CI 환경과 동일)**:
+  ```bash
+  ./gradlew spotlessCheck
+  ```
