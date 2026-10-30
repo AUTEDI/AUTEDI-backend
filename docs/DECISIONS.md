@@ -68,6 +68,7 @@
    - 11.6 74일 후 30분 무중단 마이그레이션 런북
    - 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
    - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
+   - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
 
 ---
 
@@ -986,3 +987,68 @@ MVP 개발 및 정식 런칭 전 단계에서는 개발 편의를 위해 `create
   - 컬럼명을 직접 변경(`RENAME COLUMN`)하면 배포 전환 시점에 이전 버전 애플리케이션에서 에러가 발생할 수 있으므로, **[신규 컬럼 추가 ➡️ 데이터 마이그레이션 ➡️ 구 컬럼 제거]**의 점진적 배포 방식을 권장한다.
 * **향후 고도화 경로**:
   - 팀 규모 확장 및 스키마 변경 빈도 증가 시, 형상관리 도구인 **Flyway**를 도입하여 Git 커밋과 DB 버전 마이그레이션을 완전 자동화한다.
+
+---
+
+### 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
+
+#### 11.9.1 정책 수립 배경 및 목적 (상용 유료 B2B SaaS 신뢰성 보장)
+AUTEDI는 교육기관(학원, 영어 도서관)을 대상으로 구독료를 청구하는 **유료 상용 B2B SaaS**를 지향한다. 단순 토이 프로젝트나 학습용 레포지토리와 달리, 실제 고객의 결제와 학생 과제물 피드백이 실시간으로 이루어지므로 단 한 번의 사소한 실수로도 서비스 중단, 데이터 오염, 고객 이탈이 발생할 수 있다.
+
+이에 따라 팀원 편의나 속도보다 **안정성(Stability)과 추적성(Traceability)**을 최상위 가치로 두고, `main`뿐만 아니라 **`develop` 브랜치까지 예외 없이 직접 푸시(Direct Push)를 전면 금지**하고 PR 및 자동화 검증을 강제한다.
+
+---
+
+#### 11.9.2 브랜치 보호 규칙 (Branch Protection Rules) 상세
+
+| 보호 대상 브랜치 | 직접 푸시(`git push`) 허용 여부 | 필수 상태 검사 (Required Status Checks) | 배포 연동 대상 |
+| :--- | :---: | :--- | :--- |
+| **`develop`** | **❌ 전면 금지 (Admin 포함)** | • **Spotless & Unit Tests** (코드 포맷 및 테스트 100% 통과)<br>• PR 리뷰 및 머지 승인 필수 | **Railway 개발 배포** (QC 테스트베드 자동 배포) |
+| **`main`** | **❌ 전면 금지 (Admin 포함)** | • **Spotless & Unit Tests** 통과 필수<br>• `develop` 검증 완료 커밋만 인입 허용 | **AWS EC2 실제 운영 배포** (Docker Hub ➡️ EC2 무중단 배포) |
+
+* **`develop` 브랜치까지 엄격히 통제하는 핵심 이유**:
+  1. **Railway QC 환경 보호**: `develop` 브랜치는 프론트엔드 연동 및 상시 QC 테스트가 진행되는 실시간 서버이다. 깨진 코드가 직접 푸시될 경우 프론트엔드 개발팀 전체의 작업이 즉시 중단(Block)된다.
+  2. **오타/단순 문서 수정도 예외 없음**: "단순한 1줄 수정이니까 괜찮겠지"라는 방심에서 시작되는 설정 오류 및 빌드 실패를 원천 봉쇄한다. 모든 변경은 CI 파이프라인의 기계적 검증을 통과해야만 브랜치에 합류할 수 있다.
+  3. **완벽한 변경 이력 아카이빙**: 모든 기능, 버그 수정, 문서 및 인프라 변경이 GitHub PR과 연결되어 영구 보존되므로, 장애 발생 시 원인 커밋과 맥락을 수 분 내로 역추적할 수 있다.
+
+---
+
+#### 11.9.3 표준 브랜치 전략 및 작업 흐름 (Branching Workflow)
+
+```mermaid
+flowchart LR
+    subgraph Feature["작업 브랜치"]
+        F["feat/*, fix/*, docs/*"]
+    end
+
+    subgraph CI1["1단계 검증 (PR)"]
+        C1["GitHub Actions CI\n(SpotlessCheck + Tests)"]
+    end
+
+    subgraph Develop["개발 통합 브랜치"]
+        D["develop (Protected)"]
+        R["Railway 배포\n(프론트 연동 & QC)"]
+    end
+
+    subgraph CI2["2단계 검증 (Release PR)"]
+        C2["Release PR 검증"]
+    end
+
+    subgraph Main["운영 브랜치"]
+        M["main (Protected)"]
+        E["AWS EC2 운영 배포\n(Docker Compose)"]
+    end
+
+    F -->|"PR 생성"| C1
+    C1 -->|"Pass 후 머지"| D
+    D -->|"Auto Deploy"| R
+    D -->|"PR 생성 (develop ➡️ main)"| C2
+    C2 -->|"머지 승인"| M
+    M -->|"GitHub Actions"| E
+```
+
+1. **작업 브랜치 생성**: 모든 작업은 최신 `develop`을 기반으로 `feat/*`, `fix/*`, `docs/*`, `chore/*` 접두사를 붙여 생성한다.
+2. **로컬 커밋**: `pre-commit` 훅을 통해 Palantir Java Format이 자동 적용된다.
+3. **PR 생성 및 CI 통과**: `develop`을 대상으로 PR을 열고, GitHub Actions의 `Spotless & Unit Tests`가 성공해야 머지 버튼이 활성화된다.
+4. **개발 서버 검증**: `develop` 머지 즉시 Railway에 자동 배포되어 API 및 비즈니스 로직을 검증한다.
+5. **운영 릴리즈**: 검증 완료된 `develop` 브랜치를 `main`으로 PR 요청하여 최종 배포를 진행한다.
