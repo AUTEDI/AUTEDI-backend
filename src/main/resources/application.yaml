@@ -13,10 +13,10 @@ spring:
 springdoc:
   api-docs:
     path: /v3/api-docs
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
   swagger-ui:
     path: /autedi-docs
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
     operations-sorter: method
     tags-sorter: alpha
 

@@ -15,5 +15,11 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
     show-sql: false
 
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+
 server:
   port: ${PORT:8080}

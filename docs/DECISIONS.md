@@ -785,7 +785,7 @@ services:
       AWS_S3_BUCKET: ${AWS_S3_BUCKET}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      SWAGGER_ENABLED: "true"
+      SWAGGER_ENABLED: "false"
       SWAGGER_USERNAME: ${SWAGGER_USERNAME}
       SWAGGER_PASSWORD: ${SWAGGER_PASSWORD}
     depends_on:
@@ -920,12 +920,12 @@ flowchart TD
 
 운영 안정성과 개발 배포 QC의 엄격한 분리를 위해 Spring Boot 프로파일을 3계층(로컬, 개발 배포, 실제 운영)으로 표준화한다.
 
-| 프로파일 | 파일명 | 대상 환경 및 용도 | DB 연결 및 DDL 정책 | 주요 환경변수 규격 |
-| --- | --- | --- | --- | --- |
-| **`local`** | `application-local.yaml` | 개발자 로컬 PC 개발 | 로컬 MySQL (또는 H2), `ddl-auto: update`, SQL 출력 | `LOCAL_DB_URL`, `LOCAL_DB_USER` (기본값 제공) |
-| **`dev`** | `application-dev.yaml` | **Railway 개발 배포 (QC 테스트베드)** | Railway 관리형 MySQL, `ddl-auto: update`, 포트 동적 바인딩 | `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`, `PORT` |
-| **`prod`** | `application-prod.yaml` | **AWS EC2 실제 운영 배포** | 단일 EC2 내 Docker Compose MySQL, `ddl-auto: validate`, 보안 강화 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` |
-| **`test`** | `src/test/resources/application.yaml` | Gradle 빌드 및 CI 파이프라인 | 인메모리 H2 (`MODE=MySQL`), `ddl-auto: create-drop` | 독립 실행 (외부 종속성 없음) |
+| 프로파일 | 파일명 | 대상 환경 및 용도 | Swagger 활성화 여부 | DB 연결 및 DDL 정책 | 주요 환경변수 규격 |
+| --- | --- | --- | --- | --- | --- |
+| **`local`** | `application-local.yaml` | 개발자 로컬 PC 개발 | **ON (`true`)** | 로컬 MySQL (또는 H2), `ddl-auto: update`, SQL 출력 | `LOCAL_DB_URL`, `LOCAL_DB_USER` (기본값 제공) |
+| **`dev`** | `application-dev.yaml` | **Railway 개발 배포 (QC 테스트베드)** | **ON (`true` - QC 검증용)** | Railway 관리형 MySQL, `ddl-auto: update`, 포트 동적 바인딩 | `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`, `PORT` |
+| **`prod`** | `application-prod.yaml` | **AWS EC2 실제 운영 배포** | **OFF (`false` - 운영 보안)** | 단일 EC2 내 Docker Compose MySQL, `ddl-auto: validate`, 보안 강화 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` |
+| **`test`** | `src/test/resources/application.yaml` | Gradle 빌드 및 CI 파이프라인 | **ON (`true` - 테스트 검증용)** | 인메모리 H2 (`MODE=MySQL`), `ddl-auto: create-drop` | 독립 실행 (외부 종속성 없음) |
 
 - **시드 데이터(`DevDataInitializer`) 격리**:
   - `@Profile({"local", "dev"})`를 적용하여 로컬 및 Railway QC 환경에서만 대표원장(`director@autedi.com`) 및 선생님(`teacher@autedi.com`) 계정이 자동 생성되도록 보장하고, 실제 운영(`prod`) 및 단위 테스트(`test`) 환경은 원천 격리한다.
