@@ -15,6 +15,25 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
     show-sql: false
 
+# AWS S3 운영 배포 설정 (EC2 IAM Role 기반 자격증명 사용, 키 누락 시 인스턴스 프로파일 자동 전환)
+cloud:
+  aws:
+    region:
+      static: ${AWS_REGION:ap-northeast-2}
+    s3:
+      bucket: ${AWS_S3_BUCKET:autedi-mvp-bucket}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    bucket: ${AWS_S3_BUCKET:autedi-mvp-bucket}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+
 springdoc:
   api-docs:
     enabled: ${SWAGGER_ENABLED:false}
