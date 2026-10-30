@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: autedi
+  datasource:
+    url: ${LOCAL_DB_URL:jdbc:mysql://localhost:3306/autedi?allowPublicKeyRetrieval=true&useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul}
+    username: ${LOCAL_DB_USER:root}
+    password: ${LOCAL_DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    show-sql: true
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+
+server:
+  port: ${PORT:8080}
