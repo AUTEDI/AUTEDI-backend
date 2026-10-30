@@ -117,6 +117,9 @@ tasks.register('terraFlow', JavaExec) {
     workingDir = projectDir
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 spotless {
     java {
         target 'src/*/java/**/*.java'
