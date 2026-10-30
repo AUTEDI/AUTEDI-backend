@@ -67,6 +67,7 @@
    - 11.5 데이터 영속성 및 S3 일일 DB 백업 자동화
    - 11.6 74일 후 30분 무중단 마이그레이션 런북
    - 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
+   - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
 
 ---
 
@@ -929,3 +930,59 @@ flowchart TD
 
 - **시드 데이터(`DevDataInitializer`) 격리**:
   - `@Profile({"local", "dev"})`를 적용하여 로컬 및 Railway QC 환경에서만 대표원장(`director@autedi.com`) 및 선생님(`teacher@autedi.com`) 계정이 자동 생성되도록 보장하고, 실제 운영(`prod`) 및 단위 테스트(`test`) 환경은 원천 격리한다.
+
+---
+
+### 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
+
+#### 11.8.1 의사결정 배경 및 철학
+MVP 개발 및 정식 런칭 전 단계에서는 개발 편의를 위해 `create` 또는 `update`를 임시로 허용할 수도 있으나, **AUTEDI 팀은 개발 초기부터 운영(`prod`) 환경의 JPA DDL 정책을 `validate`로 엄격히 고정**하기로 결정했다.
+
+* **결정 이유**:
+  1. **데이터 영구 유실 방지**: `create` 모드는 재기동 시 `DROP TABLE`을 수행하므로 운영 환경에서 절대 사용 불가하다.
+  2. **운영 장애 및 부작용 차단**: `update` 모드는 편리하지만, 코드 변경 시 이전 컬럼을 삭제하지 못해 쓰레기 컬럼이 누적되고, 배포 중 대용량 테이블 DDL 자동 실행으로 인한 락(Lock) 장애를 유발할 수 있다.
+  3. **실무 운영 역량 내재화**: 코드와 DB의 생명주기를 분리하고, PR 단계에서 스키마 변경을 명시하며, 배포 전 DB에 선반영하는 **프로덕션 수준의 마이그레이션 운영 프로세스를 지금부터 체화**한다.
+
+---
+
+#### 11.8.2 신규 DB 초기화 런북 (최초 1회 테이블 생성)
+신규 인프라나 빈 MySQL 인스턴스에 처음으로 테이블을 생성할 때는 아래 1회성 오버라이드를 수행한 후 원복한다:
+1. `/srv/mvp/docker-compose.yml`의 `spring-app.environment`에 임시 추가:
+   `SPRING_JPA_HIBERNATE_DDL_AUTO: update`
+2. `docker compose up -d` 실행 ➡️ Spring Boot 기동 중 전체 테이블 자동 생성 확인
+3. 생성 완료 후 해당 환경변수 라인을 제거(또는 주석 처리)하고 다시 `docker compose up -d` 실행 ➡️ 원래의 `validate` 모드로 복귀
+
+---
+
+#### 11.8.3 스키마 변경 시 표준 운영 프로세스 (팀 협업 수칙)
+향후 새로운 기능 개발로 인해 엔티티에 컬럼이 추가되거나 신규 테이블이 도입될 경우, 팀원 전원은 아래의 **"선(先) DDL 반영, 후(後) 코드 배포"** 절차를 준수한다:
+
+1. **로컬/Dev 개발 및 검증**:
+   - `local` 및 `dev` 환경(`ddl-auto: update`)에서 기능 구현 및 테스트 수행.
+   - Hibernate 콘솔 출력 로그에서 생성된 DDL 쿼리(`ALTER TABLE ...`, `CREATE TABLE ...`)를 추출 및 검증.
+2. **PR 본문에 DDL 쿼리 명시**:
+   - GitHub PR 작성 시 `## 🗄️ DB 변경 사항` 섹션을 두고, 실행해야 할 SQL 쿼리를 정확히 기재.
+   - 예시:
+     ```sql
+     ALTER TABLE users ADD COLUMN phone_number VARCHAR(20) NULL;
+     ```
+3. **운영 DB 선(先)반영 (EC2 터미널)**:
+   - PR을 `main`에 머지(배포)하기 직전에, EC2 서버에 SSH 접속하여 MySQL 컨테이너 내에서 해당 쿼리를 수동 실행.
+     ```bash
+     docker exec -i mvp-mysql mysql -u root -p"${DB_ROOT_PASSWORD}" autedi << 'EOF'
+     ALTER TABLE users ADD COLUMN phone_number VARCHAR(20) NULL;
+     EOF
+     ```
+4. **`main` 머지 및 배포 (Validate 검증)**:
+   - DDL 반영 완료 후 PR을 `main`에 머지 ➡️ GitHub Actions `deploy.yml` 트리거.
+   - 운영 서버의 Spring Boot가 `validate` 모드로 실행되며, 새로 추가된 DB 스키마와 엔티티가 정확히 일치함을 확인하고 무중단 정상 기동.
+
+---
+
+#### 11.8.4 스키마 변경 시 안전 가이드라인
+* **하위 호환성 보장 (Nullable / Default 필수)**:
+  - 기존에 데이터가 존재하는 테이블에 컬럼을 추가할 때는 반드시 `NULL`을 허용하거나 명시적 `DEFAULT` 값을 지정해야 한다. (`NOT NULL` 기본값 미지정 금지)
+* **컬럼 이름 변경/타입 변경 정책**:
+  - 컬럼명을 직접 변경(`RENAME COLUMN`)하면 배포 전환 시점에 이전 버전 애플리케이션에서 에러가 발생할 수 있으므로, **[신규 컬럼 추가 ➡️ 데이터 마이그레이션 ➡️ 구 컬럼 제거]**의 점진적 배포 방식을 권장한다.
+* **향후 고도화 경로**:
+  - 팀 규모 확장 및 스키마 변경 빈도 증가 시, 형상관리 도구인 **Flyway**를 도입하여 Git 커밋과 DB 버전 마이그레이션을 완전 자동화한다.
