@@ -67,6 +67,9 @@
    - 11.5 데이터 영속성 및 S3 일일 DB 백업 자동화
    - 11.6 74일 후 30분 무중단 마이그레이션 런북
    - 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
+   - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
+   - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
+   - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
 
 ---
 
@@ -929,3 +932,190 @@ flowchart TD
 
 - **시드 데이터(`DevDataInitializer`) 격리**:
   - `@Profile({"local", "dev"})`를 적용하여 로컬 및 Railway QC 환경에서만 대표원장(`director@autedi.com`) 및 선생님(`teacher@autedi.com`) 계정이 자동 생성되도록 보장하고, 실제 운영(`prod`) 및 단위 테스트(`test`) 환경은 원천 격리한다.
+
+---
+
+### 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
+
+#### 11.8.1 의사결정 배경 및 철학
+MVP 개발 및 정식 런칭 전 단계에서는 개발 편의를 위해 `create` 또는 `update`를 임시로 허용할 수도 있으나, **AUTEDI 팀은 개발 초기부터 운영(`prod`) 환경의 JPA DDL 정책을 `validate`로 엄격히 고정**하기로 결정했다.
+
+* **결정 이유**:
+  1. **데이터 영구 유실 방지**: `create` 모드는 재기동 시 `DROP TABLE`을 수행하므로 운영 환경에서 절대 사용 불가하다.
+  2. **운영 장애 및 부작용 차단**: `update` 모드는 편리하지만, 코드 변경 시 이전 컬럼을 삭제하지 못해 쓰레기 컬럼이 누적되고, 배포 중 대용량 테이블 DDL 자동 실행으로 인한 락(Lock) 장애를 유발할 수 있다.
+  3. **실무 운영 역량 내재화**: 코드와 DB의 생명주기를 분리하고, PR 단계에서 스키마 변경을 명시하며, 배포 전 DB에 선반영하는 **프로덕션 수준의 마이그레이션 운영 프로세스를 지금부터 체화**한다.
+
+---
+
+#### 11.8.2 신규 DB 초기화 런북 (최초 1회 테이블 생성)
+신규 인프라나 빈 MySQL 인스턴스에 처음으로 테이블을 생성할 때는 아래 1회성 오버라이드를 수행한 후 원복한다:
+1. `/srv/mvp/docker-compose.yml`의 `spring-app.environment`에 임시 추가:
+   `SPRING_JPA_HIBERNATE_DDL_AUTO: update`
+2. `docker compose up -d` 실행 ➡️ Spring Boot 기동 중 전체 테이블 자동 생성 확인
+3. 생성 완료 후 해당 환경변수 라인을 제거(또는 주석 처리)하고 다시 `docker compose up -d` 실행 ➡️ 원래의 `validate` 모드로 복귀
+
+---
+
+#### 11.8.3 스키마 변경 시 표준 운영 프로세스 (팀 협업 수칙)
+향후 새로운 기능 개발로 인해 엔티티에 컬럼이 추가되거나 신규 테이블이 도입될 경우, 팀원 전원은 아래의 **"선(先) DDL 반영, 후(後) 코드 배포"** 절차를 준수한다:
+
+1. **로컬/Dev 개발 및 검증**:
+   - `local` 및 `dev` 환경(`ddl-auto: update`)에서 기능 구현 및 테스트 수행.
+   - Hibernate 콘솔 출력 로그에서 생성된 DDL 쿼리(`ALTER TABLE ...`, `CREATE TABLE ...`)를 추출 및 검증.
+2. **PR 본문에 DDL 쿼리 명시**:
+   - GitHub PR 작성 시 `## 🗄️ DB 변경 사항` 섹션을 두고, 실행해야 할 SQL 쿼리를 정확히 기재.
+   - 예시:
+     ```sql
+     ALTER TABLE users ADD COLUMN phone_number VARCHAR(20) NULL;
+     ```
+3. **운영 DB 선(先)반영 (EC2 터미널)**:
+   - PR을 `main`에 머지(배포)하기 직전에, EC2 서버에 SSH 접속하여 MySQL 컨테이너 내에서 해당 쿼리를 수동 실행.
+     ```bash
+     docker exec -i mvp-mysql mysql -u root -p"${DB_ROOT_PASSWORD}" autedi << 'EOF'
+     ALTER TABLE users ADD COLUMN phone_number VARCHAR(20) NULL;
+     EOF
+     ```
+4. **`main` 머지 및 배포 (Validate 검증)**:
+   - DDL 반영 완료 후 PR을 `main`에 머지 ➡️ GitHub Actions `deploy.yml` 트리거.
+   - 운영 서버의 Spring Boot가 `validate` 모드로 실행되며, 새로 추가된 DB 스키마와 엔티티가 정확히 일치함을 확인하고 무중단 정상 기동.
+
+---
+
+#### 11.8.4 스키마 변경 시 안전 가이드라인
+* **하위 호환성 보장 (Nullable / Default 필수)**:
+  - 기존에 데이터가 존재하는 테이블에 컬럼을 추가할 때는 반드시 `NULL`을 허용하거나 명시적 `DEFAULT` 값을 지정해야 한다. (`NOT NULL` 기본값 미지정 금지)
+* **컬럼 이름 변경/타입 변경 정책**:
+  - 컬럼명을 직접 변경(`RENAME COLUMN`)하면 배포 전환 시점에 이전 버전 애플리케이션에서 에러가 발생할 수 있으므로, **[신규 컬럼 추가 ➡️ 데이터 마이그레이션 ➡️ 구 컬럼 제거]**의 점진적 배포 방식을 권장한다.
+* **향후 고도화 경로**:
+  - 팀 규모 확장 및 스키마 변경 빈도 증가 시, 형상관리 도구인 **Flyway**를 도입하여 Git 커밋과 DB 버전 마이그레이션을 완전 자동화한다.
+
+---
+
+### 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
+
+#### 11.9.1 정책 수립 배경 및 목적 (상용 유료 B2B SaaS 신뢰성 보장)
+AUTEDI는 교육기관(학원, 영어 도서관)을 대상으로 구독료를 청구하는 **유료 상용 B2B SaaS**를 지향한다. 단순 토이 프로젝트나 학습용 레포지토리와 달리, 실제 고객의 결제와 학생 과제물 피드백이 실시간으로 이루어지므로 단 한 번의 사소한 실수로도 서비스 중단, 데이터 오염, 고객 이탈이 발생할 수 있다.
+
+이에 따라 팀원 편의나 속도보다 **안정성(Stability)과 추적성(Traceability)**을 최상위 가치로 두고, `main`뿐만 아니라 **`develop` 브랜치까지 예외 없이 직접 푸시(Direct Push)를 전면 금지**하고 PR 및 자동화 검증을 강제한다.
+
+---
+
+#### 11.9.2 브랜치 보호 규칙 (Branch Protection Rules) 상세
+
+| 보호 대상 브랜치 | 직접 푸시(`git push`) 허용 여부 | 필수 상태 검사 (Required Status Checks) | 배포 연동 대상 |
+| :--- | :---: | :--- | :--- |
+| **`develop`** | **❌ 전면 금지 (Admin 포함)** | • **Spotless & Unit Tests** (코드 포맷 및 테스트 100% 통과)<br>• PR 리뷰 및 머지 승인 필수 | **Railway 개발 배포** (QC 테스트베드 자동 배포) |
+| **`main`** | **❌ 전면 금지 (Admin 포함)** | • **Spotless & Unit Tests** 통과 필수<br>• `develop` 검증 완료 커밋만 인입 허용 | **AWS EC2 실제 운영 배포** (Docker Hub ➡️ EC2 무중단 배포) |
+
+* **`develop` 브랜치까지 엄격히 통제하는 핵심 이유**:
+  1. **Railway QC 환경 보호**: `develop` 브랜치는 프론트엔드 연동 및 상시 QC 테스트가 진행되는 실시간 서버이다. 깨진 코드가 직접 푸시될 경우 프론트엔드 개발팀 전체의 작업이 즉시 중단(Block)된다.
+  2. **오타/단순 문서 수정도 예외 없음**: "단순한 1줄 수정이니까 괜찮겠지"라는 방심에서 시작되는 설정 오류 및 빌드 실패를 원천 봉쇄한다. 모든 변경은 CI 파이프라인의 기계적 검증을 통과해야만 브랜치에 합류할 수 있다.
+  3. **완벽한 변경 이력 아카이빙**: 모든 기능, 버그 수정, 문서 및 인프라 변경이 GitHub PR과 연결되어 영구 보존되므로, 장애 발생 시 원인 커밋과 맥락을 수 분 내로 역추적할 수 있다.
+
+---
+
+#### 11.9.3 표준 브랜치 전략 및 작업 흐름 (Branching Workflow)
+
+```mermaid
+flowchart LR
+    subgraph Feature["작업 브랜치"]
+        F["feat/*, fix/*, docs/*"]
+    end
+
+    subgraph CI1["1단계 검증 (PR)"]
+        C1["GitHub Actions CI\n(SpotlessCheck + Tests)"]
+    end
+
+    subgraph Develop["개발 통합 브랜치"]
+        D["develop (Protected)"]
+        R["Railway 배포\n(프론트 연동 & QC)"]
+    end
+
+    subgraph CI2["2단계 검증 (Release PR)"]
+        C2["Release PR 검증"]
+    end
+
+    subgraph Main["운영 브랜치"]
+        M["main (Protected)"]
+        E["AWS EC2 운영 배포\n(Docker Compose)"]
+    end
+
+    F -->|"PR 생성"| C1
+    C1 -->|"Pass 후 머지"| D
+    D -->|"Auto Deploy"| R
+    D -->|"PR 생성 (develop ➡️ main)"| C2
+    C2 -->|"머지 승인"| M
+    M -->|"GitHub Actions"| E
+```
+
+1. **작업 브랜치 생성**: 모든 작업은 최신 `develop`을 기반으로 `feat/*`, `fix/*`, `docs/*`, `chore/*` 접두사를 붙여 생성한다.
+2. **로컬 커밋**: `pre-commit` 훅을 통해 Palantir Java Format이 자동 적용된다.
+3. **PR 생성 및 CI 통과**: `develop`을 대상으로 PR을 열고, GitHub Actions의 `Spotless & Unit Tests`가 성공해야 머지 버튼이 활성화된다.
+4. **개발 서버 검증**: `develop` 머지 즉시 Railway에 자동 배포되어 API 및 비즈니스 로직을 검증한다.
+5. **운영 릴리즈**: 검증 완료된 `develop` 브랜치를 `main`으로 PR 요청하여 최종 배포를 진행한다.
+
+---
+
+#### 11.9.4 브랜치별 머지 전략 표준 (Merge Strategy Guidelines)
+GitHub PR 머지 시 브랜치 특성에 따라 허용되는 머지 방식을 엄격히 구분한다:
+
+| 머지 경로 | 허용 머지 방식 | 상세 이유 및 목적 |
+| :--- | :---: | :--- |
+| **`feature/* ➡️ develop`** | **Squash and Merge** | 기능 개발 중에 발생한 자잘한 작업 커밋(오타 수정, 시도 등)을 1개의 기능 단위 커밋으로 압축하여 `develop`의 히스토리를 선형적이고 깔끔하게 유지한다. |
+| **`develop ➡️ main`** | **Create a Merge Commit<br>(일반 머지 - 필수)** | • `develop`에서 검증된 여러 기능 커밋들의 전체 타임라인과 이력을 원본 그대로 보존한다.<br>• **주의**: 만약 여기서 Squash 머지를 수행할 경우 `develop`과 `main`의 커밋 해시 트리가 분기되어, **차후 `develop ➡️ main` 머지 시 대규모 충돌(Conflict)과 히스토리 왜곡이 발생**하므로 절대 금지한다. |
+
+---
+
+### 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
+
+#### 11.10.1 Dockerfile 멀티 스테이지 빌드 전환 원리
+초기 런타임 전용 Dockerfile(`COPY build/libs/*SNAPSHOT.jar app.jar`)은 로컬 또는 GitHub Actions 가상머신에서 사전에 Gradle 빌드가 선행되었다는 전제 하에 작성되었다. 그러나 Railway 등 클라우드 PaaS는 소스코드를 직접 내려받아 `docker build`를 즉시 실행하므로, `build/libs` 디렉터리가 없어 배포가 중단되는 문제(`lstat /build/libs: no such file or directory`)가 발생했다.
+
+이를 해결하기 위해 **도커 자체에서 빌드와 실행을 완전히 캡슐화하는 2단계 멀티 스테이지 빌드**를 표준으로 확정했다:
+```dockerfile
+# 1단계: 빌드 환경 (JDK 21) - 컨테이너 내부에서 안전하게 bootJar 생성
+FROM eclipse-temurin:21-jdk-jammy AS builder
+WORKDIR /app
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle settings.gradle ./
+RUN chmod +x ./gradlew
+COPY src src
+RUN ./gradlew clean bootJar -x test
+
+# 2단계: 실행 환경 (가벼운 JRE 21) - 최종 경량 실행 이미지 생성
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY --from=builder /app/build/libs/*SNAPSHOT.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+* **도입 효과**:
+  - Railway는 물론 로컬 PC, GitHub Actions, EC2 등 Docker가 설치된 모든 환경에서 호스트 OS 종속성 없이 동일한 이미지 빌드 및 실행을 100% 보장한다.
+  - `.dockerignore`를 통해 `.git`, `.gradle`, `build`, `docs`를 제외하여 빌드 컨텍스트 전송 속도를 극대화했다.
+
+---
+
+#### 11.10.2 Railway 대시보드 3대 필수 설정 규칙 (Troubleshooting Runbook)
+Railway 대시보드 설정과 Dockerfile 설정 간의 충돌로 인해 발생하는 배포 장애를 방지하기 위해 다음 3대 규칙을 강제한다:
+
+1. **Custom Start Command는 반드시 비워둘 것 (Empty / Clear)**:
+   - **발생했던 문제**: 과거 Nixpacks 빌드 시절 대시보드에 설정된 `java -jar build/libs/autedi-0.0.1-SNAPSHOT.jar` 명령어가 Dockerfile의 `ENTRYPOINT`를 강제 덮어쓰기하여 `Error: Unable to access jarfile build/libs/...` 에러 발생.
+   - **해결 원칙**: Railway는 Custom Start Command가 설정되어 있으면 Dockerfile의 `ENTRYPOINT/CMD`를 무시한다. 멀티 스테이지 컨테이너의 실행 파일은 `/app/app.jar`이므로, **Start Command를 완전히 빈 칸으로 비워두어 Dockerfile의 `ENTRYPOINT ["java", "-jar", "app.jar"]`를 그대로 따르도록 한다.**
+2. **`Wait for CI` 옵션 비활성화 (OFF)**:
+   - **발생했던 문제**: `Wait for CI`가 켜져 있으면 Railway가 GitHub Actions 검사 완료 웹훅을 무한 대기한다. 하지만 `ci.yml`이 `on: pull_request`로만 동작하고 `push to develop` 트리거가 없으므로, PR 머지 시 배포가 트리거되지 않고 Skip되는 현상 발생.
+   - **해결 원칙**: PR 단계에서 이미 CI 검증이 100% 완료된 후 `develop`에 머지되므로, 불필요한 대기 없이 즉각 배포되도록 **`Wait for CI`는 상시 OFF로 유지**한다.
+3. **`PR Environments` (임시 프리뷰) 비활성화 (OFF)**:
+   - **해결 원칙**: 개발 서버 QC는 `develop` 브랜치 본체 배포 하나로 충분하며, PR이 열릴 때마다 불필요한 임시 DB/컨테이너가 복제 생성되어 자원이 낭비되는 것을 방지하기 위해 PR Environments는 OFF로 관리한다.
+
+---
+
+#### 11.10.3 Railway 개발 배포 환경변수 주입 규격
+Railway 대시보드의 **Variables** 탭에 아래 환경변수가 누락 없이 등록되어 있어야 한다:
+* **Database (Railway 관리형 MySQL)**: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`
+* **Server Port**: `PORT` (Railway가 동적 바인딩)
+* **AWS S3 자격증명 (QC 이미지 저장용)**:
+  - `AWS_REGION`: `ap-northeast-2`
+  - `AWS_S3_BUCKET`: `autedi-mvp-develop-bucket`
+  - `AWS_ACCESS_KEY_ID`: IAM 발급 키
+  - `AWS_SECRET_ACCESS_KEY`: IAM 발급 시크릿
+
