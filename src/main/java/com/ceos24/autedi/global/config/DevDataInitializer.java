@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@Profile("!test")
+@Profile({"local", "dev"})
 @RequiredArgsConstructor
 public class DevDataInitializer implements CommandLineRunner {
 

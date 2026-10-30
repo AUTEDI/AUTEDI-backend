@@ -66,6 +66,7 @@
    - 11.4 프로덕션 `docker-compose.yml` 및 Nginx 리버스 프록시 규격
    - 11.5 데이터 영속성 및 S3 일일 DB 백업 자동화
    - 11.6 74일 후 30분 무중단 마이그레이션 런북
+   - 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
 
 ---
 
@@ -912,3 +913,19 @@ flowchart TD
     D --> E["DuckDNS 대시보드에서 A 레코드 IP를 신규 서버 IP로 변경"]
     E --> F["마이그레이션 완료 (DNS 전파 즉시 서비스 정상화, 다운타임 < 30분)"]
 ```
+
+---
+
+### 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
+
+운영 안정성과 개발 배포 QC의 엄격한 분리를 위해 Spring Boot 프로파일을 3계층(로컬, 개발 배포, 실제 운영)으로 표준화한다.
+
+| 프로파일 | 파일명 | 대상 환경 및 용도 | DB 연결 및 DDL 정책 | 주요 환경변수 규격 |
+| --- | --- | --- | --- | --- |
+| **`local`** | `application-local.yaml` | 개발자 로컬 PC 개발 | 로컬 MySQL (또는 H2), `ddl-auto: update`, SQL 출력 | `LOCAL_DB_URL`, `LOCAL_DB_USER` (기본값 제공) |
+| **`dev`** | `application-dev.yaml` | **Railway 개발 배포 (QC 테스트베드)** | Railway 관리형 MySQL, `ddl-auto: update`, 포트 동적 바인딩 | `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`, `PORT` |
+| **`prod`** | `application-prod.yaml` | **AWS EC2 실제 운영 배포** | 단일 EC2 내 Docker Compose MySQL, `ddl-auto: validate`, 보안 강화 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` |
+| **`test`** | `src/test/resources/application.yaml` | Gradle 빌드 및 CI 파이프라인 | 인메모리 H2 (`MODE=MySQL`), `ddl-auto: create-drop` | 독립 실행 (외부 종속성 없음) |
+
+- **시드 데이터(`DevDataInitializer`) 격리**:
+  - `@Profile({"local", "dev"})`를 적용하여 로컬 및 Railway QC 환경에서만 대표원장(`director@autedi.com`) 및 선생님(`teacher@autedi.com`) 계정이 자동 생성되도록 보장하고, 실제 운영(`prod`) 및 단위 테스트(`test`) 환경은 원천 격리한다.
