@@ -129,3 +129,6 @@ spotless {
         endWithNewline()
     }
 }
+
+jar { enabled = false }
+
