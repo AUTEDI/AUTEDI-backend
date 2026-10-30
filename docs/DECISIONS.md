@@ -79,14 +79,14 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 - **테넌트 검증 원칙**: 모든 API 요청 처리 시 Security Context의 `academyId`와 대상 리소스의 `academy_id` 일치 여부를 서비스/레포지토리 계층에서 교차 검증하며, 불일치 시 자원 존재 여부와 무관하게 `404 NOT_FOUND` 또는 `403 ACCESS_DENIED`를 응답하여 자원 스캐닝을 방지한다.
 
 ### 2.2 원장(DIRECTOR) 계정 사전 프로비저닝 및 일반 가입 차단
-- **결정**: 원장(`Role.DIRECTOR`)은 퍼블릭 회원가입 API(`/api/auth/signup`)를 통해 스스로 계정을 생성할 수 없다.
+- **결정**: 원장(`Role.DIRECTOR`)은 퍼블릭 회원가입 API(`/api/v1/auth/signup`)를 통해 스스로 계정을 생성할 수 없다.
 - **이유**:
   - AUTEDI는 B2B 영업 및 계약을 통해 도입되는 유료 SaaS이다. 임의 사용자가 무단으로 학원을 생성하거나 원장 권한을 획득하는 것을 원천 차단한다.
   - 원장 계정과 학원 엔티티는 사내 운영 관리자 툴, 배치 스크립트, 또는 개발 시드 데이터(`DevDataInitializer`)를 통해서만 사전 프로비저닝된다.
 - **보안 효과**: 권한 승격 공격(Privilege Escalation) 벡터 자체를 제거한다.
 
 ### 2.3 선생님(TEACHER) 단건 초대 프로세스 및 재초대 무효화(REVOKED) 정책
-- **단건 초대 발송**: 원장(`DIRECTOR`) 권한을 가진 사용자만이 소속 학원의 선생님을 이메일로 1건씩 초대할 수 있다 (`POST /api/invitations`).
+- **단건 초대 발송**: 원장(`DIRECTOR`) 권한을 가진 사용자만이 소속 학원의 선생님을 이메일로 1건씩 초대할 수 있다 (`POST /api/v1/invitations`).
 - **유효기간 24시간**: 발급된 초대 링크는 보안 위험을 최소화하기 위해 생성 시점으로부터 정확히 24시간(`LocalDateTime.now().plusHours(24)`) 동안만 유효하다.
 - **재초대 시 무효화 (Revocation on Re-invite)**:
   - 동일한 이메일로 새로운 초대를 발송하는 경우, DB에 남아 있는 해당 이메일의 기존 `PENDING` 상태 초대장은 즉시 `REVOKED`로 변경한다.
@@ -110,9 +110,9 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
   6. 가입 완료 즉시 초대장 상태를 `ACCEPTED`로 전이시키고 `accepted_at`을 기록한다.
 
 ### 2.5 가입 완료 직후 JWT 미발급(로그인 유도) 정책
-- **결정**: 회원가입 API(`/api/auth/signup`) 성공 시 Access Token / Refresh Token을 응답에 포함하지 않고 `201 Created`와 기본 사용자 프로필 정보(`SignupResponse`)만 반환한다.
+- **결정**: 회원가입 API(`/api/v1/auth/signup`) 성공 시 Access Token / Refresh Token을 응답에 포함하지 않고 `201 Created`와 기본 사용자 프로필 정보(`SignupResponse`)만 반환한다.
 - **이유**:
-  1. **자격 증명 검증 보장**: 사용자가 등록한 비밀번호로 정규 로그인(`/api/auth/login`) 절차를 밟도록 유도함으로써 비밀번호 오입력에 의한 계정 고립을 즉시 인지하도록 한다.
+  1. **자격 증명 검증 보장**: 사용자가 등록한 비밀번호로 정규 로그인(`/api/v1/auth/login`) 절차를 밟도록 유도함으로써 비밀번호 오입력에 의한 계정 고립을 즉시 인지하도록 한다.
   2. **세션/토큰 수명주기 책임 분리**: 토큰 발급 및 Refresh Token 레코드 생성, `last_login_at` 갱신 로직을 `AuthService.login` 한 곳으로 응집시켜 코드 중복 및 불일치를 방지한다.
   3. **초대 링크 탈취 대응**: 초대 URL이 제3자에게 노출되어 악의적 가입이 시도되더라도, 별도의 로그인 절차를 거치지 않는 한 즉각적인 세션 탈취가 성립되지 않는다.
 
@@ -127,7 +127,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
     - 신규 학습지 파일 업로드 (`POST /api/v1/worksheets`)
     - 첨삭 영역 및 수준 설정 변경 (`PUT /api/v1/worksheets/{id}/settings`)
     - AI 첨삭 생성 요청 (`POST /api/v1/worksheets/{id}/generations`)
-    - 신규 선생님 초대장 발송 (`POST /api/invitations`)
+    - 신규 선생님 초대장 발송 (`POST /api/v1/invitations`)
 - **구현 방식**: 쓰기/생성 API 진입 시점에 `director.getAcademy().isActive()` 또는 테넌트 구독 검증 인터셉터/AOP를 통과시켜 유료 연산 요청을 차단한다.
 
 ---
