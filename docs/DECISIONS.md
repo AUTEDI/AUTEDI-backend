@@ -59,6 +59,13 @@
    - 10.2 포맷터 엔진 선정 비교: Google Java Format vs Palantir Java Format
    - 10.3 2단계 품질 강제 파이프라인 (Local Hook & Remote CI)
    - 10.4 팀원 환경 설정 및 실행 명령어 가이드
+11. [인프라 및 배포 아키텍처 의사결정 (Infrastructure & Deployment)](#11-인프라-및-배포-아키텍처-의사결정-infrastructure--deployment)
+   - 11.1 확정 배포 기술 스택 요약 (Confirmed Tech Stack)
+   - 11.2 서비스 런타임 및 CI/CD 아키텍처
+   - 11.3 EC2 2GB RAM OOM 방어 및 메모리 배분 설계
+   - 11.4 프로덕션 `docker-compose.yml` 및 Nginx 리버스 프록시 규격
+   - 11.5 데이터 영속성 및 S3 일일 DB 백업 자동화
+   - 11.6 74일 후 30분 무중단 마이그레이션 런북
 
 ---
 
@@ -617,3 +624,291 @@ chmod +x scripts/pre-commit && cp scripts/pre-commit .git/hooks/pre-commit
   ```bash
   ./gradlew spotlessCheck
   ```
+
+---
+
+## 11. 인프라 및 배포 아키텍처 의사결정 (Infrastructure & Deployment)
+
+### 11.1 확정 배포 기술 스택 요약 (Confirmed Tech Stack)
+
+| 구분 | 확정 기술 / 구성 | 세부 역할 및 선정 이유 |
+| --- | --- | --- |
+| **Frontend** | **React + Vercel** | 프론트엔드 호스팅, 기본 HTTPS 제공, 추후 커스텀 도메인 연결 용이 ($0) |
+| **Backend Domain & SSL** | **DuckDNS + Nginx + Let’s Encrypt** | 무료 동적 도메인(`*.duckdns.org`) + 무료 SSL 인증서로 Vercel↔︎EC2 간 종단간 HTTPS 암호화 통신 보장 ($0) |
+| **Backend & DB** | **Spring Boot + MySQL 8.0** | 단일 EC2 내 **Docker Compose**로 통합 구동 (컨테이너 메모리 엄격 상한선 적용) |
+| **Storage** | **AWS S3** | 첨삭 대상 영어 손글씨 이미지 원본/변환본 저장 및 일일 DB 백업 아카이브 보관 |
+| **OCR & AI** | **Google Cloud Vision + 외부 AI API** | 외부 API 호출 방식으로 EC2 내부의 CPU/메모리 연산 부하 원천 차단 |
+| **CI/CD** | **GitHub Actions + Docker Registry** | **EC2 내부 빌드 절대 금지(메모리 보호)**. Actions에서 빌드/검증 완료 후 EC2는 Pull & Run만 수행 ($0) |
+| **AWS EC2 사양** | **`t4g.small` 또는 `t3.small` (2GB RAM)** | 2GB 물리 RAM + 2GB Swap 메모리 설정. 잔여 기한(74일)과 크레딧($41) 내에서 추가 과금 $0 운영 |
+
+> [!IMPORTANT]
+> **인프라 운영 핵심 목표**
+> 1. **추가 과금 $0 달성**: 잔여 기한 74일 동안 AWS 크레딧 $41 내에서 무과금으로 완주한다.
+> 2. **OOM(Out Of Memory) 서버 다운 원천 방지**: 단일 2GB RAM EC2 내에서 JVM, MySQL, Nginx의 상한선을 엄격히 통제하고 스왑 공간을 확보하여 서버 뻗음(OOM Kill)을 차단한다.
+> 3. **30분 무중단 마이그레이션 대비**: 74일 후 크레딧 만료 시 다른 클라우드/계정으로 30분 이내에 인프라와 데이터를 즉시 이전할 수 있는 컨테이너 및 볼륨 바인드 구조를 유지한다.
+
+---
+
+### 11.2 서비스 런타임 및 CI/CD 아키텍처
+
+#### 11.2.1 서비스 런타임 아키텍처
+
+```mermaid
+flowchart TB
+    User(["사용자 (Web Browser)"])
+
+    subgraph Vercel["Vercel (Frontend Hosting)"]
+        React["React App\n(https://xxx.vercel.app)"]
+    end
+
+    subgraph AWS["AWS Cloud (74일간 $41 크레딧 무과금 운영)"]
+        S3[("AWS S3\n손글씨 이미지 저장 &\nDB 일일 백업 보관")]
+
+        subgraph EC2["EC2 (2GB RAM + 2GB Swap)"]
+            subgraph Compose["Docker Compose (/srv/mvp)"]
+                Nginx["Nginx Container\n(80/443 포트, Let's Encrypt SSL)"]
+                Spring["Spring Boot Container\n(8080 포트, -Xmx512m)"]
+                MySQL[("MySQL 8.0 Container\n(3306 포트, Buffer Pool 128M)")]
+            end
+            Volume["Host Volume (/srv/mvp-data)\nMySQL 데이터 & SSL 인증서 영속화"]
+        end
+    end
+
+    subgraph External["외부 AI/ML 연산 파이프라인"]
+        Vision["Google Cloud Vision API\n(OCR 텍스트 추출)"]
+        LLM["외부 AI API (Gemini/Claude)\n(영어 문장 첨삭/교정)"]
+    end
+
+    User --> React
+    React -- "HTTPS 요청 (CORS 통과)\n(https://autedi-api.duckdns.org)" --> Nginx
+    Nginx -- "Reverse Proxy (HTTP)" --> Spring
+    Spring -- "1. 이미지 저장" --> S3
+    Spring -- "2. OCR 추출" --> Vision
+    Spring -- "3. 첨삭/교정 요청" --> LLM
+    Spring -- "4. 결과 저장" --> MySQL
+    MySQL -. "데이터 바인드 마운트" .-> Volume
+    Nginx -. "인증서 바인드 마운트" .-> Volume
+```
+
+#### 11.2.2 GitHub Actions 기반 경량 무중단 CI/CD 파이프라인
+
+EC2 인스턴스에서 직접 `./gradlew build`나 Docker 이미지 빌드를 실행하면 메모리 스파이크로 인해 즉시 서버가 정지(OOM Freeze)됩니다. 따라서 **빌드 및 테스트는 100% GitHub Actions 가상머신이 전담**하며, EC2는 사전 빌드된 경량 컨테이너 이미지를 다운로드받아 재기동(Pull & Run)만 수행합니다.
+
+```mermaid
+flowchart LR
+    Dev(["개발자"]) -- "1. git push (develop/main)" --> GH["GitHub Repository"]
+    GH -- "2. 워크플로우 트리거" --> Actions["GitHub Actions Runner\n(SpotlessCheck + Gradle Test + Docker Build)"]
+    Actions -- "3. 빌드 이미지 Push" --> Hub["Docker Hub / GHCR"]
+    Actions -- "4. SSH 원격 배포 명령" --> EC2["AWS EC2 Host\n(docker compose pull && docker compose up -d)"]
+    Hub -. "5. 최신 이미지 Pull" .-> EC2
+```
+
+---
+
+### 11.3 EC2 2GB RAM OOM 방어 및 메모리 배분 설계
+
+#### 11.3.1 Swap 메모리 (2GB) 필수 활성화
+
+물리 메모리(2GB)가 순간적으로 고갈될 때 Linux 커널의 OOM Killer가 주요 프로세스를 강제 종료하지 않도록, 디스크(EBS)를 가상 메모리로 확장하는 Swap 메모리를 최초 프로비저닝 시 반드시 설정합니다:
+
+```bash
+# 1. 2GB 스왑 파일 생성 및 권한 설정
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+
+# 2. 스왑 포맷팅 및 활성화
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# 3. 재부팅 시 자동 마운트 등록 (/etc/fstab)
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# 4. 스왑 활성화 확인
+free -h
+```
+
+#### 11.3.2 컨테이너별 메모리 다이어트 예산 (2GB RAM 기준)
+
+| 계층 / 컨테이너 | 할당 목표치 | 튜닝 및 제약 옵션 |
+| --- | --- | --- |
+| **Host OS + Docker Daemon + Nginx** | **~ 250 MB** | Alpine 기반 Nginx 경량 이미지, 불필요한 OS 백그라운드 서비스 비활성화 |
+| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=50` |
+| **Spring Boot Container** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC` 강제 |
+| **비상 예비 물리 메모리 (Buffer)** | **~ 850 MB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
+
+#### 11.3.3 Nginx 설정 시 필수 주의사항 (사진 업로드 용량 및 AI 타임아웃)
+
+Nginx 기본값은 파일 업로드 용량 제한이 **1MB**이고 프록시 타임아웃이 **60초**입니다. 백엔드 `application.yaml`의 멀티파트 설정(`20MB`)과 조화를 이루고 대용량 사진 업로드 시 `413 Request Entity Too Large` 에러를 방지하기 위해, Nginx 가상호스트 설정에 아래 두 지시어를 반드시 명시해야 합니다:
+
+1. `client_max_body_size 25M;`: Spring Boot의 20MB 멀티파트 한도보다 여유 있게 설정하여 Nginx 단에서의 조기 차단 방지.
+2. `proxy_read_timeout 120s;`, `proxy_connect_timeout 60s;`: Google Vision OCR 및 외부 LLM 첨삭 호출 시 지연에 따른 504 Gateway Timeout 방지.
+
+---
+
+### 11.4 프로덕션 `docker-compose.yml` 및 Nginx 리버스 프록시 규격
+
+#### 11.4.1 `/srv/mvp/docker-compose.yml`
+
+```yaml
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: mvp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /srv/mvp-data/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /srv/mvp-data/certbot/conf:/etc/letsencrypt:ro
+      - /srv/mvp-data/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - spring-app
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+
+  spring-app:
+    image: ${DOCKER_IMAGE_NAME}:latest
+    container_name: mvp-spring
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:+UseSerialGC"
+      DB_URL: jdbc:mysql://mysql:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      SWAGGER_ENABLED: "true"
+      SWAGGER_USERNAME: ${SWAGGER_USERNAME}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD}
+    depends_on:
+      - mysql
+    deploy:
+      resources:
+        limits:
+          memory: 750M
+
+  mysql:
+    image: mysql:8.0
+    container_name: mvp-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --performance-schema=OFF
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=50
+    volumes:
+      - /srv/mvp-data/mysql:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+```
+
+#### 11.4.2 `/srv/mvp-data/nginx/conf.d/default.conf`
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.duckdns.org;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.duckdns.org;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.duckdns.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.duckdns.org/privkey.pem;
+
+    # 필수 1: 스마트폰 고해상도 사진 업로드 허용 (Spring Boot 20MB 설정 대응)
+    client_max_body_size 25M;
+
+    # 백엔드 API 및 프록시 설정
+    location / {
+        proxy_pass http://spring-app:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # 필수 2: OCR 및 AI 첨삭 응답 대기 타임아웃 여유 확보
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 60s;
+    }
+}
+```
+
+---
+
+### 11.5 데이터 영속성 및 S3 일일 DB 백업 자동화
+
+단일 EC2 인스턴스에 내장된 MySQL 컨테이너는 인스턴스 장애(하드웨어 결함, 디스크 손상) 시 데이터가 영구 손실될 위험이 있습니다. 별도의 유료 RDS를 사용하지 않고도 안정성을 보장하기 위해, S3로의 일일 자동 백업 스크립트를 Crontab에 등록합니다.
+
+#### 11.5.1 일일 백업 스크립트 (`/srv/mvp/scripts/backup-db.sh`)
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/tmp/db_backups"
+BACKUP_FILE="${BACKUP_DIR}/db_backup_${DATE}.sql.gz"
+
+mkdir -p "${BACKUP_DIR}"
+
+# 1. 컨테이너 내부 DB 덤프 및 압축 (메모리 버퍼 최소화 스트리밍)
+docker exec mvp-mysql mysqldump -u root -p"${DB_ROOT_PASSWORD}" --single-transaction --quick --databases "${DB_NAME}" | gzip > "${BACKUP_FILE}"
+
+# 2. S3 백업 전용 경로로 업로드
+aws s3 cp "${BACKUP_FILE}" "s3://${AWS_S3_BUCKET}/backups/db_backup_${DATE}.sql.gz"
+
+# 3. 임시 로컬 덤프 파일 즉시 삭제
+rm -f "${BACKUP_FILE}"
+
+echo "[$(date)] Database backup completed successfully: db_backup_${DATE}.sql.gz"
+```
+
+#### 11.5.2 Cron 스케줄러 등록 및 S3 수명주기 정책
+
+* **EC2 Crontab 등록 (매일 새벽 04:00 자동 실행)**:
+  ```bash
+  0 4 * * * /bin/bash /srv/mvp/scripts/backup-db.sh >> /var/log/db-backup.log 2>&1
+  ```
+* **S3 버킷 수명주기(Lifecycle) 규칙**:
+  - `backups/` 접두사 객체에 대해 30일 경과 시 자동 영구 삭제(Expiration) 규칙을 활성화하여 S3 스토리지 비용을 최소화($0.05/월 미만 유지).
+
+---
+
+### 11.6 74일 후 30분 무중단 마이그레이션 런북
+
+74일 후 현재 AWS 계정의 크레딧($41)이 소진되더라도, 모든 설정과 영속 데이터가 호스트 볼륨(`/srv/mvp-data`)과 S3에 표준화되어 있어 30분 이내에 신규 인프라로 즉시 이전할 수 있습니다.
+
+```mermaid
+flowchart TD
+    A["신규 인프라 준비\n(새 AWS 계정, Lightsail, NCP, 또는 타사 클라우드)"] --> B["Docker & Compose 설치 및 /srv/mvp-data 디렉토리 생성"]
+    B --> C["최신 S3 DB 덤프 다운로드 및 MySQL 복원\n(또는 rsync로 /srv/mvp-data 복제)"]
+    C --> D["docker compose up -d 실행 및 헬스체크 확인"]
+    D --> E["DuckDNS 대시보드에서 A 레코드 IP를 신규 서버 IP로 변경"]
+    E --> F["마이그레이션 완료 (DNS 전파 즉시 서비스 정상화, 다운타임 < 30분)"]
+```
