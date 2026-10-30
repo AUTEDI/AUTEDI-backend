@@ -1,5 +1,7 @@
 package com.ceos24.autedi.global.exception;
 
+import com.ceos24.autedi.global.response.ApiResponse;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -16,20 +18,26 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
-    public ResponseEntity<ErrorResponse> handleCustomException(CustomException e) {
+    public ResponseEntity<ApiResponse<Object>> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("CustomException: code={}, message={}", errorCode.getCode(), e.getMessage());
         return ResponseEntity
                 .status(errorCode.getStatus())
-                .body(ErrorResponse.of(errorCode, e.getMessage()));
+                .body(ApiResponse.onFailure(errorCode, null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
+    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException e
+    ) {
         log.warn("Validation failed: {}", e.getMessage());
+        List<String> errors = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .toList();
+
         return ResponseEntity
                 .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
-                .body(ErrorResponse.of(ErrorCode.INVALID_INPUT_VALUE, e.getBindingResult()));
+                .body(ApiResponse.onFailure(ErrorCode.INVALID_INPUT_VALUE, errors));
     }
 
     @ExceptionHandler({
@@ -37,36 +45,36 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class
     })
-    public ResponseEntity<ErrorResponse> handleBadRequestException(Exception e) {
+    public ResponseEntity<ApiResponse<Object>> handleBadRequestException(Exception e) {
         log.warn("Bad request: {}", e.getMessage());
         return ResponseEntity
                 .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
-                .body(ErrorResponse.of(ErrorCode.INVALID_INPUT_VALUE));
+                .body(ApiResponse.onFailure(ErrorCode.INVALID_INPUT_VALUE));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException e) {
+    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException e) {
         log.warn("Access denied: {}", e.getMessage());
         return ResponseEntity
                 .status(ErrorCode.ACCESS_DENIED.getStatus())
-                .body(ErrorResponse.of(ErrorCode.ACCESS_DENIED));
+                .body(ApiResponse.onFailure(ErrorCode.ACCESS_DENIED));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleHttpRequestMethodNotSupportedException(
+    public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
             HttpRequestMethodNotSupportedException e
     ) {
         log.warn("Method not allowed: {}", e.getMessage());
         return ResponseEntity
                 .status(ErrorCode.METHOD_NOT_ALLOWED.getStatus())
-                .body(ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED));
+                .body(ApiResponse.onFailure(ErrorCode.METHOD_NOT_ALLOWED));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleException(Exception e) {
+    public ResponseEntity<ApiResponse<Object>> handleException(Exception e) {
         log.error("Unhandled exception occurred", e);
         return ResponseEntity
                 .status(ErrorCode.INTERNAL_SERVER_ERROR.getStatus())
-                .body(ErrorResponse.of(ErrorCode.INTERNAL_SERVER_ERROR));
+                .body(ApiResponse.onFailure(ErrorCode.INTERNAL_SERVER_ERROR));
     }
 }

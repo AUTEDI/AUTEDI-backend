@@ -2,6 +2,7 @@ package com.ceos24.autedi.domain.user.controller;
 
 import com.ceos24.autedi.domain.auth.service.AuthService;
 import com.ceos24.autedi.domain.user.dto.response.UserResponse;
+import com.ceos24.autedi.global.response.ApiResponse;
 import com.ceos24.autedi.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,8 +19,8 @@ public class UserController {
     private final AuthService authService;
 
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getMe(@AuthenticationPrincipal CustomUserPrincipal principal) {
+    public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal CustomUserPrincipal principal) {
         UserResponse response = authService.getCurrentUser(principal.userId());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
 }
