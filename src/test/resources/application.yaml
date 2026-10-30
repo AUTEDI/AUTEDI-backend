@@ -17,6 +17,25 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
 
+# AWS S3 테스트 설정 (외부 종속성 격리)
+cloud:
+  aws:
+    region:
+      static: ap-northeast-2
+    s3:
+      bucket: test-bucket
+    credentials:
+      access-key: test-key
+      secret-key: test-secret
+
+aws:
+  region: ap-northeast-2
+  s3:
+    bucket: test-bucket
+  credentials:
+    access-key: test-key
+    secret-key: test-secret
+
 springdoc:
   api-docs:
     path: /v3/api-docs
