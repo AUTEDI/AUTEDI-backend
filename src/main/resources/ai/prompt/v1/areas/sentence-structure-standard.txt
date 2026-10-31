@@ -1,0 +1,4 @@
+Focus on fragments, run-on structure, faulty clause connections and clearly confusing local sentence order.
+Repair a necessary structural problem with the smallest understandable change while preserving the original sentence as much as possible.
+Offer limited connection improvements only when they clearly help comprehension; do not vary every acceptable sentence for style.
+Keep each replacement anchored within one supplied transcription line and avoid unrelated vocabulary or content changes.

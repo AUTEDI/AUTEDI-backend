@@ -8,10 +8,17 @@ import com.ceos24.autedi.domain.correction.dto.response.CorrectionResponse;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
+import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
 import com.ceos24.autedi.domain.generation.dto.response.GenerationResponse;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
+import com.ceos24.autedi.domain.generation.entity.WorksheetGenerationResult;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
+import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationResultRepository;
+import com.ceos24.autedi.domain.generation.service.FixedResponseGenerationService;
+import com.ceos24.autedi.domain.worksheet.dto.response.ReviewAreaSummaryResponse;
+import com.ceos24.autedi.domain.worksheet.dto.response.ReviewIssueResponse;
 import com.ceos24.autedi.domain.worksheet.dto.response.ReviewResponse;
+import com.ceos24.autedi.domain.worksheet.dto.response.ReviewResultResponse;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetDetailResponse;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
@@ -23,7 +30,10 @@ import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +51,7 @@ public class CorrectionService {
     private final WorksheetGenerationRepository worksheetGenerationRepository;
     private final CorrectionRepository correctionRepository;
     private final CommentRepository commentRepository;
+    private final WorksheetGenerationResultRepository generationResults;
 
     public ReviewResponse getReview(Long academyId, Long worksheetId) {
         Worksheet worksheet = findWorksheetAndValidateReady(academyId, worksheetId);
@@ -48,23 +59,76 @@ public class CorrectionService {
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
         WorksheetGeneration latestGen = worksheetGenerationRepository
-                .findFirstByWorksheetIdOrderByCreatedAtDesc(worksheetId)
+                .findFirstByWorksheetIdOrderByCreatedAtDescIdDesc(worksheetId)
                 .orElse(null);
 
         Long latestGenId = latestGen != null ? latestGen.getId() : null;
         WorksheetDetailResponse worksheetDetail = WorksheetDetailResponse.of(worksheet, pages, settings, latestGenId);
         GenerationResponse generationResponse = latestGen != null ? GenerationResponse.from(latestGen) : null;
 
+        List<WorksheetGenerationResult> archived = latestGenId == null
+                ? List.of()
+                : generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(List.of(latestGenId));
+        Map<Long, String> sources = sources(archived);
         List<CorrectionResponse> corrections =
                 correctionRepository.findAllByWorksheetIdAndStatus(worksheetId, CorrectionStatus.ACTIVE).stream()
-                        .map(CorrectionResponse::from)
+                        .map(correction -> response(correction, sources))
                         .toList();
 
         List<CommentResponse> comments = commentRepository.findAllActiveByWorksheet(worksheetId, null).stream()
                 .map(CommentResponse::from)
                 .toList();
 
-        return new ReviewResponse(worksheetDetail, generationResponse, corrections, comments);
+        List<ReviewIssueResponse> reviewIssues = new ArrayList<>();
+        List<ReviewAreaSummaryResponse> summary = new ArrayList<>();
+        List<ReviewResultResponse> resultInfo = new ArrayList<>();
+        for (WorksheetGenerationResult entity : archived) {
+            var saved = entity.snapshot();
+            var transcript = saved.transcription();
+            resultInfo.add(new ReviewResultResponse(
+                    saved.id(),
+                    saved.generationId(),
+                    transcript.pageId(),
+                    transcript.id(),
+                    sources.get(saved.generationId()),
+                    saved.metadata()));
+            if (saved.validationResult() == null) continue;
+            for (var issue : saved.validationResult().reviewIssues()) {
+                reviewIssues.add(new ReviewIssueResponse(
+                        saved.id(),
+                        saved.generationId(),
+                        transcript.id(),
+                        transcript.pageId(),
+                        issue.pageNumber(),
+                        issue.candidateIndex(),
+                        issue.original(),
+                        issue.resolvedAnchor(),
+                        issue.validBoxes(),
+                        issue.issues(),
+                        issue.requiresReview()));
+            }
+            for (var area : saved.validationResult().summary()) {
+                int active = (int) corrections.stream()
+                        .filter(card -> saved.generationId().equals(card.generationId())
+                                && card.area().name().equals(area.area().name())
+                                && card.anchor() != null
+                                && card.anchor().transcriptionId().equals(transcript.id()))
+                        .count();
+                summary.add(new ReviewAreaSummaryResponse(
+                        saved.generationId(),
+                        transcript.pageId(),
+                        transcript.pageNumber(),
+                        area.area(),
+                        area.level(),
+                        area.recommendedCount(),
+                        area.maximumCount(),
+                        area.displayedCount(),
+                        active,
+                        area.omittedCount()));
+            }
+        }
+        return new ReviewResponse(
+                worksheetDetail, generationResponse, corrections, comments, reviewIssues, summary, resultInfo);
     }
 
     public CorrectionListResponse getCorrections(
@@ -73,10 +137,13 @@ public class CorrectionService {
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
+        var entities = correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area);
+        var sources = sources(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(entities.stream()
+                .map(card -> card.getGeneration().getId())
+                .distinct()
+                .toList()));
         List<CorrectionResponse> items =
-                correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area).stream()
-                        .map(CorrectionResponse::from)
-                        .toList();
+                entities.stream().map(card -> response(card, sources)).toList();
 
         return CorrectionListResponse.of(items);
     }
@@ -85,7 +152,7 @@ public class CorrectionService {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
-        return CorrectionResponse.from(correction);
+        return response(correction);
     }
 
     @Transactional
@@ -101,11 +168,15 @@ public class CorrectionService {
             throw new CustomException(ErrorCode.CANNOT_MODIFY_DELETED_CORRECTION);
         }
 
-        correction.editContent(request.content().trim());
+        String content = request.content();
+        if (content == null || correction.getAction() != AiAction.REPLACE && content.isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "내용 보완 안내와 기존 첨삭 내용은 비어 있을 수 없습니다.");
+        }
+        correction.editContent(correction.getAction() == AiAction.REPLACE ? content : content.trim());
+        correctionRepository.flush();
         log.info("첨삭 내용 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
-        String nextEtag = "\"cor_" + correction.getId() + "-v" + (correction.getVersion() + 1) + "\"";
-        return CorrectionResponse.of(correction, nextEtag);
+        return response(correction);
     }
 
     @Transactional
@@ -122,9 +193,10 @@ public class CorrectionService {
         }
 
         correction.delete();
+        correctionRepository.flush();
         log.info("첨삭 항목 논리 삭제 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
-        return "\"cor_" + correction.getId() + "-v" + (correction.getVersion() + 1) + "\"";
+        return correction.getEtag();
     }
 
     @Transactional
@@ -137,14 +209,37 @@ public class CorrectionService {
 
         if (correction.getStatus() == CorrectionStatus.ACTIVE) {
             log.info("이미 활성 상태인 첨삭 항목 (200 처리): correctionId={}", correctionId);
-            return CorrectionResponse.from(correction);
+            return response(correction);
         }
 
         correction.restore();
+        correctionRepository.flush();
         log.info("첨삭 항목 복원 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
-        String nextEtag = "\"cor_" + correction.getId() + "-v" + (correction.getVersion() + 1) + "\"";
-        return CorrectionResponse.of(correction, nextEtag);
+        return response(correction);
+    }
+
+    private CorrectionResponse response(Correction correction) {
+        return response(
+                correction,
+                sources(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(
+                        List.of(correction.getGeneration().getId()))));
+    }
+
+    private static CorrectionResponse response(Correction correction, Map<Long, String> sources) {
+        return CorrectionResponse.of(
+                correction,
+                correction.getEtag(),
+                sources.getOrDefault(correction.getGeneration().getId(), "AI"));
+    }
+
+    private static Map<Long, String> sources(List<WorksheetGenerationResult> results) {
+        Map<Long, String> sources = new HashMap<>();
+        for (var result : results)
+            sources.put(
+                    result.getGeneration().getId(),
+                    FixedResponseGenerationService.MODEL.equals(result.getModel()) ? "FIXED" : "AI");
+        return sources;
     }
 
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
