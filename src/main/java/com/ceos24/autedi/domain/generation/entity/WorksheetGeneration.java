@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -24,7 +25,9 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "worksheet_generations")
+@Table(
+        name = "worksheet_generations",
+        uniqueConstraints = @UniqueConstraint(name = "UK_generation_idempotency_key", columnNames = "idempotency_key"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class WorksheetGeneration extends BaseTimeEntity {
@@ -41,7 +44,7 @@ public class WorksheetGeneration extends BaseTimeEntity {
     @JoinColumn(name = "requested_by", nullable = false)
     private User requestedBy;
 
-    @Column(name = "idempotency_key", length = 100, nullable = false, unique = true)
+    @Column(name = "idempotency_key", length = 100, nullable = false)
     private String idempotencyKey;
 
     @Enumerated(EnumType.STRING)
@@ -51,6 +54,10 @@ public class WorksheetGeneration extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "current_stage", length = 30, nullable = false)
     private GenerationStage currentStage;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "client_mode", length = 30, updatable = false)
+    private GenerationClientMode clientMode;
 
     @Column(name = "request_file_hash", length = 64, nullable = false)
     private String requestFileHash;
@@ -74,6 +81,10 @@ public class WorksheetGeneration extends BaseTimeEntity {
     @Column(name = "retry_of_generation_id")
     private Long retryOfGenerationId;
 
+    // JSON anchor와 동일한 논리 참조. 저장·재사용 시 학원/학습지/파일/PNG 연결을 확인한다.
+    @Column(name = "input_transcription_id")
+    private Long inputTranscriptionId;
+
     @Version
     @Column(name = "version", nullable = false)
     private Integer version;
@@ -92,12 +103,16 @@ public class WorksheetGeneration extends BaseTimeEntity {
             String requestFileHash,
             Object requestSettingsSnapshot,
             Integer retryCount,
-            Long retryOfGenerationId) {
+            Long retryOfGenerationId,
+            GenerationClientMode clientMode,
+            Long inputTranscriptionId) {
         this.worksheet = worksheet;
         this.requestedBy = requestedBy;
         this.idempotencyKey = idempotencyKey;
         this.status = GenerationStatus.PENDING;
         this.currentStage = GenerationStage.QUEUED;
+        this.clientMode = clientMode;
+        this.inputTranscriptionId = inputTranscriptionId;
         this.requestFileHash = requestFileHash;
         this.requestSettingsSnapshot = requestSettingsSnapshot;
         this.isRetryable = false;
@@ -114,6 +129,13 @@ public class WorksheetGeneration extends BaseTimeEntity {
 
     public void updateStage(GenerationStage stage) {
         this.currentStage = stage;
+    }
+
+    public void useTranscription(Long id) {
+        if (status != GenerationStatus.RUNNING || currentStage != GenerationStage.OCR || id == null)
+            throw new IllegalStateException("OCR 단계에서만 전사를 확정할 수 있습니다.");
+        this.inputTranscriptionId = id;
+        this.currentStage = GenerationStage.AI_CORRECTION;
     }
 
     public void succeed() {

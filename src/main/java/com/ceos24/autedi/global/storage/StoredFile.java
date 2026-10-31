@@ -9,5 +9,6 @@ public record StoredFile(
         FileType fileType,
         Long fileSize,
         String fileHash,
+        String preparedImageUrl,
         Integer width,
         Integer height) {}

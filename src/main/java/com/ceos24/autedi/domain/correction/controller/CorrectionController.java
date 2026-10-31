@@ -37,7 +37,8 @@ public class CorrectionController {
 
     @Operation(
             summary = "검토 화면 통합 조회 (F05)",
-            description = "네트워크 워터폴을 제거하기 위해 검토 화면에 필요한 학습지, 페이지, 활성 첨삭, 교사 코멘트를 1회 왕복으로 한 번에 조회합니다.")
+            description =
+                    "학습지, 페이지, 활성 첨삭, 교사 코멘트와 최신 생성의 reviewIssues, 영역별 요약, 결과 출처를 조회합니다. 첨삭에는 action과 검증 경고가 포함됩니다.")
     @GetMapping("/review")
     public ResponseEntity<ApiResponse<ReviewResponse>> getReview(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -68,7 +69,7 @@ public class CorrectionController {
 
     @Operation(
             summary = "AI 첨삭 단건 상세 조회 (F05)",
-            description = "첨삭 한 건의 원문, AI 최초 제안, 현재 수정문, 교사용 설명, 바운딩 박스 좌표 및 수정 여부를 조회합니다.")
+            description = "첨삭 한 건의 action(REPLACE/GUIDANCE), 원문, AI 최초 제안, 현재 수정문, anchor, 좌표, 검증 경고 및 수정 여부를 조회합니다.")
     @GetMapping("/corrections/{correctionId}")
     public ResponseEntity<ApiResponse<CorrectionResponse>> getCorrection(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -81,7 +82,7 @@ public class CorrectionController {
     @Operation(
             summary = "AI 첨삭 내용(content) 수정 (F05)",
             description =
-                    "AI가 생성한 수정문 또는 제안문을 선생님이 직접 편집합니다. 원문/좌표/설명은 보존되며 is_edited=true가 설정됩니다. ETag 동시성 제어를 지원합니다.")
+                    "선생님이 현재 내용만 편집합니다. REPLACE는 빈 문자열(삭제 제안)을 허용하고 공백을 보존하며, GUIDANCE는 빈 내용을 거부합니다. 최초 제안/원문/좌표/설명/검증 결과는 보존됩니다. ETag 동시성 제어를 지원합니다.")
     @PatchMapping("/corrections/{correctionId}")
     public ResponseEntity<ApiResponse<CorrectionResponse>> updateCorrection(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
