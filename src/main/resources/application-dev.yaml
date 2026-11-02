@@ -46,3 +46,9 @@ server:
 app:
   storage:
     type: ${STORAGE_TYPE:s3}
+  mail:
+    type: ${MAIL_TYPE:http}
+    http:
+      api-key: ${RESEND_API_KEY:}
+      endpoint: ${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}
+      from: ${MAIL_HTTP_FROM:onboarding@resend.dev}
