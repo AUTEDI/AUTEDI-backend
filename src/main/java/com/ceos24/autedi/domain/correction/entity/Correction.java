@@ -75,6 +75,9 @@ public class Correction extends BaseTimeEntity {
     @Column(name = "is_edited", nullable = false)
     private Boolean isEdited;
 
+    @Column(name = "is_applied", nullable = false)
+    private Boolean isApplied;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
     private CorrectionStatus status;
@@ -97,7 +100,8 @@ public class Correction extends BaseTimeEntity {
             String aiInitialContent,
             String content,
             String explanation,
-            List<RegionPayload> regions) {
+            List<RegionPayload> regions,
+            Boolean isApplied) {
         this.worksheet = worksheet;
         this.page = page;
         this.generation = generation;
@@ -109,6 +113,7 @@ public class Correction extends BaseTimeEntity {
         this.explanation = explanation;
         this.regions = regions;
         this.isEdited = false;
+        this.isApplied = isApplied != null ? isApplied : true;
         this.status = CorrectionStatus.ACTIVE;
         this.version = 1;
     }
@@ -116,6 +121,24 @@ public class Correction extends BaseTimeEntity {
     public void editContent(String newContent) {
         this.content = newContent;
         this.isEdited = true;
+    }
+
+    public void update(String newContent, List<RegionPayload> newRegions, Boolean newIsApplied) {
+        if (newContent != null && !newContent.isBlank()) {
+            this.content = newContent;
+            this.isEdited = true;
+        }
+        if (newRegions != null && !newRegions.isEmpty()) {
+            this.regions = newRegions;
+            this.isEdited = true;
+        }
+        if (newIsApplied != null) {
+            this.isApplied = newIsApplied;
+        }
+    }
+
+    public void updateApplied(boolean applied) {
+        this.isApplied = applied;
     }
 
     public void delete() {

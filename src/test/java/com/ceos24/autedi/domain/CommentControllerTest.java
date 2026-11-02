@@ -15,6 +15,7 @@ import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
 import com.ceos24.autedi.domain.comment.dto.request.CommentCreateRequest;
 import com.ceos24.autedi.domain.comment.dto.request.CommentUpdateRequest;
 import com.ceos24.autedi.domain.comment.entity.Comment;
+import com.ceos24.autedi.domain.comment.entity.CommentColor;
 import com.ceos24.autedi.domain.comment.entity.HighlightType;
 import com.ceos24.autedi.domain.comment.repository.CommentRepository;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
@@ -147,6 +148,25 @@ class CommentControllerTest {
                 .andExpect(header().exists(HttpHeaders.ETAG))
                 .andExpect(jsonPath("$.result.content").value("이 부분을 더 자세히 설명해 보세요."))
                 .andExpect(jsonPath("$.result.highlightType").value("HIGHLIGHT"));
+    }
+
+    @Test
+    @DisplayName("POST /comments - 화살표(ARROW) 및 빨간색(RED) 코멘트 작성 성공")
+    void createComment_withArrowAndRedColor_success() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest(
+                testPage.getId(),
+                HighlightType.ARROW,
+                CommentColor.RED,
+                List.of(new RegionPayload(0.1, 0.2, 0.3, 0.05)),
+                "화살표 지점 확인 필요");
+
+        mockMvc.perform(post("/api/v1/worksheets/{worksheetId}/comments", testWorksheet.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.result.highlightType").value("ARROW"))
+                .andExpect(jsonPath("$.result.color").value("RED"));
     }
 
     @Test

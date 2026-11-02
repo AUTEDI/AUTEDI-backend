@@ -41,7 +41,11 @@ public class WorksheetService {
     private final FileStorageService fileStorageService;
 
     @Transactional
-    public WorksheetDetailResponse uploadWorksheet(Long userId, Long academyId, MultipartFile file) {
+    public WorksheetDetailResponse uploadWorksheets(Long userId, Long academyId, List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            throw new CustomException(ErrorCode.EMPTY_FILE);
+        }
+
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         Academy academy = user.getAcademy();
@@ -54,35 +58,67 @@ public class WorksheetService {
             throw new CustomException(ErrorCode.ACADEMY_SUBSCRIPTION_INACTIVE);
         }
 
-        // 파일 저장 및 메타데이터 추출
-        StoredFile storedFile = fileStorageService.upload(file, "worksheets/" + academyId);
+        // 각 파일 저장 및 메타데이터 추출
+        List<StoredFile> storedFiles = new java.util.ArrayList<>();
+        long totalSize = 0L;
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            StoredFile sf = fileStorageService.upload(file, "worksheets/" + academyId);
+            storedFiles.add(sf);
+            totalSize += sf.fileSize();
+        }
 
-        // 학습지 마스터 레코드 생성 (초기 상태: DRAFT)
+        if (storedFiles.isEmpty()) {
+            throw new CustomException(ErrorCode.EMPTY_FILE);
+        }
+
+        StoredFile firstFile = storedFiles.get(0);
+
+        // 학습지 마스터 레코드 생성 (초기 상태: DRAFT, pageCount: 업로드된 파일 개수)
         Worksheet worksheet = Worksheet.builder()
                 .academy(academy)
                 .user(user)
-                .originalFilename(storedFile.originalFilename())
-                .fileUrl(storedFile.fileUrl())
-                .fileType(storedFile.fileType())
-                .fileSize(storedFile.fileSize())
-                .fileHash(storedFile.fileHash())
-                .pageCount(1)
+                .originalFilename(firstFile.originalFilename())
+                .fileUrl(firstFile.fileUrl())
+                .fileType(firstFile.fileType())
+                .fileSize(totalSize)
+                .fileHash(firstFile.fileHash())
+                .pageCount(storedFiles.size())
                 .build();
-        worksheetRepository.save(worksheet);
+        Worksheet savedWorksheet = worksheetRepository.save(worksheet);
 
-        // 기본 1페이지 생성
-        WorksheetPage page = WorksheetPage.builder()
-                .worksheet(worksheet)
-                .pageNumber(1)
-                .previewImageUrl(storedFile.fileUrl())
-                .width(storedFile.width())
-                .height(storedFile.height())
-                .build();
-        worksheetPageRepository.save(page);
+        // 순서대로 페이지(1, 2, ...) 생성
+        List<WorksheetPage> pages = new java.util.ArrayList<>();
+        for (int i = 0; i < storedFiles.size(); i++) {
+            StoredFile sf = storedFiles.get(i);
+            WorksheetPage page = WorksheetPage.builder()
+                    .worksheet(savedWorksheet)
+                    .pageNumber(i + 1)
+                    .previewImageUrl(sf.fileUrl())
+                    .width(sf.width())
+                    .height(sf.height())
+                    .build();
+            worksheetPageRepository.save(page);
+            pages.add(page);
+        }
 
-        log.info("학습지 업로드 완료: worksheetId={}, originalFilename={}", worksheet.getId(), worksheet.getOriginalFilename());
+        log.info(
+                "학습지 다중 페이지 업로드 완료: worksheetId={}, originalFilename={}, pageCount={}",
+                savedWorksheet.getId(),
+                savedWorksheet.getOriginalFilename(),
+                pages.size());
 
-        return WorksheetDetailResponse.of(worksheet, List.of(page), List.of(), null);
+        return WorksheetDetailResponse.of(savedWorksheet, pages, List.of(), null);
+    }
+
+    @Transactional
+    public WorksheetDetailResponse uploadWorksheet(Long userId, Long academyId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new CustomException(ErrorCode.EMPTY_FILE);
+        }
+        return uploadWorksheets(userId, academyId, List.of(file));
     }
 
     public WorksheetDetailResponse getWorksheetDetail(Long academyId, Long worksheetId) {

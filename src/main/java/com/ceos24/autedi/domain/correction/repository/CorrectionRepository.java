@@ -21,13 +21,20 @@ public interface CorrectionRepository extends JpaRepository<Correction, Long> {
             + "AND (:pageId IS NULL OR c.page.id = :pageId) "
             + "AND (:area IS NULL OR c.area = :area) "
             + "AND (:feedbackType IS NULL OR c.feedbackType = :feedbackType) "
+            + "AND (:isApplied IS NULL OR c.isApplied = :isApplied) "
             + "ORDER BY c.page.pageNumber ASC, c.id ASC")
     List<Correction> findAllByFilter(
             @Param("worksheetId") Long worksheetId,
             @Param("status") CorrectionStatus status,
             @Param("pageId") Long pageId,
             @Param("area") CorrectionArea area,
-            @Param("feedbackType") FeedbackType feedbackType);
+            @Param("feedbackType") FeedbackType feedbackType,
+            @Param("isApplied") Boolean isApplied);
+
+    default List<Correction> findAllByFilter(
+            Long worksheetId, CorrectionStatus status, Long pageId, CorrectionArea area, FeedbackType feedbackType) {
+        return findAllByFilter(worksheetId, status, pageId, area, feedbackType, null);
+    }
 
     List<Correction> findAllByWorksheetIdAndStatus(Long worksheetId, CorrectionStatus status);
 }

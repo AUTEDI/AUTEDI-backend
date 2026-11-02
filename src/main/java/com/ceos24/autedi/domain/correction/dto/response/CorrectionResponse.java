@@ -25,6 +25,7 @@ public record CorrectionResponse(
         @Schema(description = "캔버스 상의 바운딩 박스 위치 좌표 배열") List<RegionPayload> regions,
         @Schema(description = "선생님 편집 여부", example = "false") Boolean editedByTeacher,
         @Schema(description = "선생님 편집으로 인한 해설 진부화 여부", example = "false") Boolean explanationStale,
+        @Schema(description = "선생님 피드백 채택/반영 여부", example = "true") Boolean isApplied,
         @Schema(description = "상태 (ACTIVE: 활성, DELETED: 소프트 삭제)", example = "ACTIVE") CorrectionStatus status,
         @Schema(description = "생성 일시", example = "2026-10-30T10:00:05") LocalDateTime createdAt,
         @Schema(description = "수정 일시", example = "2026-10-30T10:05:00") LocalDateTime updatedAt) {
@@ -47,6 +48,7 @@ public record CorrectionResponse(
                 correction.getRegions(),
                 Boolean.TRUE.equals(correction.getIsEdited()),
                 Boolean.TRUE.equals(correction.getIsEdited()),
+                Boolean.TRUE.equals(correction.getIsApplied()),
                 correction.getStatus(),
                 correction.getCreatedAt(),
                 correction.getUpdatedAt());

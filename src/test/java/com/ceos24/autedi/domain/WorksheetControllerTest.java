@@ -171,6 +171,25 @@ class WorksheetControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/worksheets - 다중 파일(files) 업로드 시 2페이지 이상 생성 성공")
+    void uploadWorksheets_multiPage_success() throws Exception {
+        MockMultipartFile file1 =
+                new MockMultipartFile("files", "page1.png", MediaType.IMAGE_PNG_VALUE, "dummy content 1".getBytes());
+        MockMultipartFile file2 =
+                new MockMultipartFile("files", "page2.png", MediaType.IMAGE_PNG_VALUE, "dummy content 2".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/worksheets")
+                        .file(file1)
+                        .file(file2)
+                        .header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.pages.length()").value(2))
+                .andExpect(jsonPath("$.result.pages[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.result.pages[1].pageNumber").value(2));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/worksheets/{id} - [테넌트 격리] 타 학원 학습지 접근 시 404 자원 은닉")
     void getWorksheet_tenantIsolation_returnsNotFound() throws Exception {
         // Academy B의 유저가 Academy A의 학습지 상세 조회를 시도할 때 404 반환

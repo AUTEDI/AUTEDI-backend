@@ -298,4 +298,48 @@ class CorrectionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.status").value("ACTIVE"));
     }
+
+    @Test
+    @DisplayName("PATCH /corrections/{correctionId}/apply - 피드백 반영(채택) 여부 토글 성공")
+    void toggleCorrectionApplied_success() throws Exception {
+        mockMvc.perform(patch(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}/apply",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .param("applied", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isApplied").value(false));
+
+        mockMvc.perform(patch(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}/apply",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .param("applied", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isApplied").value(true));
+    }
+
+    @Test
+    @DisplayName("PATCH /corrections/{correctionId} - 바운딩 박스 위치(regions) 및 반영 여부 동시 수정 성공")
+    void updateCorrection_withRegionsAndIsApplied_success() throws Exception {
+        String etag = testCorrection.getEtag();
+        List<RegionPayload> newRegions = List.of(new RegionPayload(0.15, 0.25, 0.35, 0.08));
+        CorrectionUpdateRequest request = new CorrectionUpdateRequest("Modified by Teacher", newRegions, false);
+
+        mockMvc.perform(patch(
+                                "/api/v1/worksheets/{worksheetId}/corrections/{correctionId}",
+                                testWorksheet.getId(),
+                                testCorrection.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .header(HttpHeaders.IF_MATCH, etag)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content").value("Modified by Teacher"))
+                .andExpect(jsonPath("$.result.regions[0].x").value(0.15))
+                .andExpect(jsonPath("$.result.isApplied").value(false))
+                .andExpect(jsonPath("$.result.editedByTeacher").value(true));
+    }
 }

@@ -72,6 +72,7 @@
    - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
    - 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
    - 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
+   - 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
 
 ---
 
@@ -1629,4 +1630,26 @@ class S3FileStorageServiceTest {
      ]
    }
    ```
+
+---
+
+### 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
+
+#### 11.13.1 배경 및 목적
+노션 연동 가이드 Section 3(프론트-백 협의 항목)에서 확인된 화면 UI 상의 미반영 요구사항 5가지를 단일 마일스톤으로 수용하여 프론트엔드 팀의 캔버스 조작(그리기, 채택, 바운딩 박스 리사이징, 다중 페이지 검토)을 완벽히 지원한다.
+
+#### 11.13.2 5대 핵심 도메인 아키텍처 확장
+1. **피드백 채택 상태 머신 (`Correction.isApplied`)**:
+   - AI 첨삭 항목의 채택/반영 여부를 즉시 토글하는 경량 엔드포인트(`PATCH /corrections/{id}/apply?applied=true/false`)를 신설하여 캔버스 상의 원클릭 인터랙션을 보장.
+2. **교사 캔버스 그리기 도구 확장 (`HighlightType`)**:
+   - `HIGHLIGHT`, `UNDERLINE` 외에 `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
+3. **교사 표시 색상 스키마 (`CommentColor`)**:
+   - `Comment.color` 컬럼(`RED`, `BLUE`, `YELLOW`, `GREEN`)을 추가하여 교사의 시각적 코멘트 강조를 다채화 (기본값: `BLUE`).
+4. **AI 바운딩 박스 동적 좌표 갱신 (`CorrectionUpdateRequest.regions`)**:
+   - AI가 인식한 캔버스 좌표가 미세하게 어긋났을 때 교사가 드래그/리사이징한 신규 `RegionPayload` 리스트를 부분 수정(`PATCH`) 바디로 받아 영속화.
+5. **다중 페이지 업로드 파이프라인 (Short-term Multi-Page Pipeline)**:
+   - `POST /api/v1/worksheets`에서 `files: List<MultipartFile>`을 지원하여 업로드된 파일 순서대로 1, 2, ... 페이지로 자동 분할 생성 (기존 단일 `file` 파라미터와 100% 하위 호환).
+
+*상세 API I/O 명세 및 JSON 예시는 [`docs/FRONTEND_COLLABORATION_SPECS.md`](./FRONTEND_COLLABORATION_SPECS.md)를 참조한다.*
+
 
