@@ -40,8 +40,10 @@ public class EmailService {
 
         if (mailSender instanceof JavaMailSenderImpl mailSenderImpl) {
             if (mailSenderImpl.getHost() == null
-                    || mailSenderImpl.getHost().trim().isEmpty()) {
-                log.warn("메일 발송 호스트(MAIL_HOST)가 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+                    || mailSenderImpl.getHost().trim().isEmpty()
+                    || mailSenderImpl.getUsername() == null
+                    || mailSenderImpl.getUsername().trim().isEmpty()) {
+                log.warn("메일 발송 호스트 또는 인증 계정(MAIL_USERNAME)이 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
                 return;
             }
         }
@@ -50,8 +52,14 @@ public class EmailService {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
 
+            String senderAddress = (fromAddress != null && !fromAddress.trim().isEmpty())
+                    ? fromAddress
+                    : (mailSender instanceof JavaMailSenderImpl impl && impl.getUsername() != null
+                            ? impl.getUsername()
+                            : "noreply@autedi.com");
+
             helper.setTo(toEmail);
-            helper.setFrom(fromAddress, fromName);
+            helper.setFrom(senderAddress, fromName);
             helper.setSubject("[" + academyName + "] 선생님 초대장");
 
             String htmlContent = buildInvitationHtml(academyName, inviteLink);

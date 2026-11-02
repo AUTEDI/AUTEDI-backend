@@ -10,7 +10,7 @@ spring:
   jpa:
     open-in-view: false
   mail:
-    host: ${MAIL_HOST:}
+    host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
@@ -20,13 +20,14 @@ spring:
           auth: true
           starttls:
             enable: true
+            required: true
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
 
 app:
   mail:
-    from-address: ${MAIL_FROM_ADDRESS:noreply@autedi.com}
+    from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}
     from-name: ${MAIL_FROM_NAME:AUTEDI}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
 

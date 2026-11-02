@@ -48,13 +48,22 @@ class EmailServiceTest {
     }
 
     @Test
-    @DisplayName("JavaMailSenderImpl의 host가 비어 있는 경우 메일 발송 생략")
-    void sendInvitationEmail_whenHostBlank_skipsSending() {
-        JavaMailSenderImpl impl = new JavaMailSenderImpl();
-        impl.setHost("");
-        when(mailSenderProvider.getIfAvailable()).thenReturn(impl);
+    @DisplayName("JavaMailSenderImpl의 host 또는 username이 비어 있는 경우 메일 발송 생략")
+    void sendInvitationEmail_whenHostOrUsernameBlank_skipsSending() {
+        JavaMailSenderImpl implWithoutHost = new JavaMailSenderImpl();
+        implWithoutHost.setHost("");
+        when(mailSenderProvider.getIfAvailable()).thenReturn(implWithoutHost);
 
         assertDoesNotThrow(() -> emailService.sendInvitationEmail("teacher@test.com", "에이플러스 학원", "raw-token-123"));
+
+        JavaMailSenderImpl implWithoutUser = new JavaMailSenderImpl();
+        implWithoutUser.setHost("smtp.gmail.com");
+        implWithoutUser.setUsername("");
+        when(mailSenderProvider.getIfAvailable()).thenReturn(implWithoutUser);
+
+        assertDoesNotThrow(() -> emailService.sendInvitationEmail("teacher@test.com", "에이플러스 학원", "raw-token-123"));
+
+        verify(javaMailSender, never()).send(any(MimeMessage.class));
     }
 
     @Test
