@@ -52,6 +52,10 @@ public class Comment extends BaseTimeEntity {
     @Column(name = "highlight_type", length = 20, nullable = false)
     private HighlightType highlightType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "color", length = 20, nullable = false)
+    private CommentColor color;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "regions", columnDefinition = "json", nullable = false)
     private List<RegionPayload> regions;
@@ -72,19 +76,32 @@ public class Comment extends BaseTimeEntity {
             WorksheetPage page,
             User user,
             HighlightType highlightType,
+            CommentColor color,
             List<RegionPayload> regions,
             String content) {
         this.worksheet = worksheet;
         this.page = page;
         this.user = user;
         this.highlightType = highlightType;
+        this.color = color != null ? color : CommentColor.BLUE;
         this.regions = regions;
         this.content = content;
         this.version = 1;
     }
 
     public void updateContent(String content) {
-        this.content = content;
+        if (content != null) {
+            this.content = content;
+        }
+    }
+
+    public void updateContent(String content, CommentColor color) {
+        if (content != null) {
+            this.content = content;
+        }
+        if (color != null) {
+            this.color = color;
+        }
     }
 
     public void delete() {

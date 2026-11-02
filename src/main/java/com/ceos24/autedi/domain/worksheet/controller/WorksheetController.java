@@ -36,15 +36,30 @@ public class WorksheetController {
     private final WorksheetService worksheetService;
 
     @Operation(
-            summary = "학습지 원본 파일 업로드 (F02)",
-            description = "학습지 이미지(JPG, PNG) 또는 PDF 파일을 업로드하여 DRAFT 상태로 등록합니다. 응답 헤더로 최신 ETag가 발급됩니다.")
+            summary = "학습지 원본 파일(들) 업로드 (F02)",
+            description =
+                    "단일 또는 다중 학습지 이미지(JPG, PNG) 및 PDF 파일을 업로드하여 DRAFT 상태로 등록합니다. 다중 파일 업로드(files) 시 전달된 순서대로 1, 2, ... 페이지로 생성됩니다. 응답 헤더로 최신 ETag가 발급됩니다.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<WorksheetDetailResponse>> uploadWorksheet(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
-            @Parameter(description = "업로드할 학습지 이미지/PDF 파일 (최대 20MB)", required = true) @RequestParam("file")
+            @Parameter(description = "업로드할 학습지 파일 목록 (다중 페이지 지원)", required = false)
+                    @RequestParam(value = "files", required = false)
+                    java.util.List<MultipartFile> files,
+            @Parameter(description = "단일 학습지 파일 (기존 단일 업로드 호환용)", required = false)
+                    @RequestParam(value = "file", required = false)
                     MultipartFile file) {
+        java.util.List<MultipartFile> targetFiles;
+        if (files != null && !files.isEmpty()) {
+            targetFiles = files;
+        } else if (file != null && !file.isEmpty()) {
+            targetFiles = java.util.List.of(file);
+        } else {
+            throw new com.ceos24.autedi.global.exception.CustomException(
+                    com.ceos24.autedi.global.exception.ErrorCode.EMPTY_FILE);
+        }
+
         WorksheetDetailResponse response =
-                worksheetService.uploadWorksheet(principal.userId(), principal.academyId(), file);
+                worksheetService.uploadWorksheets(principal.userId(), principal.academyId(), targetFiles);
         URI location = URI.create("/api/v1/worksheets/" + response.id());
         return ResponseEntity.created(location)
                 .header(HttpHeaders.ETAG, response.etag())

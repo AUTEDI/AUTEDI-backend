@@ -7,6 +7,7 @@ import com.ceos24.autedi.domain.correction.dto.response.CorrectionListResponse;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionResponse;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.dto.response.GenerationResponse;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
@@ -68,13 +69,31 @@ public class CorrectionService {
     }
 
     public CorrectionListResponse getCorrections(
-            Long academyId, Long worksheetId, String statusParam, Long pageId, CorrectionArea area) {
+            Long academyId,
+            Long worksheetId,
+            String statusParam,
+            Long pageId,
+            CorrectionArea area,
+            FeedbackType feedbackType) {
+        return getCorrections(academyId, worksheetId, statusParam, pageId, area, feedbackType, null);
+    }
+
+    public CorrectionListResponse getCorrections(
+            Long academyId,
+            Long worksheetId,
+            String statusParam,
+            Long pageId,
+            CorrectionArea area,
+            FeedbackType feedbackType,
+            Boolean isApplied) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
         List<CorrectionResponse> items =
-                correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area).stream()
+                correctionRepository
+                        .findAllByFilter(worksheetId, filterStatus, pageId, area, feedbackType, isApplied)
+                        .stream()
                         .map(CorrectionResponse::from)
                         .toList();
 
@@ -101,8 +120,27 @@ public class CorrectionService {
             throw new CustomException(ErrorCode.CANNOT_MODIFY_DELETED_CORRECTION);
         }
 
-        correction.editContent(request.content().trim());
-        log.info("첨삭 내용 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
+        correction.update(
+                request.content() != null ? request.content().trim() : null, request.regions(), request.isApplied());
+        log.info("첨삭 내용/위치/반영여부 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
+
+        String nextEtag = "\"cor_" + correction.getId() + "-v" + (correction.getVersion() + 1) + "\"";
+        return CorrectionResponse.of(correction, nextEtag);
+    }
+
+    @Transactional
+    public CorrectionResponse toggleCorrectionApplied(
+            Long academyId, Long worksheetId, Long correctionId, boolean applied) {
+        findWorksheetAndValidateReady(academyId, worksheetId);
+
+        Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
+
+        if (correction.getStatus() == CorrectionStatus.DELETED) {
+            throw new CustomException(ErrorCode.CANNOT_MODIFY_DELETED_CORRECTION);
+        }
+
+        correction.updateApplied(applied);
+        log.info("첨삭 반영 여부(isApplied) 변경 완료: correctionId={}, isApplied={}", correctionId, applied);
 
         String nextEtag = "\"cor_" + correction.getId() + "-v" + (correction.getVersion() + 1) + "\"";
         return CorrectionResponse.of(correction, nextEtag);

@@ -3,6 +3,7 @@ package com.ceos24.autedi.domain.correction.controller;
 import com.ceos24.autedi.domain.correction.dto.request.CorrectionUpdateRequest;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionListResponse;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionResponse;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.correction.service.CorrectionService;
 import com.ceos24.autedi.domain.worksheet.dto.response.ReviewResponse;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
@@ -60,10 +61,34 @@ public class CorrectionController {
                     Long pageId,
             @Parameter(description = "첨삭 영역 필터 (GRAMMAR_SPELLING 등)", required = false)
                     @RequestParam(value = "area", required = false)
-                    CorrectionArea area) {
-        CorrectionListResponse response =
-                correctionService.getCorrections(principal.academyId(), worksheetId, status, pageId, area);
+                    CorrectionArea area,
+            @Parameter(description = "피드백 유형 필터 (CORRECTION: 오류수정, SUGGESTION: 개선제안)", required = false)
+                    @RequestParam(value = "feedbackType", required = false)
+                    FeedbackType feedbackType,
+            @Parameter(description = "피드백 반영(채택) 여부 필터 (true / false)", required = false)
+                    @RequestParam(value = "isApplied", required = false)
+                    Boolean isApplied) {
+        CorrectionListResponse response = correctionService.getCorrections(
+                principal.academyId(), worksheetId, status, pageId, area, feedbackType, isApplied);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
+    }
+
+    @Operation(
+            summary = "AI 첨삭 반영 여부(isApplied) 토글 (F05)",
+            description = "선생님이 캔버스 상에서 AI 첨삭 항목의 학생 리포트 반영 여부를 즉시 토글합니다.")
+    @PatchMapping("/corrections/{correctionId}/apply")
+    public ResponseEntity<ApiResponse<CorrectionResponse>> toggleApply(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Parameter(description = "학습지 고유 ID", required = true) @PathVariable("worksheetId") Long worksheetId,
+            @Parameter(description = "첨삭 항목 고유 ID", required = true) @PathVariable("correctionId") Long correctionId,
+            @Parameter(description = "반영 여부 (true: 채택, false: 제외)", example = "true")
+                    @RequestParam(value = "applied", defaultValue = "true")
+                    boolean applied) {
+        CorrectionResponse response =
+                correctionService.toggleCorrectionApplied(principal.academyId(), worksheetId, correctionId, applied);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, response.etag())
+                .body(ApiResponse.onSuccess("첨삭 반영 여부가 변경되었습니다.", response));
     }
 
     @Operation(

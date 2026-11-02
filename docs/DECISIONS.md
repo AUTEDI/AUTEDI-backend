@@ -70,6 +70,9 @@
    - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
    - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
    - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
+   - 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
+   - 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
+   - 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
 
 ---
 
@@ -390,6 +393,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 | **F06 코멘트 불변 영역** | 생성 시 `pageId`, `regions` 고정, 수정 시 오직 `content`만 변경 | `CommentService.updateComment` | 프론트엔드 캔버스 자동 배치 레이아웃 일관성 유지 |
 | **F06 코멘트 일관성** | 코멘트 내부 모든 `regions.pageId`와 요청 `pageId` 일치 강제 | `CommentService.createComment` | 페이지 간 교차 좌표 참조 오염 400 차단 |
 | **F05/F06 동시성 제어** | 자원별 ETag(`cor_`, `com_`) 및 `If-Match` 헤더를 통한 낙관적 락 | `CorrectionService`, `CommentService` | 다중 교사 동시 검토 및 코멘트 덮어쓰기 방지 (412) |
+| **파일 스토리지** | DIP 기반 AWS S3 전환 (`S3FileStorageService`) 및 로컬 Fallback | `FileStorageService`, `S3FileStorageService`, `LocalStorageService` | 프론트 0-code <img> 렌더링 유지, 서버 트래픽 격리, 로컬 무자격증명 개발 지원 |
 
 ---
 *본 문서는 AUTEDI 백엔드 개발 팀의 공식 아키텍처 의사결정 기록(ADR)이며, 변경 사항 발생 시 PR을 통한 리뷰 후 갱신됩니다.*
@@ -463,7 +467,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 
 ### 8.4 파일 스토리지 추상화 및 SHA-256 해시/메타데이터 산출
 - **스토리지 인터페이스 추상화 (`FileStorageService`)**:
-  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하고, 현재는 로컬 스토리지 구현체(`LocalStorageService`)를 사용하되 추후 AWS S3 등으로 무중단 전환이 가능하도록 설계했다.
+  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하였으며, 프로덕션 환경에서는 AWS S3 구현체(`S3FileStorageService`)를, AWS 자격증명이 없는 로컬 개발/테스트 환경에서는 로컬 스토리지 구현체(`LocalStorageService`)로 자동 Fallback 되도록 DIP(의존성 역전 원칙)를 적용했다. (상세 아키텍처 및 무중단 전환 규격은 Section 11.12 참조)
 - **SHA-256 파일 해시 (`fileHash`)**:
   - 파일 업로드 및 교체 시 원본 파일의 바이트 스트림으로부터 SHA-256 Hex 해시를 계산하여 영속화한다.
   - 이는 향후 동일 파일 재업로드 감지 및 OCR 결과 캐싱(`ocr_file_hash`)의 키 값으로 활용된다.
@@ -1118,4 +1122,534 @@ Railway 대시보드의 **Variables** 탭에 아래 환경변수가 누락 없�
   - `AWS_S3_BUCKET`: `autedi-mvp-develop-bucket`
   - `AWS_ACCESS_KEY_ID`: IAM 발급 키
   - `AWS_SECRET_ACCESS_KEY`: IAM 발급 시크릿
+
+---
+
+### 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
+
+#### 11.11.1 비동기 스레드 풀 격리 설계 (`@EnableAsync`, `AsyncConfig`, `mailExecutor`) 및 메인 HTTP 서블릿 스레드 블로킹 방지 원리
+
+##### 1. 동기 메일 발송의 치명적 병목 및 결합도 문제
+SMTP(Simple Mail Transfer Protocol)는 외부 통신 프로토콜로서 DNS 질의, TCP 3-way Handshake, STARTTLS 암호화 협상, SMTP AUTH 인증, MIME 데이터 송수신 등 다단계 네트워크 통신을 거친다. 외부 메일 서버(Gmail, AWS SES 등)의 상황에 따라 통상 500ms ~ 3,000ms 이상의 긴 레이턴시가 발생하며, 일시적 네트워크 지연 시에는 수십 초까지 지연될 수 있다.
+
+만약 HTTP 서블릿 스레드(Tomcat Worker Thread)에서 메일 발송을 동기식(`Synchronous`)으로 처리할 경우 다음과 같은 심각한 장애가 유발된다:
+1. **서블릿 스레드 고갈 및 연쇄 장애 (Thread Starvation & Cascading Failure)**:
+   - 외부 SMTP 지연 시 톰캣 워커 스레드가 응답 대기 상태로 블로킹되어 빠르게 고갈된다. 이로 인해 메일과 무관한 일반 사용자(로그인, 학습지 조회 등)의 HTTP 요청까지 타임아웃이 발생하여 시스템 전체가 마비된다.
+2. **DB 트랜잭션 및 커넥션 장기 점유 (HikariCP Connection Starvation)**:
+   - `@Transactional` 범위 내에서 동기 메일 발송을 수행하면, 메일 발송이 끝날 때까지 DB 커넥션을 반환하지 못하고 락(Lock) 및 커넥션 풀을 불필요하게 점유하여 DB 병목을 가속화한다.
+3. **사용자 경험(UX) 훼손 및 트랜잭션 오염**:
+   - 원장 선생님이 [선생님 초대] 버튼을 누른 후 메일 발송이 끝날 때까지 수 초간 로딩 스피너를 대기해야 하며, 네트워크 순시 장애로 메일 발송이 실패하면 초대 레코드 생성 트랜잭션까지 롤백되는 부작용이 발생한다.
+
+##### 2. 비동기 스레드 풀 격리 설계 (`AsyncConfig.java`)
+이러한 문제를 원천 차단하기 위해 Spring의 `@EnableAsync` 기반 전용 `ThreadPoolTaskExecutor`(`mailExecutor`)를 도입하여, 메일 발송 작업을 메인 서블릿 스레드 및 기본 스프링 작업 풀로부터 완전 물리/논리 격리하였다.
+
+```java
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean(name = "mailExecutor")
+    public Executor mailExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("mail-exec-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+* **스레드 풀 튜닝 사양**:
+  - `corePoolSize(2)`: 서버 평상시 최소 2개의 백그라운드 스레드를 유지하여 초대 메일 발송을 즉각 처리.
+  - `maxPoolSize(5)`: 특정 학원에서 다수의 교사를 일괄 초대하거나 동시 요청이 몰릴 경우 최대 5개까지 동적 확장.
+  - `queueCapacity(100)`: 최대 100건의 메일 발송 작업을 메모리 큐에 대기 버퍼링하여 트래픽 버스트 수용.
+  - `threadNamePrefix("mail-exec-")`: 로깅 및 APM(핀포인트, 데이터독 등) 모니터링 시 메일 전담 스레드를 즉시 식별 가능.
+  - `waitForTasksToCompleteOnShutdown(true)` & `awaitTerminationSeconds(30)`: 서버 무중단 배포 및 종료(SIGTERM) 시, 이미 큐에 인입된 초대 메일 발송 작업을 최대 30초간 정상 완료한 후 안전하게 종료(Graceful Shutdown)하여 메일 유실 방지.
+
+* **SMTP 연결 레벨 소켓 타임아웃 방어막 (`application.yaml`)**:
+  ```yaml
+  spring:
+    mail:
+      properties:
+        mail:
+          smtp:
+            connectiontimeout: 5000  # 소켓 연결 타임아웃 (5초)
+            timeout: 5000            # 응답 읽기 타임아웃 (5초)
+            writetimeout: 5000       # 데이터 쓰기 타임아웃 (5초)
+  ```
+  - 외부 SMTP 서버가 응답하지 않는 최악의 상황에서도 스레드가 무한정 행(Hang) 상태에 빠지지 않고 최대 5초 내에 실패 처리 및 스레드 풀로 반환되도록 보장한다.
+
+##### 3. 메인 서블릿 스레드와 비동기 워커 스레드의 상호작용 흐름
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Director as 원장 (Client)
+    participant Controller as InvitationController
+    participant Service as InvitationService
+    participant DB as MySQL (JPA)
+    participant Async as Spring @Async Proxy
+    participant Pool as mailExecutor Thread
+    participant SMTP as SMTP Server (SES/Gmail)
+
+    Director->>Controller: POST /api/v1/invitations (선생님 초대)
+    Controller->>Service: createInvitation(...)
+    activate Service
+    Service->>DB: DB 토큰 저장 및 PENDING 등록 (@Transactional)
+    DB-->>Service: Commit 완료
+    Service->>Async: emailService.sendInvitationEmail(...) 호출
+    Async-->>Pool: 비동기 발송 Task 제출 (Queue 인입)
+    Service-->>Controller: InvitationResponse 반환
+    deactivate Service
+    Controller-->>Director: 201 CREATED (응답 소요: < 20ms)
+
+    Note over Pool,SMTP: 백그라운드 스레드에서 비동기 격리 실행
+    activate Pool
+    Pool->>SMTP: STARTTLS Handshake & MimeMessage 전송 (500~2000ms)
+    alt 전송 성공
+        SMTP-->>Pool: 250 OK
+        Pool->>Pool: log.info("초대 이메일 발송 성공: to={}")
+    else 전송 실패 (SMTP 장애)
+        SMTP-->>Pool: Error (Timeout / Auth Failed)
+        Pool->>Pool: log.error("초대 이메일 발송 실패: to={}, error={}")
+        Note over Pool: try-catch 방어로 예외 격리 (DB 롤백 없음)
+    end
+    deactivate Pool
+```
+
+> [!NOTE]
+> **트랜잭션 및 비즈니스 예외 격리 원칙**:
+> `EmailService.sendInvitationEmail` 메서드는 `@Async("mailExecutor")` 애노테이션을 통해 별도 스레드에서 수행되며, 내부 `try-catch` 블록으로 모든 메일 전송 예외(`Exception`)를 캡슐화하여 로깅한다. 따라서 외부 메일 서버 장애가 발생하더라도 이미 커밋된 초대장 발급 트랜잭션(`UserInvitation`)은 안전하게 영속되며, 클라이언트에게 500 Internal Server Error가 전파되지 않는다.
+
+---
+
+#### 11.11.2 환경별(Local / Dev / Prod) 메일 발송 전략
+
+AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증 용이성, 그리고 운영 서버(AWS SES)의 엔터프라이즈급 신뢰도를 모두 충족하기 위해 3단계 환경별 발송 전략을 수립했다.
+
+| 환경 (Profile) | 발송 인프라 | 자격증명 관리 | Mocking / Fallback 동작 | 주 목적 및 기대 효과 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | • **Default**: No-op Logger (Mock)<br>• **Optional**: Gmail SMTP | `.env` 파일<br>(미설정 허용) | `JavaMailSender` 미설정 시<br>**경고 로그 + 콘솔 링크 출력**으로 대체 | 로컬 개발 시 SMTP 계정 설정 없이도<br>터미널 로그의 초대 링크로 가입 E2E 즉시 테스트 |
+| **Dev** (`dev`) | • **PaaS**: Railway SMTP<br>(Gmail 앱비밀번호 or SES Sandbox) | Railway 대시보드<br>Variables 주입 | 환경변수 미주입 시 로깅 대체,<br>주입 시 실제 이메일 발송 | 프론트-백엔드 간 실제 이메일 수신 및<br>웹메일 클라이언트 렌더링 QC 테스트베드 |
+| **Prod** (`prod`) | • **AWS SES**<br>(Simple Email Service, 서울 리전) | EC2 환경변수 /<br>AWS IAM SMTP Credential | 예외 격리 로깅 및<br>CloudWatch 모니터링 | 대규모 발송 SLA, 높은 수신 도달률(Inbox),<br>도메인 위변조 방지 및 반송률 관리 |
+
+##### 1. Local 환경: 유연한 무중단 로깅 대체(Graceful Mocking) 및 팀 Gmail SMTP
+* **무중단 로깅 대체 (Safe Mocking Fallback)**:
+  - 신규 팀원이 프로젝트를 클론한 뒤 `.env`에 SMTP 설정을 기재하지 않더라도, 초대 API 호출 시 NullPointer나 BeanCreation 에러가 발생하지 않도록 `EmailService`에 방어 로직을 구현했다:
+    ```java
+    JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+    if (mailSender == null) {
+        log.warn("JavaMailSender가 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+        return;
+    }
+    if (mailSender instanceof JavaMailSenderImpl mailSenderImpl) {
+        if (mailSenderImpl.getHost() == null
+                || mailSenderImpl.getHost().trim().isEmpty()
+                || mailSenderImpl.getUsername() == null
+                || mailSenderImpl.getUsername().trim().isEmpty()) {
+            log.warn("메일 발송 호스트 또는 인증 계정(MAIL_USERNAME)이 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+            return;
+        }
+    }
+    ```
+  - `MAIL_USERNAME` 또는 `MAIL_HOST`가 비어있을 경우, 콘솔에 다음과 같이 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다:
+    ```text
+    [초대 링크 발송] To: teacher@example.com, 학원: 에이플러스 학원, 링크: http://localhost:3000/signup?token=b4d8...
+    ```
+* **MVP 및 시연 단계: 팀 공용 Gmail SMTP 연동 확정**:
+  - 도메인 구매 전 MVP 시연 및 프론트엔드 연동 테스트를 위해 **팀 공용 Gmail 계정 + 구글 앱 비밀번호(16자리)** 방식을 채택했다.
+  - Gmail 계정의 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
+    ```env
+    MAIL_HOST=smtp.gmail.com
+    MAIL_PORT=587
+    MAIL_USERNAME=autedi.team@gmail.com
+    MAIL_PASSWORD=xxxx xxxx xxxx xxxx
+    MAIL_FROM_ADDRESS=autedi.team@gmail.com
+    MAIL_FROM_NAME=AUTEDI
+    FRONTEND_URL=http://localhost:3000
+    ```
+  - **Gmail 발신자 일치 보장 정책**: Gmail SMTP는 보안 정책상 인증 계정과 `From` 헤더의 주소가 다르면 `550 Sender Rejected`로 메일을 거부한다. 이를 방지하기 위해 `application.yaml`에서 `from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}` fallback 구조를 적용하여, 별도 `MAIL_FROM_ADDRESS`를 지정하지 않더라도 로그인 계정 주소가 발신자로 자동 일치되도록 구현했다.
+
+##### 2. Dev (Railway) 환경: PaaS 대시보드 환경변수 주입
+* Railway 대시보드의 **Variables** 탭에 팀 Gmail 계정 정보를 주입하여 배포 환경에서도 실제 이메일 발송을 활성화한다:
+  - `MAIL_HOST`: `smtp.gmail.com`
+  - `MAIL_PORT`: `587`
+  - `MAIL_USERNAME`: `autedi.team@gmail.com`
+  - `MAIL_PASSWORD`: `[구글_16자리_앱비밀번호]`
+  - `MAIL_FROM_NAME`: `AUTEDI`
+  - `FRONTEND_URL`: `https://autedi-mvp.vercel.app` (프론트엔드 배포 도메인)
+
+##### 3. Prod (AWS EC2) 환경: 정식 서비스 런칭 시 AWS SES 전용 인프라 전환
+* 정식 상용화 시점에는 `autedi.com` 커스텀 도메인 등록 후 AWS SES(서울 리전: `ap-northeast-2`)를 표준 게이트웨이로 전환하여, `noreply@autedi.com` 발신 전용 체계로 무제한/고신뢰도 발송을 운영한다.
+
+---
+
+#### 11.11.3 반응형 HTML 초대장 템플릿 표준 규격 및 발신자 정책
+
+##### 1. 발신자(Sender) 및 헤더 표준 정책
+* **발신 주소(From Address)**: `noreply@autedi.com`
+  - 도메인 네임스페이스(`autedi.com`)를 통일하여 주요 메일 서비스(Gmail, Naver, Daum, Outlook)의 발신 도메인 불일치 스팸 분류 방지.
+* **발신자 명(From Name)**: `AUTEDI`
+* **메일 제목(Subject)**: `[{academyName}] 선생님 초대장`
+  - 원장 선생님이 소속된 학원명(예: `[대치 정상어학원] 선생님 초대장`)을 동적으로 주입하여 수신 교사의 신뢰성 확보 및 피싱 오인 방지.
+* **문자셋 인코딩**: `UTF-8` 강제 (`new MimeMessageHelper(mimeMessage, false, "UTF-8")`)
+  - 한글 학원명 및 안내 본문 깨짐 현상 원천 방지.
+
+##### 2. 반응형 HTML 템플릿 디자인 사양 (`buildInvitationHtml`)
+이메일 클라이언트는 웹 브라우저와 달리 외부 CSS 파일(`<link>`) 및 `<style>` 블록을 차단하거나 제한적으로 파싱하므로, **모든 서식은 인라인 스타일(Inline CSS)**로 완결되도록 설계했다:
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:540px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:36px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+    <!-- 헤더 -->
+    <div style="margin-bottom:24px;">
+      <h2 style="margin:0 0 8px 0;color:#0f172a;font-size:22px;font-weight:700;">선생님 초대장</h2>
+      <p style="margin:0;color:#64748b;font-size:14px;">AUTEDI 초등 영어 학습지 AI 첨삭 서비스</p>
+    </div>
+    <!-- 본문 안내 -->
+    <div style="line-height:1.7;color:#334155;font-size:15px;margin-bottom:32px;">
+      <p style="margin:0 0 16px 0;">안녕하세요.<br><strong style="color:#0f172a;">{academyName}</strong>에 선생님으로 초대되었습니다.</p>
+      <p style="margin:0 0 16px 0;">아래 버튼을 클릭하여 회원가입을 완료해 주시면, 소속 학원의 학습지 첨삭 및 코멘트 작성 업무를 시작하실 수 있습니다.</p>
+      <p style="margin:0;color:#ef4444;font-size:13px;">* 본 초대 링크는 발송 시점으로부터 24시간 동안만 유효합니다.</p>
+    </div>
+    <!-- CTA 버튼 -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <a href="{inviteLink}" target="_blank" style="display:inline-block;padding:14px 28px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;box-shadow:0 2px 4px rgba(37,99,235,0.2);">초대 수락하고 회원가입하기</a>
+    </div>
+    <!-- 보안 만료 및 Fallback 링크 푸터 -->
+    <div style="border-top:1px solid #e2e8f0;padding-top:20px;font-size:12px;color:#94a3b8;line-height:1.6;">
+      <p style="margin:0 0 8px 0;">버튼이 동작하지 않을 경우 아래 링크를 브라우저 주소창에 직접 붙여넣어 주세요:</p>
+      <p style="margin:0;word-break:break-all;"><a href="{inviteLink}" style="color:#2563eb;text-decoration:underline;">{inviteLink}</a></p>
+      <p style="margin:16px 0 0 0;">본 메일은 {academyName}의 원장 선생님 요청으로 발송되었습니다.</p>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+* **템플릿 핵심 UX/보안 가이드라인**:
+  1. **모바일 최적화 레이아웃**: 최대 너비 `540px`의 카드 컨테이너와 `-apple-system` 산세리프 폰트를 적용하여 데스크톱 및 스마트폰 화면에서 가독성을 보장.
+  2. **명확한 CTA 버튼**: 고대비 블루 컬러(`#2563eb`)의 큼직한 가입 버튼을 배치하여 클릭률 극대화.
+  3. **보안 유효기간 명시**: Section 2.3 및 3.1에 명시된 정책에 따라, `24시간 유효` 경고 문구를 붉은색(`#ef4444`)으로 강조 안내.
+  4. **텍스트 뷰어 대비 Fallback URL**: 이미지/버튼 링크가 비활성화된 폐쇄망 환경을 대비하여 하단에 URL 원본 텍스트를 노출하고 `word-break: break-all`로 줄바꿈 처리.
+  5. **발송 출처 명시**: 학원 원장의 정당한 요청으로 생성되었음을 명시하여 스팸 신고 방지.
+
+---
+
+#### 11.11.4 운영 환경 AWS SES 연동 및 도메인(autedi.com) DNS(DKIM, SPF, DMARC) 인증 런북
+
+상용 B2B 서비스에서 기업 메일 서버나 대형 포털(Gmail, 네이버 등)에 이메일을 안정적으로 도달시키기 위해서는 발신 도메인에 대한 **암호학적 서명(DKIM)과 발신 서버 공인(SPF), 그리고 도메인 보호 정책(DMARC) 3대 인증**이 필수적이다. 인증이 누락될 경우 Gmail의 강력한 스팸 방어 정책(2024년 발효된 대량 발신자 의무 규정)에 의해 메일이 즉시 반송(Reject)되거나 스팸함으로 직행한다.
+
+##### 1. AWS SES 설정 및 Production 모드 전환 (Sandbox 해제)
+1. **AWS Management Console 접속**: 리전을 **`ap-northeast-2 (서울)`**로 선택 후 **Amazon Simple Email Service**로 이동.
+2. **도메인 Identity 생성**:
+   - [Configuration] ➡️ [Identities] ➡️ [Create identity] 클릭.
+   - Identity type: **Domain** 선택.
+   - Domain: `autedi.com` 입력.
+   - Advanced DKIM settings: **Easy DKIM** 선택, DKIM key length: **RSA_2048_BIT** 선택.
+   - [Create identity] 완료.
+3. **SES Production Sandbox 해제 신청**:
+   - 신규 AWS 계정의 SES는 Sandbox 모드로 시작되어 사전에 인증된 이메일 주소로만 발송이 가능하다.
+   - [Account dashboard] ➡️ [Request production access] 클릭:
+     - Mail type: **Transactional** (B2B SaaS 초대장 및 알림 메일)
+     - Website URL: `https://autedi.com`
+     - Use case description: "AUTEDI B2B SaaS 학원 선생님 초대 및 시스템 알림 메일 발송용. 모든 메일은 원장의 명시적 초대 행위로만 발송되며 마케팅 스팸 발송은 일절 없음" 기재 후 제출. (통상 24~48시간 내 승인)
+
+##### 2. DNS 3대 인증 레코드 등록 런북 (Route 53 / 호스팅 네임서버)
+도메인 네임서버 관리 콘솔(Route 53 또는 가비아/Cloudflare 등)에 아래 레코드를 정확히 등록한다:
+
+| 인증 규격 | 레코드 타입 (Type) | 이름 / 호스트 (Host/Name) | 값 / 데이터 (Value/Content) | TTL | 설명 및 역할 |
+| :--- | :---: | :--- | :--- | :---: | :--- |
+| **SPF** | **TXT** | `@` (또는 `autedi.com`) | `v=spf1 include:amazonses.com ~all` | 300 | `autedi.com` 도메인 명의로 메일을 발송할 권한이 있는 공인 발송 인프라로 AWS SES를 지정. |
+| **DKIM #1** | **CNAME** | `[token1]._domainkey.autedi.com` | `[token1].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 1번 공개키 CNAME 레코드. |
+| **DKIM #2** | **CNAME** | `[token2]._domainkey.autedi.com` | `[token2].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 2번 공개키 CNAME 레코드. |
+| **DKIM #3** | **CNAME** | `[token3]._domainkey.autedi.com` | `[token3].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 3번 공개키 CNAME 레코드 (키 로테이션용). |
+| **DMARC** | **TXT** | `_dmarc.autedi.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@autedi.com; pct=100` | 300 | SPF/DKIM 인증 실패 메일을 스팸 격리(`quarantine`) 처리하고 집계 리포트를 수신하도록 수신 메일 서버에 지시. |
+
+> [!IMPORTANT]
+> **SPF 레코드 중복 주의**:
+> DNS TXT 레코드에 `v=spf1 ...` 레코드는 도메인당 반드시 **단 1개만 존재**해야 한다. 만약 이미 구글 워크스페이스나 타 메일 서비스용 SPF가 존재한다면 두 개의 TXT 레코드를 만들지 말고 기존 레코드에 `include:amazonses.com`을 병합해야 한다:
+> `v=spf1 include:_spf.google.com include:amazonses.com ~all`
+
+##### 3. AWS SES SMTP 자격증명(Credentials) 생성
+1. SES Console ➡️ [Configuration] ➡️ [SMTP settings] 메뉴로 이동.
+2. SMTP Configuration 정보 확인:
+   - **Server Name**: `email-smtp.ap-northeast-2.amazonaws.com`
+   - **Port**: `587` (STARTTLS 지원 포트)
+3. [Create SMTP credentials] 버튼 클릭:
+   - IAM User Name 지정 (예: `ses-smtp-user.autedi`).
+   - [Create] 클릭 후 생성된 **SMTP Username**과 **SMTP Password**를 안전하게 다운로드/보관 (비밀번호는 최초 1회만 노출됨).
+
+##### 4. 운영 서버 환경변수 주입 규격 (`/srv/mvp/.env` or Docker Compose)
+운영 EC2 인스턴스의 환경변수 파일에 아래 값을 누락 없이 주입한다:
+
+```env
+# ==============================================================================
+# SMTP Mail Configuration (AWS SES Production)
+# ==============================================================================
+MAIL_HOST=email-smtp.ap-northeast-2.amazonaws.com
+MAIL_PORT=587
+MAIL_USERNAME=AKIAIOSFODNN7EXAMPLE
+MAIL_PASSWORD=BJ45...[SES_SMTP_GENERATED_PASSWORD]...
+MAIL_FROM_ADDRESS=noreply@autedi.com
+MAIL_FROM_NAME=AUTEDI
+FRONTEND_URL=https://autedi.com
+```
+
+##### 5. 발송 도메인 검증 및 수신 테스팅 체크리스트
+- [ ] AWS SES Console에서 `autedi.com` 도메인의 Verification status 및 DKIM status가 모두 **"Success (Verified)"**로 표시되는지 확인.
+- [ ] 운영 서버 기동 후 초대 API 호출 시 `mail-exec-*` 스레드에서 `초대 이메일 발송 성공: to=...` 로그 확인.
+- [ ] Gmail, Naver 메일함으로 초대장을 발송하여 **스팸함이 아닌 일반 편지함(Inbox)**으로 수신되는지 확인.
+- [ ] 수신된 메일의 원본 보기(Show Original)에서 **`SPF: PASS`, `DKIM: PASS`, `DMARC: PASS`** 3대 검증 항목이 모두 합격 판정을 받았는지 확인.
+
+---
+
+### 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
+
+#### 11.12.1 도입 배경 및 스토리지 전환 필요성
+
+초기 개발 단계에서 채택했던 로컬 파일 스토리지(`LocalStorageService`)는 서버 인스턴스 내부의 로컬 디스크(`uploads/`)에 파일을 저장하고, 백엔드 애플리케이션의 엔드포인트(`/files/**`)를 통해 정적 리소스를 직접 서빙하는 방식을 취했다.
+
+그러나 B2B 상용 SaaS 런칭 및 프론트엔드 연동 과정에서 다음과 같은 구조적 한계와 병목이 확인되었다:
+1. **정적 리소스 인증 충돌 (`401 Unauthorized`)**:
+   - 백엔드의 `SecurityConfig`는 무상태(Stateless) JWT Bearer 토큰 기반으로 보호된다.
+   - 표준 HTML `<img src="...">` 태그는 브라우저 네이티브 HTTP GET 요청을 보내므로 별도의 `Authorization` 헤더를 포함할 수 없다. 로컬 서빙 방식에서는 `/files/**` 경로를 `permitAll()`로 열고 `WebMvcConfigurer` 정적 리소스 핸들러를 별도로 구성해야 하는 번거로움과 보안 구멍이 발생했다.
+2. **단일 서버 디스크 용량 한계 및 인스턴스 무상태성(Stateless) 훼손**:
+   - Docker 컨테이너 및 EC2 인스턴스 교체/재배포 시 로컬 볼륨 마운트가 누락되면 저장된 학생 과제물이 영구 유실될 위험이 있다.
+3. **네트워크 대역폭 및 I/O 블로킹 병목**:
+   - 고해상도(A4 300DPI, 5~15MB) 학습지 이미지를 Spring Boot 톰캣 스레드가 직접 읽어서 스트리밍할 경우, 교사들의 동시 조회 시 애플리케이션 스레드 풀이 고갈되고 네트워크 대역폭 비용이 가중된다.
+
+이에 따라 백엔드 팀은 고가용성 오브젝트 스토리지인 **AWS S3 (`S3FileStorageService`)**로 스토리지 인프라를 전격 전환하였다.
+
+---
+
+#### 11.12.2 DIP(의존성 역전 원칙) 기반 스토리지 설계
+
+비즈니스 도메인 계층(`WorksheetService`)이 AWS SDK나 파일 시스템의 저수준 구현에 직접 의존하지 않도록 순수 도메인 인터페이스 `FileStorageService`와 불변 DTO `StoredFile`을 중심으로 결합도를 격리하였다.
+
+```mermaid
+classDiagram
+    class WorksheetService {
+        -FileStorageService fileStorageService
+        +uploadWorksheet()
+        +replaceWorksheetFile()
+    }
+
+    class FileStorageService {
+        <<Interface>>
+        +upload(MultipartFile file, String subDir) StoredFile
+        +delete(String fileUrl) void
+    }
+
+    class LocalStorageService {
+        -Path rootLocation
+        -String baseUrl
+        +upload() StoredFile
+        +delete() void
+    }
+
+    class S3FileStorageService {
+        -S3Client s3Client
+        -String bucketName
+        -String region
+        +upload() StoredFile
+        +delete() void
+    }
+
+    class StoredFile {
+        <<Record>>
+        +String originalFilename
+        +String storedFilename
+        +String fileUrl
+        +FileType fileType
+        +Long fileSize
+        +String fileHash
+        +Integer width
+        +Integer height
+    }
+
+    WorksheetService --> FileStorageService : 의존 (DIP)
+    LocalStorageService ..|> FileStorageService : 구현 (로컬 Fallback)
+    S3FileStorageService ..|> FileStorageService : 구현 (운영 메인)
+    FileStorageService ..> StoredFile : 반환 계약
+```
+
+- **도메인 계약 불변성**:
+  - `WorksheetService`는 주입된 Bean이 `S3FileStorageService`인지 `LocalStorageService`인지 알 필요가 없으며, 단 1줄의 서비스 비즈니스 로직 수정 없이 스토리지 백엔드를 교체할 수 있다 (개방-폐쇄 원칙 OCP 준수).
+- **불변 메타데이터 레코드 (`StoredFile`)**:
+  - 파일 업로드 시 파일 원본명, S3 고유 저장 키, 영구 접근 URL(`fileUrl`), SHA-256 해시값(`fileHash`), 이미지 가로/세로 픽셀 해상도(`width`, `height`)를 한 번에 캡슐화하여 반환한다.
+
+---
+
+#### 11.12.3 테넌트 격리 S3 객체 키 네이밍 및 업로드 메커니즘
+
+1. **테넌트 격리 객체 키 경로**:
+   - `worksheets/{academyId}/{UUID}.{ext}`
+   - 학원(`academyId`)별 폴더 구조를 강제하여 S3 버킷 내부에서도 테넌트 간 파일 충돌을 방지하고 추후 학원 단위 데이터 아카이빙/용량 측정을 용이하게 한다.
+2. **MIME 타입 보존 및 인라인 렌더링 (`Content-Type`)**:
+   - S3에 파일 업로드 시 `PutObjectRequest`의 `contentType` 메타데이터(예: `image/jpeg`, `image/png`, `application/pdf`)를 정확히 지정한다.
+   - MIME 타입이 누락되어 기본값(`binary/octet-stream`)으로 업로드되면, 브라우저가 이미지를 렌더링하지 않고 강제 다운로드 팝업을 띄우는 현상을 원천 방지한다.
+3. **영구 퍼블릭 URL 산출**:
+   - 표준 S3 가상 호스팅 URL 규격을 채택한다:
+     `https://{bucketName}.s3.{region}.amazonaws.com/{s3Key}`
+   - 추후 CloudFront CDN 도입 시 도메인 접두사(`https://cdn.autedi.com/{s3Key}`)만 손쉽게 교체 가능하도록 구조화한다.
+
+---
+
+#### 11.12.4 유연한 빈 등록 및 무중단 로컬 Fallback 메커니즘
+
+새로운 팀원이 프로젝트를 클론하거나 CI 서버에서 테스트를 수행할 때, AWS 계정이나 S3 API 키가 없더라도 애플리케이션 기동 및 테스트가 실패하지 않도록 2단계 Fallback 빈 등록 전략을 적용한다.
+
+```mermaid
+flowchart TD
+    Start[Spring Boot 애플리케이션 시작] --> CheckS3Config{cloud.aws.s3.bucket 설정 및\nAWS 자격증명 유효한가?}
+    CheckS3Config -- Yes --> RegisterS3[S3FileStorageService Bean 등록\n@Primary / 활성화]
+    CheckS3Config -- No --> FallbackLocal[LocalStorageService Fallback Bean 등록\n로컬 uploads/ 디렉터리 사용]
+    RegisterS3 --> Complete[FileStorageService 주입 완료]
+    FallbackLocal --> Complete
+```
+
+- **조건부 주입 구현 원칙**:
+  - `@ConditionalOnProperty(name = "cloud.aws.s3.bucket")` 애노테이션 또는 `StorageConfig` 팩토리 클래스를 통해 S3 버킷 환경변수가 주입된 경우에만 `S3FileStorageService`를 우선 등록한다.
+  - 버킷 설정이 없거나 비어있는 경우 자동으로 `LocalStorageService`가 활성화되어 로컬 개발 환경의 연속성을 보장한다.
+
+| 환경 (Profile) | 활성 스토리지 구현체 | 자격증명 방식 | URL 형태 | 비고 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | `S3FileStorageService`<br>(or `LocalStorageService`) | `.env`의 AWS Key<br>(미설정 시 Fallback) | S3 HTTPS URL<br>(Fallback 시 `http://localhost:8080/files/...`) | S3 키 주입 시 실제 버킷 테스트 가능,<br>미주입 시 로컬 디스크 무중단 개발 |
+| **Dev** (`dev`) | `S3FileStorageService` | Railway Variables 주입 | `https://autedi-mvp-develop-bucket.s3...` | 프론트-백 간 실서버 연동 QC |
+| **Prod** (`prod`) | `S3FileStorageService` | EC2 IAM Role<br>(Instance Profile) | `https://autedi-mvp-bucket.s3...` | 키 하드코딩 없는 안전한 IAM 권한 위임 |
+
+---
+
+#### 11.12.5 프론트엔드 호환성 (Zero-Frontend-Impact / 0 LOC)
+
+AWS S3 전환은 프론트엔드 코드베이스에 단 1줄의 변경도 요구하지 않는다 (**0 Lines of Code Change**).
+
+1. **완벽한 API 응답 스키마 보존**:
+   - 학습지 상세 조회(`WorksheetDetailResponse`) 및 검토 집계(`ReviewAggregationResponse`)에서 반환되는 DTO 필드 구조(`previewImageUrl`, `fileUrl`)가 100% 동일하다:
+     ```json
+     {
+       "pages": [
+         {
+           "pageId": 1,
+           "pageNumber": 1,
+           "previewImageUrl": "https://autedi-mvp-bucket.s3.ap-northeast-2.amazonaws.com/worksheets/50/a9b8c7...png"
+         }
+       ]
+     }
+     ```
+2. **브라우저 `<img src="...">` 네이티브 렌더링**:
+   - S3 퍼블릭 객체 URL을 제공하므로, 프론트엔드는 이전 로컬 스토리지처럼 `fetch()` + `blob` 생성 + Bearer 헤더 주입과 같은 비표준적 우회 코드를 작성할 필요가 없다.
+   - `<img src={page.previewImageUrl} alt="과제물 미리보기" />` 한 줄로 즉각적인 브라우저 캐싱과 렌더링이 이루어진다.
+3. **CORS 이슈 해결**:
+   - 프론트엔드 호스트(Vercel, Localhost)에서 S3 이미지의 픽셀 좌표 분석이나 캔버스 오버레이(`toDataURL`, Fabric.js, Canvas 2D)를 안전하게 수행할 수 있도록 S3 버킷 레벨의 CORS 허용 정책을 사전에 완비한다.
+
+---
+
+#### 11.12.6 슬라이스 및 단위 테스트 전략 (Mockito 기반 외부 격리)
+
+- **원칙**: 단위 및 슬라이스 테스트(`S3FileStorageServiceTest`, `WorksheetControllerTest`) 실행 시 **실제 AWS S3 네트워크 호출이나 라이브 자격증명을 일절 요구하지 않는다.**
+- **구현 방식**:
+  - AWS SDK의 `S3Client`를 Mockito의 `@Mock`으로 격리하여 `putObject`, `deleteObject` 메서드의 정상 호출 여부와 예외 처리(네트워크 단절, S3Exception 등)를 검증한다.
+  - `./gradlew test`를 오프라인 상태에서도 100% 신속하고 안정적으로 통과시킨다.
+
+```java
+@ExtendWith(MockitoExtension.class)
+class S3FileStorageServiceTest {
+
+    @Mock
+    private S3Client s3Client;
+
+    private S3FileStorageService s3FileStorageService;
+
+    @BeforeEach
+    void setUp() {
+        s3FileStorageService = new S3FileStorageService(s3Client, "autedi-test-bucket", "ap-northeast-2");
+    }
+
+    @Test
+    @DisplayName("파일 업로드 성공 시 S3 PutObject 호출 및 올바른 StoredFile 반환")
+    void upload_success() {
+        // given
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "homework.png", "image/png", "<dummy-png-bytes>".getBytes());
+
+        // when
+        StoredFile result = s3FileStorageService.upload(file, "worksheets/1");
+
+        // then
+        assertThat(result.fileUrl()).contains("https://autedi-test-bucket.s3.ap-northeast-2.amazonaws.com/worksheets/1/");
+        assertThat(result.originalFilename()).isEqualTo("homework.png");
+        verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
+}
+```
+
+---
+
+#### 11.12.7 S3 버킷 CORS 및 퍼블릭 읽기 권한 정책 런북
+
+프론트엔드 웹 애플리케이션에서 캔버스 이미지 조작 및 CORS 차단을 방지하기 위해 S3 버킷 설정에 아래 JSON 정책을 적용한다:
+
+1. **S3 버킷 CORS 설정 (Cross-Origin Resource Sharing)**:
+   ```json
+   [
+     {
+       "AllowedHeaders": ["*"],
+       "AllowedMethods": ["GET", "HEAD"],
+       "AllowedOrigins": [
+         "http://localhost:3000",
+         "https://*.vercel.app",
+         "https://autedi.com",
+         "https://*.autedi.com"
+       ],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+2. **S3 버킷 읽기 정책 (Bucket Policy - GetObject Public Read)**:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "PublicReadGetObject",
+         "Effect": "Allow",
+         "Principal": "*",
+         "Action": "s3:GetObject",
+         "Resource": "arn:aws:s3:::autedi-mvp-bucket/*"
+       }
+     ]
+   }
+   ```
+
+---
+
+### 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
+
+#### 11.13.1 배경 및 목적
+노션 연동 가이드 Section 3(프론트-백 협의 항목)에서 확인된 화면 UI 상의 미반영 요구사항 5가지를 단일 마일스톤으로 수용하여 프론트엔드 팀의 캔버스 조작(그리기, 채택, 바운딩 박스 리사이징, 다중 페이지 검토)을 완벽히 지원한다.
+
+#### 11.13.2 5대 핵심 도메인 아키텍처 확장
+1. **피드백 채택 상태 머신 (`Correction.isApplied`)**:
+   - AI 첨삭 항목의 채택/반영 여부를 즉시 토글하는 경량 엔드포인트(`PATCH /corrections/{id}/apply?applied=true/false`)를 신설하여 캔버스 상의 원클릭 인터랙션을 보장.
+2. **교사 캔버스 그리기 도구 확장 (`HighlightType`)**:
+   - `HIGHLIGHT`, `UNDERLINE` 외에 `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
+3. **교사 표시 색상 스키마 (`CommentColor`)**:
+   - `Comment.color` 컬럼(`RED`, `BLUE`, `YELLOW`, `GREEN`)을 추가하여 교사의 시각적 코멘트 강조를 다채화 (기본값: `BLUE`).
+4. **AI 바운딩 박스 동적 좌표 갱신 (`CorrectionUpdateRequest.regions`)**:
+   - AI가 인식한 캔버스 좌표가 미세하게 어긋났을 때 교사가 드래그/리사이징한 신규 `RegionPayload` 리스트를 부분 수정(`PATCH`) 바디로 받아 영속화.
+5. **다중 페이지 업로드 파이프라인 (Short-term Multi-Page Pipeline)**:
+   - `POST /api/v1/worksheets`에서 `files: List<MultipartFile>`을 지원하여 업로드된 파일 순서대로 1, 2, ... 페이지로 자동 분할 생성 (기존 단일 `file` 파라미터와 100% 하위 호환).
+
+*상세 API I/O 명세 및 JSON 예시는 [`docs/FRONTEND_COLLABORATION_SPECS.md`](./FRONTEND_COLLABORATION_SPECS.md)를 참조한다.*
+
 
