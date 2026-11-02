@@ -1677,7 +1677,7 @@ class S3FileStorageServiceTest {
 1. **피드백 채택 상태 머신 (`Correction.isApplied`)**:
    - AI 첨삭 항목의 채택/반영 여부를 즉시 토글하는 경량 엔드포인트(`PATCH /corrections/{id}/apply?applied=true/false`)를 신설하여 캔버스 상의 원클릭 인터랙션을 보장.
 2. **교사 캔버스 그리기 도구 확장 (`HighlightType`)**:
-   - `HIGHLIGHT`, `UNDERLINE` 외에 `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
+   - `HIGHLIGHT`, `UNDERLINE` 외에 `STRIKETHROUGH`(취소선), `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
 3. **교사 표시 색상 스키마 (`CommentColor`)**:
    - `Comment.color` 컬럼(`RED`, `BLUE`, `YELLOW`, `GREEN`)을 추가하여 교사의 시각적 코멘트 강조를 다채화 (기본값: `BLUE`).
 4. **AI 바운딩 박스 동적 좌표 갱신 (`CorrectionUpdateRequest.regions`)**:

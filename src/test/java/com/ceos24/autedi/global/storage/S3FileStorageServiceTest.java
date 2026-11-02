@@ -150,7 +150,7 @@ class S3FileStorageServiceTest {
     }
 
     @Test
-    @DisplayName("S3 putObject 실패 시 FILE_STORAGE_FAILED 예외로 전환된다")
+    @DisplayName("S3 putObject 실패 시 fallbackService가 없으면 FILE_STORAGE_FAILED 예외로 전환된다")
     void upload_s3Exception_throwsFileStorageFailed() {
         MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", "sample".getBytes());
 
@@ -161,6 +161,42 @@ class S3FileStorageServiceTest {
         assertThatThrownBy(() -> storageService.upload(file, "worksheets/1"))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_STORAGE_FAILED);
+    }
+
+    @Test
+    @DisplayName("S3 putObject 실패 시 fallbackService가 존재하면 로컬 스토리지로 자동 폴백한다")
+    void upload_s3Exception_withFallbackService_fallbacksToLocalStorage() {
+        FileStorageService mockFallback = org.mockito.Mockito.mock(FileStorageService.class);
+        S3FileStorageService serviceWithFallback =
+                new S3FileStorageService(s3Client, BUCKET, REGION, null, mockFallback);
+
+        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", "sample".getBytes());
+        StoredFile expectedFallbackFile = new StoredFile(
+                "image.png", "uuid.png", "http://localhost:8080/files/uuid.png", FileType.PNG, 6L, "hash", 100, 100);
+
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenThrow((S3Exception)
+                        S3Exception.builder().message("S3 Access Denied").build());
+        when(mockFallback.upload(file, "worksheets/1")).thenReturn(expectedFallbackFile);
+
+        StoredFile result = serviceWithFallback.upload(file, "worksheets/1");
+
+        assertThat(result).isEqualTo(expectedFallbackFile);
+        verify(mockFallback).upload(file, "worksheets/1");
+    }
+
+    @Test
+    @DisplayName("로컬 폴백 URL 삭제 요청 시 fallbackService.delete가 호출된다")
+    void delete_localFallbackUrl_callsFallbackDelete() {
+        FileStorageService mockFallback = org.mockito.Mockito.mock(FileStorageService.class);
+        S3FileStorageService serviceWithFallback =
+                new S3FileStorageService(s3Client, BUCKET, REGION, null, mockFallback);
+
+        String localUrl = "http://localhost:8080/files/worksheets/1/uuid.png";
+        serviceWithFallback.delete(localUrl);
+
+        verify(mockFallback).delete(localUrl);
+        verifyNoInteractions(s3Client);
     }
 
     @Test

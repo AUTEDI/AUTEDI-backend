@@ -16,7 +16,7 @@ public record CommentResponse(
         @Schema(description = "대상 페이지 ID", example = "10") Long pageId,
         @Schema(
                         description =
-                                "강조 유형 (HIGHLIGHT: 형광펜, UNDERLINE: 밑줄, ARROW: 화살표, TEXTBOX: 텍스트 상자, CARET: 삽입 기호)",
+                                "강조 유형 (HIGHLIGHT: 형광펜, UNDERLINE: 밑줄, STRIKETHROUGH: 취소선, ARROW: 화살표, TEXTBOX: 텍스트 상자, CARET: 삽입 기호)",
                         example = "HIGHLIGHT")
                 HighlightType highlightType,
         @Schema(description = "표시 색상 (RED, BLUE, YELLOW, GREEN)", example = "BLUE") CommentColor color,

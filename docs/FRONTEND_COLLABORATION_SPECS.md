@@ -9,7 +9,7 @@
 | # | 협의 항목 | 백엔드 구현 내역 | 변경된 파일 |
 |---|---|---|---|
 | **1** | **피드백 "반영" 표시** | `Correction.isApplied` 필드 추가, 목록 필터(`?isApplied=`) 및 즉시 토글 API(`PATCH /corrections/{id}/apply?applied=`) 신설 | `Correction.java`, `CorrectionResponse.java`, `CorrectionController.java` |
-| **2** | **교사 표시 도구 확장** | `HighlightType` ENUM에 `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호) 추가 | `HighlightType.java`, `CommentCreateRequest.java` |
+| **2** | **교사 표시 도구 확장** | `HighlightType` ENUM에 `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호), `STRIKETHROUGH`(취소선) 추가 | `HighlightType.java`, `CommentCreateRequest.java` |
 | **3** | **표시 색상 지원** | `CommentColor` ENUM (`RED`, `BLUE`, `YELLOW`, `GREEN`) 신설, `Comment.color` 컬럼 및 DTO 반영 | `CommentColor.java`, `Comment.java`, `CommentCreateRequest.java`, `CommentResponse.java` |
 | **4** | **AI 표시 위치/크기 조절** | `CorrectionUpdateRequest`에 `regions: List<RegionPayload>` 필드 추가, 바운딩 박스 캔버스 드래그/리사이징 허용 | `CorrectionUpdateRequest.java`, `Correction.java`, `CorrectionService.java` |
 | **5** | **문서 2페이지 이상 지원** | `POST /api/v1/worksheets`에서 다중 파일(`files: List<MultipartFile>`) 수용, 파일 순서대로 1, 2, ... 페이지 자동 생성 | `WorksheetController.java`, `WorksheetService.java` |
@@ -105,7 +105,7 @@
 }
 ```
 - **지원 ENUM 규격**:
-  - `highlightType`: `HIGHLIGHT`(형광펜), `UNDERLINE`(밑줄), `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`)
+  - `highlightType`: `HIGHLIGHT`(형광펜), `UNDERLINE`(밑줄), `STRIKETHROUGH`(취소선), `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`)
   - `color`: `RED`(빨강), `BLUE`(파랑, 기본값), `YELLOW`(노랑), `GREEN`(초록)
 
 ---
