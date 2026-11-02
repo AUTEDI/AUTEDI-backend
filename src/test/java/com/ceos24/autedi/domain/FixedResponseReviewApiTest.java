@@ -33,7 +33,6 @@ import com.ceos24.autedi.global.storage.LocalStorageService;
 import com.ceos24.autedi.support.FakeResponsesServer;
 import com.ceos24.autedi.support.TestWorksheetImages;
 import java.io.ByteArrayInputStream;
-import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -1046,9 +1045,9 @@ class FixedResponseReviewApiTest {
     @Test
     void fullOfflineFlowPreservesRotatedImageCoordinatesAndAiSourceThroughFailureRetryAndTeacherEdits()
             throws Exception {
-        byte[] original = TestWorksheetImages.withOrientation(true, 6, ByteOrder.BIG_ENDIAN);
+        byte[] original = TestWorksheetImages.hdrJpeg(false);
         JsonNode uploaded = body(mvc.perform(multipart("/api/v1/worksheets")
-                        .file(new MockMultipartFile("file", "rotated.jpg", "image/jpeg", original))
+                        .file(new MockMultipartFile("file", "hdr-rotated.jpg", "image/jpeg", original))
                         .header(HttpHeaders.AUTHORIZATION, bearer))
                 .andExpect(status().isCreated())
                 .andReturn());

@@ -140,11 +140,13 @@ class WorksheetImageFlowTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"jpg", "jpeg", "PNG"})
+    @ValueSource(strings = {"jpg", "jpeg", "PNG", "hdr.jpg"})
     void uploadPreservesOriginalAndQueriesSamePngUsedByProcessingWithCorrectDimensions(String extension)
             throws Exception {
         boolean jpeg = !extension.equals("PNG");
-        byte[] original = TestWorksheetImages.withOrientation(jpeg, 6, ByteOrder.BIG_ENDIAN);
+        byte[] original = extension.equals("hdr.jpg")
+                ? TestWorksheetImages.hdrJpeg(false)
+                : TestWorksheetImages.withOrientation(jpeg, 6, ByteOrder.BIG_ENDIAN);
         JsonNode response = upload("사진." + extension, original);
         long id = response.get("id").longValue();
         assertEquals("DRAFT", response.get("status").asString());

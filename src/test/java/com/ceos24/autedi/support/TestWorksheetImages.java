@@ -73,6 +73,77 @@ public final class TestWorksheetImages {
         return png;
     }
 
+    public static byte[] hdrJpeg(boolean adobe) throws IOException {
+        String adobeXmp =
+                xmp("xmlns:g='http://ns.adobe.com/hdr-gain-map/1.0/' g:Version='1.0' g:BaseRenditionIsHDR='False'", "");
+        String appleXmp = xmp(
+                "xmlns:p='http://ns.apple.com/pixeldatainfo/1.0/'",
+                "<p:AuxiliaryImageType>urn:com:apple:photo:2020:aux:hdrgainmap</p:AuxiliaryImageType>");
+        return jpegWithAuxiliary(adobe ? adobeXmp : null, adobe ? adobeXmp : appleXmp);
+    }
+
+    /** 실제 MPF 인덱스와 별도 XMP를 가진 두 JPEG. 기본 사진은 2×3·EXIF 6, 보조 이미지는 1×1이다. */
+    public static byte[] jpegWithAuxiliary(String primaryXmp, String auxiliaryXmp) throws IOException {
+        byte[] primary = withoutJfif(withOrientation(true, 6, ByteOrder.BIG_ENDIAN));
+        if (primaryXmp != null) primary = withXmp(primary, primaryXmp);
+        byte[] auxiliary = withoutJfif(encode(pattern(1, 1, false), "jpeg"));
+        if (auxiliaryXmp != null) auxiliary = withXmp(auxiliary, auxiliaryXmp);
+        int primaryLength = primary.length + 90;
+        ByteBuffer mpf = ByteBuffer.allocate(86);
+        mpf.put(new byte[] {'M', 'P', 'F', 0, 'M', 'M'})
+                .putShort((short) 42)
+                .putInt(8)
+                .putShort((short) 3);
+        mpf.putShort((short) 0xb000).putShort((short) 7).putInt(4).put(new byte[] {'0', '1', '0', '0'});
+        mpf.putShort((short) 0xb001).putShort((short) 4).putInt(1).putInt(2);
+        mpf.putShort((short) 0xb002).putShort((short) 7).putInt(32).putInt(50).putInt(0);
+        mpf.putInt(0x030000).putInt(primaryLength).putInt(0).putInt(0);
+        mpf.putInt(0).putInt(auxiliary.length).putInt(primaryLength - 10).putInt(0);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(withJpegSegment(primary, 0xe2, mpf.array()));
+        out.write(auxiliary);
+        return out.toByteArray();
+    }
+
+    public static String xmp(String attributes, String content) {
+        return "<x:xmpmeta xmlns:x='adobe:ns:meta/'><r:RDF xmlns:r='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>"
+                + "<r:Description " + attributes + ">" + content + "</r:Description></r:RDF></x:xmpmeta>";
+    }
+
+    private static byte[] withXmp(byte[] jpeg, String xml) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write("http://ns.adobe.com/xap/1.0/\0".getBytes(StandardCharsets.US_ASCII));
+        out.write(xml.getBytes(StandardCharsets.UTF_8));
+        return withJpegSegment(jpeg, 0xe1, out.toByteArray());
+    }
+
+    private static byte[] withJpegSegment(byte[] jpeg, int marker, byte[] payload) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(jpeg, 0, 2);
+        out.write(255);
+        out.write(marker);
+        out.write(ByteBuffer.allocate(2).putShort((short) (payload.length + 2)).array());
+        out.write(payload);
+        out.write(jpeg, 2, jpeg.length - 2);
+        return out.toByteArray();
+    }
+
+    /** EXIF JPEG로 구성한다. JFIF APP0를 뒤로 밀면 ImageIO의 메타데이터 판독에서 거부된다. */
+    private static byte[] withoutJfif(byte[] jpeg) throws IOException {
+        int pos = 2;
+        while ((jpeg[pos] & 255) == 255 && (jpeg[pos + 1] & 255) != 0xda) {
+            int length = ((jpeg[pos + 2] & 255) << 8) | (jpeg[pos + 3] & 255);
+            if ((jpeg[pos + 1] & 255) == 0xe0) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                out.write(jpeg, 0, pos);
+                out.write(jpeg, pos + 2 + length, jpeg.length - pos - 2 - length);
+                return out.toByteArray();
+            }
+            pos += 2 + length;
+        }
+        return jpeg;
+    }
+
     private static byte[] encode(BufferedImage image, String format) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!ImageIO.write(image, format, out)) throw new IOException("테스트 이미지 인코더가 없습니다.");

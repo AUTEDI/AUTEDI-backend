@@ -39,3 +39,7 @@ out/
 .env
 .env.*
 !.env.example
+
+# Local HTTP Client credentials
+http-client.private.env.json
+/scripts/__pycache__/
