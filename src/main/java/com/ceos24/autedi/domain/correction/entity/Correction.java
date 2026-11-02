@@ -52,6 +52,10 @@ public class Correction extends BaseTimeEntity {
     @Column(name = "area", length = 50, nullable = false)
     private CorrectionArea area;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "feedback_type", length = 30, nullable = false)
+    private FeedbackType feedbackType;
+
     @Column(name = "original_text", columnDefinition = "TEXT", nullable = false)
     private String originalText;
 
@@ -88,6 +92,7 @@ public class Correction extends BaseTimeEntity {
             WorksheetPage page,
             WorksheetGeneration generation,
             CorrectionArea area,
+            FeedbackType feedbackType,
             String originalText,
             String aiInitialContent,
             String content,
@@ -97,6 +102,7 @@ public class Correction extends BaseTimeEntity {
         this.page = page;
         this.generation = generation;
         this.area = area;
+        this.feedbackType = feedbackType != null ? feedbackType : FeedbackType.CORRECTION;
         this.originalText = originalText;
         this.aiInitialContent = aiInitialContent;
         this.content = content != null ? content : aiInitialContent;

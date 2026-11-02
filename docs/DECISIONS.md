@@ -71,6 +71,7 @@
    - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
    - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
    - 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
+   - 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
 
 ---
 
@@ -391,6 +392,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 | **F06 코멘트 불변 영역** | 생성 시 `pageId`, `regions` 고정, 수정 시 오직 `content`만 변경 | `CommentService.updateComment` | 프론트엔드 캔버스 자동 배치 레이아웃 일관성 유지 |
 | **F06 코멘트 일관성** | 코멘트 내부 모든 `regions.pageId`와 요청 `pageId` 일치 강제 | `CommentService.createComment` | 페이지 간 교차 좌표 참조 오염 400 차단 |
 | **F05/F06 동시성 제어** | 자원별 ETag(`cor_`, `com_`) 및 `If-Match` 헤더를 통한 낙관적 락 | `CorrectionService`, `CommentService` | 다중 교사 동시 검토 및 코멘트 덮어쓰기 방지 (412) |
+| **파일 스토리지** | DIP 기반 AWS S3 전환 (`S3FileStorageService`) 및 로컬 Fallback | `FileStorageService`, `S3FileStorageService`, `LocalStorageService` | 프론트 0-code <img> 렌더링 유지, 서버 트래픽 격리, 로컬 무자격증명 개발 지원 |
 
 ---
 *본 문서는 AUTEDI 백엔드 개발 팀의 공식 아키텍처 의사결정 기록(ADR)이며, 변경 사항 발생 시 PR을 통한 리뷰 후 갱신됩니다.*
@@ -464,7 +466,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 
 ### 8.4 파일 스토리지 추상화 및 SHA-256 해시/메타데이터 산출
 - **스토리지 인터페이스 추상화 (`FileStorageService`)**:
-  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하고, 현재는 로컬 스토리지 구현체(`LocalStorageService`)를 사용하되 추후 AWS S3 등으로 무중단 전환이 가능하도록 설계했다.
+  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하였으며, 프로덕션 환경에서는 AWS S3 구현체(`S3FileStorageService`)를, AWS 자격증명이 없는 로컬 개발/테스트 환경에서는 로컬 스토리지 구현체(`LocalStorageService`)로 자동 Fallback 되도록 DIP(의존성 역전 원칙)를 적용했다. (상세 아키텍처 및 무중단 전환 규격은 Section 11.12 참조)
 - **SHA-256 파일 해시 (`fileHash`)**:
   - 파일 업로드 및 교체 시 원본 파일의 바이트 스트림으로부터 SHA-256 Hex 해시를 계산하여 영속화한다.
   - 이는 향후 동일 파일 재업로드 감지 및 OCR 결과 캐싱(`ocr_file_hash`)의 키 값으로 활용된다.
@@ -1406,4 +1408,225 @@ FRONTEND_URL=https://autedi.com
 - [ ] Gmail, Naver 메일함으로 초대장을 발송하여 **스팸함이 아닌 일반 편지함(Inbox)**으로 수신되는지 확인.
 - [ ] 수신된 메일의 원본 보기(Show Original)에서 **`SPF: PASS`, `DKIM: PASS`, `DMARC: PASS`** 3대 검증 항목이 모두 합격 판정을 받았는지 확인.
 
+---
+
+### 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
+
+#### 11.12.1 도입 배경 및 스토리지 전환 필요성
+
+초기 개발 단계에서 채택했던 로컬 파일 스토리지(`LocalStorageService`)는 서버 인스턴스 내부의 로컬 디스크(`uploads/`)에 파일을 저장하고, 백엔드 애플리케이션의 엔드포인트(`/files/**`)를 통해 정적 리소스를 직접 서빙하는 방식을 취했다.
+
+그러나 B2B 상용 SaaS 런칭 및 프론트엔드 연동 과정에서 다음과 같은 구조적 한계와 병목이 확인되었다:
+1. **정적 리소스 인증 충돌 (`401 Unauthorized`)**:
+   - 백엔드의 `SecurityConfig`는 무상태(Stateless) JWT Bearer 토큰 기반으로 보호된다.
+   - 표준 HTML `<img src="...">` 태그는 브라우저 네이티브 HTTP GET 요청을 보내므로 별도의 `Authorization` 헤더를 포함할 수 없다. 로컬 서빙 방식에서는 `/files/**` 경로를 `permitAll()`로 열고 `WebMvcConfigurer` 정적 리소스 핸들러를 별도로 구성해야 하는 번거로움과 보안 구멍이 발생했다.
+2. **단일 서버 디스크 용량 한계 및 인스턴스 무상태성(Stateless) 훼손**:
+   - Docker 컨테이너 및 EC2 인스턴스 교체/재배포 시 로컬 볼륨 마운트가 누락되면 저장된 학생 과제물이 영구 유실될 위험이 있다.
+3. **네트워크 대역폭 및 I/O 블로킹 병목**:
+   - 고해상도(A4 300DPI, 5~15MB) 학습지 이미지를 Spring Boot 톰캣 스레드가 직접 읽어서 스트리밍할 경우, 교사들의 동시 조회 시 애플리케이션 스레드 풀이 고갈되고 네트워크 대역폭 비용이 가중된다.
+
+이에 따라 백엔드 팀은 고가용성 오브젝트 스토리지인 **AWS S3 (`S3FileStorageService`)**로 스토리지 인프라를 전격 전환하였다.
+
+---
+
+#### 11.12.2 DIP(의존성 역전 원칙) 기반 스토리지 설계
+
+비즈니스 도메인 계층(`WorksheetService`)이 AWS SDK나 파일 시스템의 저수준 구현에 직접 의존하지 않도록 순수 도메인 인터페이스 `FileStorageService`와 불변 DTO `StoredFile`을 중심으로 결합도를 격리하였다.
+
+```mermaid
+classDiagram
+    class WorksheetService {
+        -FileStorageService fileStorageService
+        +uploadWorksheet()
+        +replaceWorksheetFile()
+    }
+
+    class FileStorageService {
+        <<Interface>>
+        +upload(MultipartFile file, String subDir) StoredFile
+        +delete(String fileUrl) void
+    }
+
+    class LocalStorageService {
+        -Path rootLocation
+        -String baseUrl
+        +upload() StoredFile
+        +delete() void
+    }
+
+    class S3FileStorageService {
+        -S3Client s3Client
+        -String bucketName
+        -String region
+        +upload() StoredFile
+        +delete() void
+    }
+
+    class StoredFile {
+        <<Record>>
+        +String originalFilename
+        +String storedFilename
+        +String fileUrl
+        +FileType fileType
+        +Long fileSize
+        +String fileHash
+        +Integer width
+        +Integer height
+    }
+
+    WorksheetService --> FileStorageService : 의존 (DIP)
+    LocalStorageService ..|> FileStorageService : 구현 (로컬 Fallback)
+    S3FileStorageService ..|> FileStorageService : 구현 (운영 메인)
+    FileStorageService ..> StoredFile : 반환 계약
+```
+
+- **도메인 계약 불변성**:
+  - `WorksheetService`는 주입된 Bean이 `S3FileStorageService`인지 `LocalStorageService`인지 알 필요가 없으며, 단 1줄의 서비스 비즈니스 로직 수정 없이 스토리지 백엔드를 교체할 수 있다 (개방-폐쇄 원칙 OCP 준수).
+- **불변 메타데이터 레코드 (`StoredFile`)**:
+  - 파일 업로드 시 파일 원본명, S3 고유 저장 키, 영구 접근 URL(`fileUrl`), SHA-256 해시값(`fileHash`), 이미지 가로/세로 픽셀 해상도(`width`, `height`)를 한 번에 캡슐화하여 반환한다.
+
+---
+
+#### 11.12.3 테넌트 격리 S3 객체 키 네이밍 및 업로드 메커니즘
+
+1. **테넌트 격리 객체 키 경로**:
+   - `worksheets/{academyId}/{UUID}.{ext}`
+   - 학원(`academyId`)별 폴더 구조를 강제하여 S3 버킷 내부에서도 테넌트 간 파일 충돌을 방지하고 추후 학원 단위 데이터 아카이빙/용량 측정을 용이하게 한다.
+2. **MIME 타입 보존 및 인라인 렌더링 (`Content-Type`)**:
+   - S3에 파일 업로드 시 `PutObjectRequest`의 `contentType` 메타데이터(예: `image/jpeg`, `image/png`, `application/pdf`)를 정확히 지정한다.
+   - MIME 타입이 누락되어 기본값(`binary/octet-stream`)으로 업로드되면, 브라우저가 이미지를 렌더링하지 않고 강제 다운로드 팝업을 띄우는 현상을 원천 방지한다.
+3. **영구 퍼블릭 URL 산출**:
+   - 표준 S3 가상 호스팅 URL 규격을 채택한다:
+     `https://{bucketName}.s3.{region}.amazonaws.com/{s3Key}`
+   - 추후 CloudFront CDN 도입 시 도메인 접두사(`https://cdn.autedi.com/{s3Key}`)만 손쉽게 교체 가능하도록 구조화한다.
+
+---
+
+#### 11.12.4 유연한 빈 등록 및 무중단 로컬 Fallback 메커니즘
+
+새로운 팀원이 프로젝트를 클론하거나 CI 서버에서 테스트를 수행할 때, AWS 계정이나 S3 API 키가 없더라도 애플리케이션 기동 및 테스트가 실패하지 않도록 2단계 Fallback 빈 등록 전략을 적용한다.
+
+```mermaid
+flowchart TD
+    Start[Spring Boot 애플리케이션 시작] --> CheckS3Config{cloud.aws.s3.bucket 설정 및\nAWS 자격증명 유효한가?}
+    CheckS3Config -- Yes --> RegisterS3[S3FileStorageService Bean 등록\n@Primary / 활성화]
+    CheckS3Config -- No --> FallbackLocal[LocalStorageService Fallback Bean 등록\n로컬 uploads/ 디렉터리 사용]
+    RegisterS3 --> Complete[FileStorageService 주입 완료]
+    FallbackLocal --> Complete
+```
+
+- **조건부 주입 구현 원칙**:
+  - `@ConditionalOnProperty(name = "cloud.aws.s3.bucket")` 애노테이션 또는 `StorageConfig` 팩토리 클래스를 통해 S3 버킷 환경변수가 주입된 경우에만 `S3FileStorageService`를 우선 등록한다.
+  - 버킷 설정이 없거나 비어있는 경우 자동으로 `LocalStorageService`가 활성화되어 로컬 개발 환경의 연속성을 보장한다.
+
+| 환경 (Profile) | 활성 스토리지 구현체 | 자격증명 방식 | URL 형태 | 비고 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | `S3FileStorageService`<br>(or `LocalStorageService`) | `.env`의 AWS Key<br>(미설정 시 Fallback) | S3 HTTPS URL<br>(Fallback 시 `http://localhost:8080/files/...`) | S3 키 주입 시 실제 버킷 테스트 가능,<br>미주입 시 로컬 디스크 무중단 개발 |
+| **Dev** (`dev`) | `S3FileStorageService` | Railway Variables 주입 | `https://autedi-mvp-develop-bucket.s3...` | 프론트-백 간 실서버 연동 QC |
+| **Prod** (`prod`) | `S3FileStorageService` | EC2 IAM Role<br>(Instance Profile) | `https://autedi-mvp-bucket.s3...` | 키 하드코딩 없는 안전한 IAM 권한 위임 |
+
+---
+
+#### 11.12.5 프론트엔드 호환성 (Zero-Frontend-Impact / 0 LOC)
+
+AWS S3 전환은 프론트엔드 코드베이스에 단 1줄의 변경도 요구하지 않는다 (**0 Lines of Code Change**).
+
+1. **완벽한 API 응답 스키마 보존**:
+   - 학습지 상세 조회(`WorksheetDetailResponse`) 및 검토 집계(`ReviewAggregationResponse`)에서 반환되는 DTO 필드 구조(`previewImageUrl`, `fileUrl`)가 100% 동일하다:
+     ```json
+     {
+       "pages": [
+         {
+           "pageId": 1,
+           "pageNumber": 1,
+           "previewImageUrl": "https://autedi-mvp-bucket.s3.ap-northeast-2.amazonaws.com/worksheets/50/a9b8c7...png"
+         }
+       ]
+     }
+     ```
+2. **브라우저 `<img src="...">` 네이티브 렌더링**:
+   - S3 퍼블릭 객체 URL을 제공하므로, 프론트엔드는 이전 로컬 스토리지처럼 `fetch()` + `blob` 생성 + Bearer 헤더 주입과 같은 비표준적 우회 코드를 작성할 필요가 없다.
+   - `<img src={page.previewImageUrl} alt="과제물 미리보기" />` 한 줄로 즉각적인 브라우저 캐싱과 렌더링이 이루어진다.
+3. **CORS 이슈 해결**:
+   - 프론트엔드 호스트(Vercel, Localhost)에서 S3 이미지의 픽셀 좌표 분석이나 캔버스 오버레이(`toDataURL`, Fabric.js, Canvas 2D)를 안전하게 수행할 수 있도록 S3 버킷 레벨의 CORS 허용 정책을 사전에 완비한다.
+
+---
+
+#### 11.12.6 슬라이스 및 단위 테스트 전략 (Mockito 기반 외부 격리)
+
+- **원칙**: 단위 및 슬라이스 테스트(`S3FileStorageServiceTest`, `WorksheetControllerTest`) 실행 시 **실제 AWS S3 네트워크 호출이나 라이브 자격증명을 일절 요구하지 않는다.**
+- **구현 방식**:
+  - AWS SDK의 `S3Client`를 Mockito의 `@Mock`으로 격리하여 `putObject`, `deleteObject` 메서드의 정상 호출 여부와 예외 처리(네트워크 단절, S3Exception 등)를 검증한다.
+  - `./gradlew test`를 오프라인 상태에서도 100% 신속하고 안정적으로 통과시킨다.
+
+```java
+@ExtendWith(MockitoExtension.class)
+class S3FileStorageServiceTest {
+
+    @Mock
+    private S3Client s3Client;
+
+    private S3FileStorageService s3FileStorageService;
+
+    @BeforeEach
+    void setUp() {
+        s3FileStorageService = new S3FileStorageService(s3Client, "autedi-test-bucket", "ap-northeast-2");
+    }
+
+    @Test
+    @DisplayName("파일 업로드 성공 시 S3 PutObject 호출 및 올바른 StoredFile 반환")
+    void upload_success() {
+        // given
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "homework.png", "image/png", "<dummy-png-bytes>".getBytes());
+
+        // when
+        StoredFile result = s3FileStorageService.upload(file, "worksheets/1");
+
+        // then
+        assertThat(result.fileUrl()).contains("https://autedi-test-bucket.s3.ap-northeast-2.amazonaws.com/worksheets/1/");
+        assertThat(result.originalFilename()).isEqualTo("homework.png");
+        verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
+}
+```
+
+---
+
+#### 11.12.7 S3 버킷 CORS 및 퍼블릭 읽기 권한 정책 런북
+
+프론트엔드 웹 애플리케이션에서 캔버스 이미지 조작 및 CORS 차단을 방지하기 위해 S3 버킷 설정에 아래 JSON 정책을 적용한다:
+
+1. **S3 버킷 CORS 설정 (Cross-Origin Resource Sharing)**:
+   ```json
+   [
+     {
+       "AllowedHeaders": ["*"],
+       "AllowedMethods": ["GET", "HEAD"],
+       "AllowedOrigins": [
+         "http://localhost:3000",
+         "https://*.vercel.app",
+         "https://autedi.com",
+         "https://*.autedi.com"
+       ],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+2. **S3 버킷 읽기 정책 (Bucket Policy - GetObject Public Read)**:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "PublicReadGetObject",
+         "Effect": "Allow",
+         "Principal": "*",
+         "Action": "s3:GetObject",
+         "Resource": "arn:aws:s3:::autedi-mvp-bucket/*"
+       }
+     ]
+   }
+   ```
 

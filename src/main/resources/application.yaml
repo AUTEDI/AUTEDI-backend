@@ -30,6 +30,8 @@ app:
     from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}
     from-name: ${MAIL_FROM_NAME:AUTEDI}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  storage:
+    type: ${STORAGE_TYPE:s3}
 
 springdoc:
   api-docs:

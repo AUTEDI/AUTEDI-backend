@@ -42,3 +42,7 @@ springdoc:
 
 server:
   port: ${PORT:8080}
+
+app:
+  storage:
+    type: ${STORAGE_TYPE:local}
