@@ -7,6 +7,7 @@ import com.ceos24.autedi.domain.correction.dto.response.CorrectionListResponse;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionResponse;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.dto.response.GenerationResponse;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
@@ -68,13 +69,18 @@ public class CorrectionService {
     }
 
     public CorrectionListResponse getCorrections(
-            Long academyId, Long worksheetId, String statusParam, Long pageId, CorrectionArea area) {
+            Long academyId,
+            Long worksheetId,
+            String statusParam,
+            Long pageId,
+            CorrectionArea area,
+            FeedbackType feedbackType) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
         List<CorrectionResponse> items =
-                correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area).stream()
+                correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area, feedbackType).stream()
                         .map(CorrectionResponse::from)
                         .toList();
 

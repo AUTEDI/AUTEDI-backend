@@ -3,6 +3,7 @@ package com.ceos24.autedi.domain.correction.controller;
 import com.ceos24.autedi.domain.correction.dto.request.CorrectionUpdateRequest;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionListResponse;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionResponse;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.correction.service.CorrectionService;
 import com.ceos24.autedi.domain.worksheet.dto.response.ReviewResponse;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
@@ -60,9 +61,12 @@ public class CorrectionController {
                     Long pageId,
             @Parameter(description = "첨삭 영역 필터 (GRAMMAR_SPELLING 등)", required = false)
                     @RequestParam(value = "area", required = false)
-                    CorrectionArea area) {
-        CorrectionListResponse response =
-                correctionService.getCorrections(principal.academyId(), worksheetId, status, pageId, area);
+                    CorrectionArea area,
+            @Parameter(description = "피드백 유형 필터 (CORRECTION: 오류수정, SUGGESTION: 개선제안)", required = false)
+                    @RequestParam(value = "feedbackType", required = false)
+                    FeedbackType feedbackType) {
+        CorrectionListResponse response = correctionService.getCorrections(
+                principal.academyId(), worksheetId, status, pageId, area, feedbackType);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
 

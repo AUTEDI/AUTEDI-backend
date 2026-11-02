@@ -43,6 +43,10 @@ dependencies {
     testImplementation 'io.github.cdimascio:dotenv-java:3.2.0'
 
 
+    // AWS S3 SDK (Java v2)
+    implementation platform('software.amazon.awssdk:bom:2.29.51')
+    implementation 'software.amazon.awssdk:s3'
+
     testImplementation platform('com.google.cloud:libraries-bom:26.90.0')
     testImplementation 'com.google.cloud:google-cloud-vision'
 

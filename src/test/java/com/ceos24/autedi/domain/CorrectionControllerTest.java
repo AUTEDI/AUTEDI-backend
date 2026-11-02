@@ -17,6 +17,7 @@ import com.ceos24.autedi.domain.comment.entity.HighlightType;
 import com.ceos24.autedi.domain.comment.repository.CommentRepository;
 import com.ceos24.autedi.domain.correction.dto.request.CorrectionUpdateRequest;
 import com.ceos24.autedi.domain.correction.entity.Correction;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
@@ -157,6 +158,7 @@ class CorrectionControllerTest {
                 .page(testPage)
                 .generation(testGeneration)
                 .area(CorrectionArea.GRAMMAR_SPELLING)
+                .feedbackType(FeedbackType.CORRECTION)
                 .originalText("He go")
                 .aiInitialContent("He goes")
                 .content("He goes")
@@ -185,6 +187,7 @@ class CorrectionControllerTest {
                 .andExpect(jsonPath("$.result.generation.id").value(testGeneration.getId()))
                 .andExpect(jsonPath("$.result.corrections[0].id").value(testCorrection.getId()))
                 .andExpect(jsonPath("$.result.corrections[0].originalText").value("He go"))
+                .andExpect(jsonPath("$.result.corrections[0].feedbackType").value("CORRECTION"))
                 .andExpect(jsonPath("$.result.comments[0].content").value("교사 코멘트입니다."));
     }
 
@@ -197,7 +200,25 @@ class CorrectionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.result.total").value(1))
-                .andExpect(jsonPath("$.result.items[0].id").value(testCorrection.getId()));
+                .andExpect(jsonPath("$.result.items[0].id").value(testCorrection.getId()))
+                .andExpect(jsonPath("$.result.items[0].feedbackType").value("CORRECTION"));
+    }
+
+    @Test
+    @DisplayName("GET /corrections - feedbackType 필터링 조회 성공")
+    void getCorrections_filterByFeedbackType_success() throws Exception {
+        mockMvc.perform(get("/api/v1/worksheets/{worksheetId}/corrections", testWorksheet.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .param("feedbackType", "CORRECTION"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.total").value(1))
+                .andExpect(jsonPath("$.result.items[0].feedbackType").value("CORRECTION"));
+
+        mockMvc.perform(get("/api/v1/worksheets/{worksheetId}/corrections", testWorksheet.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .param("feedbackType", "SUGGESTION"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.total").value(0));
     }
 
     @Test
@@ -210,7 +231,8 @@ class CorrectionControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andExpect(header().exists(HttpHeaders.ETAG))
-                .andExpect(jsonPath("$.result.content").value("He goes"));
+                .andExpect(jsonPath("$.result.content").value("He goes"))
+                .andExpect(jsonPath("$.result.feedbackType").value("CORRECTION"));
     }
 
     @Test

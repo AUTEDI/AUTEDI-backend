@@ -202,6 +202,7 @@ public class WorksheetGenerationService {
                             .page(matchedPage)
                             .generation(generation)
                             .area(d.area())
+                            .feedbackType(d.feedbackType())
                             .originalText(d.originalText())
                             .aiInitialContent(d.aiInitialContent())
                             .content(d.aiInitialContent())

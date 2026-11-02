@@ -2,6 +2,7 @@ package com.ceos24.autedi.domain.correction.dto.response;
 
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -15,6 +16,8 @@ public record CorrectionResponse(
         @Schema(description = "생성 작업 ID", example = "101") Long generationId,
         @Schema(description = "생성 주체 (항상 AI)", example = "AI") String source,
         @Schema(description = "첨삭 영역", example = "GRAMMAR_SPELLING") CorrectionArea area,
+        @Schema(description = "피드백 유형 (CORRECTION: 오류 수정, SUGGESTION: 개선 제안)", example = "CORRECTION")
+                FeedbackType feedbackType,
         @Schema(description = "인식된 원문 텍스트 (불변)", example = "He go to school.") String originalText,
         @Schema(description = "AI 최초 제안문 (불변)", example = "He goes to school.") String aiInitialContent,
         @Schema(description = "현재 수정/제안문 (선생님 편집 대상)", example = "He goes to school every day.") String content,
@@ -36,6 +39,7 @@ public record CorrectionResponse(
                 correction.getGeneration() != null ? correction.getGeneration().getId() : null,
                 "AI",
                 correction.getArea(),
+                correction.getFeedbackType(),
                 correction.getOriginalText(),
                 correction.getAiInitialContent(),
                 correction.getContent(),

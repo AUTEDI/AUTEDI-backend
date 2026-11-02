@@ -2,6 +2,7 @@ package com.ceos24.autedi.domain.correction.repository;
 
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
 import java.util.List;
 import java.util.Optional;
@@ -19,12 +20,14 @@ public interface CorrectionRepository extends JpaRepository<Correction, Long> {
             + "AND (:status IS NULL OR c.status = :status) "
             + "AND (:pageId IS NULL OR c.page.id = :pageId) "
             + "AND (:area IS NULL OR c.area = :area) "
+            + "AND (:feedbackType IS NULL OR c.feedbackType = :feedbackType) "
             + "ORDER BY c.page.pageNumber ASC, c.id ASC")
     List<Correction> findAllByFilter(
             @Param("worksheetId") Long worksheetId,
             @Param("status") CorrectionStatus status,
             @Param("pageId") Long pageId,
-            @Param("area") CorrectionArea area);
+            @Param("area") CorrectionArea area,
+            @Param("feedbackType") FeedbackType feedbackType);
 
     List<Correction> findAllByWorksheetIdAndStatus(Long worksheetId, CorrectionStatus status);
 }
