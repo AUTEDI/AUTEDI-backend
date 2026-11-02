@@ -38,3 +38,7 @@ out/
 .env
 .env.*
 !.env.example
+
+# Antigravity agents scratch
+.agents/
+
