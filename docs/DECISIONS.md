@@ -1234,7 +1234,7 @@ AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증
 | **Dev** (`dev`) | • **PaaS**: Railway SMTP<br>(Gmail 앱비밀번호 or SES Sandbox) | Railway 대시보드<br>Variables 주입 | 환경변수 미주입 시 로깅 대체,<br>주입 시 실제 이메일 발송 | 프론트-백엔드 간 실제 이메일 수신 및<br>웹메일 클라이언트 렌더링 QC 테스트베드 |
 | **Prod** (`prod`) | • **AWS SES**<br>(Simple Email Service, 서울 리전) | EC2 환경변수 /<br>AWS IAM SMTP Credential | 예외 격리 로깅 및<br>CloudWatch 모니터링 | 대규모 발송 SLA, 높은 수신 도달률(Inbox),<br>도메인 위변조 방지 및 반송률 관리 |
 
-##### 1. Local 환경: 유연한 무중단 로깅 대체(Graceful Mocking) 및 Gmail SMTP
+##### 1. Local 환경: 유연한 무중단 로깅 대체(Graceful Mocking) 및 팀 Gmail SMTP
 * **무중단 로깅 대체 (Safe Mocking Fallback)**:
   - 신규 팀원이 프로젝트를 클론한 뒤 `.env`에 SMTP 설정을 기재하지 않더라도, 초대 API 호출 시 NullPointer나 BeanCreation 에러가 발생하지 않도록 `EmailService`에 방어 로직을 구현했다:
     ```java
@@ -1244,38 +1244,44 @@ AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증
         return;
     }
     if (mailSender instanceof JavaMailSenderImpl mailSenderImpl) {
-        if (mailSenderImpl.getHost() == null || mailSenderImpl.getHost().trim().isEmpty()) {
-            log.warn("메일 발송 호스트(MAIL_HOST)가 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+        if (mailSenderImpl.getHost() == null
+                || mailSenderImpl.getHost().trim().isEmpty()
+                || mailSenderImpl.getUsername() == null
+                || mailSenderImpl.getUsername().trim().isEmpty()) {
+            log.warn("메일 발송 호스트 또는 인증 계정(MAIL_USERNAME)이 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
             return;
         }
     }
     ```
-  - `MAIL_HOST`가 비어있을 경우, 콘솔에 다음과 같이 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다:
+  - `MAIL_USERNAME` 또는 `MAIL_HOST`가 비어있을 경우, 콘솔에 다음과 같이 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다:
     ```text
-    [초대 링크 발송] To: teacher@example.com, 학원: 강남 직영점, 링크: http://localhost:3000/signup?token=b4d8...
+    [초대 링크 발송] To: teacher@example.com, 학원: 에이플러스 학원, 링크: http://localhost:3000/signup?token=b4d8...
     ```
-* **로컬에서 실제 메일 수신 테스트가 필요한 경우**:
-  - 개인 Google 계정에서 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
+* **MVP 및 시연 단계: 팀 공용 Gmail SMTP 연동 확정**:
+  - 도메인 구매 전 MVP 시연 및 프론트엔드 연동 테스트를 위해 **팀 공용 Gmail 계정 + 구글 앱 비밀번호(16자리)** 방식을 채택했다.
+  - Gmail 계정의 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
     ```env
     MAIL_HOST=smtp.gmail.com
     MAIL_PORT=587
-    MAIL_USERNAME=your-account@gmail.com
+    MAIL_USERNAME=autedi.team@gmail.com
     MAIL_PASSWORD=xxxx xxxx xxxx xxxx
-    MAIL_FROM_ADDRESS=your-account@gmail.com
-    MAIL_FROM_NAME=AUTEDI-Local
+    MAIL_FROM_ADDRESS=autedi.team@gmail.com
+    MAIL_FROM_NAME=AUTEDI
     FRONTEND_URL=http://localhost:3000
     ```
+  - **Gmail 발신자 일치 보장 정책**: Gmail SMTP는 보안 정책상 인증 계정과 `From` 헤더의 주소가 다르면 `550 Sender Rejected`로 메일을 거부한다. 이를 방지하기 위해 `application.yaml`에서 `from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}` fallback 구조를 적용하여, 별도 `MAIL_FROM_ADDRESS`를 지정하지 않더라도 로그인 계정 주소가 발신자로 자동 일치되도록 구현했다.
 
 ##### 2. Dev (Railway) 환경: PaaS 대시보드 환경변수 주입
-* Railway 대시보드의 **Variables** 탭에 다음 변수들을 등록하여 QC 테스트 메일 발송을 활성화한다:
-  - `MAIL_HOST`, `MAIL_PORT` (587), `MAIL_USERNAME`, `MAIL_PASSWORD`
-  - `MAIL_FROM_ADDRESS`: `noreply@autedi.com` (또는 인증된 발신자 주소)
-  - `MAIL_FROM_NAME`: `AUTEDI [Dev]`
-  - `FRONTEND_URL`: `https://dev.autedi.com` (프론트엔드 프리뷰 도메인)
+* Railway 대시보드의 **Variables** 탭에 팀 Gmail 계정 정보를 주입하여 배포 환경에서도 실제 이메일 발송을 활성화한다:
+  - `MAIL_HOST`: `smtp.gmail.com`
+  - `MAIL_PORT`: `587`
+  - `MAIL_USERNAME`: `autedi.team@gmail.com`
+  - `MAIL_PASSWORD`: `[구글_16자리_앱비밀번호]`
+  - `MAIL_FROM_NAME`: `AUTEDI`
+  - `FRONTEND_URL`: `https://autedi-mvp.vercel.app` (프론트엔드 배포 도메인)
 
-##### 3. Prod (AWS EC2) 환경: AWS SES 전용 인프라 연동
-* 상용 서비스 운영을 위해 AWS SES(서울 리전: `ap-northeast-2`)를 표준 SMTP 게이트웨이로 확정한다.
-* AWS SES 엔드포인트(`email-smtp.ap-northeast-2.amazonaws.com`)와 전용 IAM SMTP 자격증명을 사용하여 매월 수만 건 이상의 발송 요청을 안정적으로 처리한다.
+##### 3. Prod (AWS EC2) 환경: 정식 서비스 런칭 시 AWS SES 전용 인프라 전환
+* 정식 상용화 시점에는 `autedi.com` 커스텀 도메인 등록 후 AWS SES(서울 리전: `ap-northeast-2`)를 표준 게이트웨이로 전환하여, `noreply@autedi.com` 발신 전용 체계로 무제한/고신뢰도 발송을 운영한다.
 
 ---
 
