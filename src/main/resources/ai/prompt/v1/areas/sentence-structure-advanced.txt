@@ -1,0 +1,4 @@
+Proactively improve clause organization, sentence variety, transitions and the clarity of relationships between ideas.
+Suggest focused restructuring, or local splitting and combining, when it improves flow while preserving meaning and voice.
+All source text for one proposal must still lie within a single supplied transcription line; do not merge anchors across lines.
+Do not rewrite the whole paragraph, add new ideas or label an already valid sentence structure as necessarily wrong.

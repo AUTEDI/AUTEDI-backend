@@ -3,33 +3,33 @@ package com.ceos24.autedi.global.storage;
 import com.ceos24.autedi.domain.worksheet.entity.FileType;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
-import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+/** S3와 로컬 모두 같은 이미지 준비 계약을 사용한다. 원본과 보정 PNG는 별도 객체로 보존한다. */
 @Slf4j
 public class S3FileStorageService implements FileStorageService {
-
     private final S3Client s3Client;
     private final String bucket;
     private final String region;
     private final String customDomain;
     private final FileStorageService fallbackService;
+    private final WorksheetImagePreparer preparer = new WorksheetImagePreparer();
 
     public S3FileStorageService(
             S3Client s3Client, String bucket, String region, String customDomain, FileStorageService fallbackService) {
@@ -50,172 +50,161 @@ public class S3FileStorageService implements FileStorageService {
 
     @Override
     public StoredFile upload(MultipartFile file, String subDir) {
-        if (file == null || file.isEmpty()) {
-            throw new CustomException(ErrorCode.EMPTY_FILE);
-        }
-
-        String originalFilename =
-                StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "file");
-        String extension = getExtension(originalFilename);
-        FileType fileType;
+        if (file == null || file.isEmpty()) throw new CustomException(ErrorCode.EMPTY_FILE);
+        if (file.getSize() > WorksheetImagePreparer.MAX_BYTES) throw new CustomException(ErrorCode.FILE_TOO_LARGE);
+        String name = file.getOriginalFilename();
+        name = StringUtils.getFilename(name == null ? "file" : name.replace('\\', '/'));
+        int dot = name.lastIndexOf('.');
+        FileType type;
+        String extension = dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
         try {
-            fileType = FileType.fromExtension(extension);
-        } catch (Exception e) {
+            type = FileType.fromExtension(extension);
+        } catch (IllegalArgumentException e) {
             throw new CustomException(ErrorCode.UNSUPPORTED_FILE_TYPE);
         }
-
-        byte[] fileBytes;
-        try {
-            fileBytes = file.getBytes();
-        } catch (IOException e) {
-            log.error("파일 바이트 읽기 실패: filename={}, error={}", originalFilename, e.getMessage(), e);
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, "파일을 읽는 중 오류가 발생했습니다.");
+        if (type == FileType.PDF) throw new CustomException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        byte[] original;
+        PreparedImage prepared;
+        try (var input = file.getInputStream()) {
+            original = input.readNBytes(WorksheetImagePreparer.MAX_BYTES + 1);
+            if (original.length > WorksheetImagePreparer.MAX_BYTES) throw new CustomException(ErrorCode.FILE_TOO_LARGE);
+            prepared = preparer.prepare(original, type);
+        } catch (WorksheetImagePreparer.ImageLimitException e) {
+            throw new CustomException(ErrorCode.FILE_TOO_LARGE, e.getMessage());
+        } catch (IOException | IllegalArgumentException e) {
+            throw new CustomException(ErrorCode.INVALID_IMAGE);
         }
-
-        String fileHash = calculateHash(fileBytes);
-
-        // 이미지 크기 추출 (PDF인 경우 기본 가로/세로 1000 x 1400 설정)
-        int width = 1000;
-        int height = 1400;
-        if (fileType != FileType.PDF) {
-            try {
-                BufferedImage image = ImageIO.read(new ByteArrayInputStream(fileBytes));
-                if (image != null) {
-                    width = image.getWidth();
-                    height = image.getHeight();
-                }
-            } catch (Exception e) {
-                log.debug("이미지 규격 파싱 실패, 기본 크기로 대체: {}", e.getMessage());
-            }
-        }
-
-        String storedFilename = UUID.randomUUID() + "." + extension.toLowerCase();
-        String cleanSubDir = (subDir != null) ? subDir.replaceAll("^/+", "").replaceAll("/+$", "") : "";
-        String s3Key = cleanSubDir.isEmpty() ? storedFilename : cleanSubDir + "/" + storedFilename;
-
-        String contentType = determineContentType(file, extension);
-
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(s3Key)
-                .contentType(contentType)
-                .contentLength((long) fileBytes.length)
-                .build();
-
+        String directory = subDir == null ? "" : subDir.replaceAll("^/+|/+$", "");
+        validateKey(directory.isEmpty() ? "image" : directory);
+        String id = UUID.randomUUID().toString();
+        String filename = id + "." + extension;
+        String prefix = directory.isEmpty() ? "" : directory + "/";
+        String originalKey = prefix + filename;
+        String preparedKey = prefix + id + "-prepared.png";
         try {
-            s3Client.putObject(putObjectRequest, RequestBody.fromBytes(fileBytes));
-            log.info("S3 파일 업로드 성공: bucket={}, key={}", bucket, s3Key);
-        } catch (Exception e) {
-            log.error("S3 파일 업로드 실패: bucket={}, key={}, error={}", bucket, s3Key, e.getMessage(), e);
+            put(originalKey, original, type == FileType.PNG ? "image/png" : "image/jpeg");
+            put(preparedKey, prepared.png(), "image/png");
+        } catch (RuntimeException e) {
+            // 이번 요청이 선택한 UUID 객체만 정리한다. 이전 업로드나 다른 키는 삭제하지 않는다.
+            cleanup(originalKey);
+            cleanup(preparedKey);
             if (fallbackService != null) {
-                log.warn("S3 파일 업로드 실패로 LocalStorageService로 자동 폴백합니다: bucket={}, key={}", bucket, s3Key);
+                log.warn("S3 업로드 실패로 로컬 저장소를 사용합니다.");
                 return fallbackService.upload(file, subDir);
             }
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, "S3 파일 업로드에 실패했습니다: " + e.getMessage());
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
         }
-
-        String fileUrl = buildFileUrl(s3Key);
-
         return new StoredFile(
-                originalFilename, storedFilename, fileUrl, fileType, (long) fileBytes.length, fileHash, width, height);
+                name,
+                filename,
+                buildFileUrl(originalKey),
+                type,
+                (long) original.length,
+                LocalStorageService.sha256(original),
+                buildFileUrl(preparedKey),
+                prepared.width(),
+                prepared.height());
+    }
+
+    private void put(String key, byte[] bytes, String contentType) {
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .contentType(contentType)
+                        .contentLength((long) bytes.length)
+                        .build(),
+                RequestBody.fromBytes(bytes));
+    }
+
+    @Override
+    public Resource load(String fileUrl) {
+        if (isLocal(fileUrl)) return fallbackService.load(fileUrl);
+        String key = extractKeyFromUrl(fileUrl);
+        try (var input = s3Client.getObject(
+                GetObjectRequest.builder().bucket(bucket).key(key).build())) {
+            byte[] bytes = input.readNBytes(WorksheetImagePreparer.MAX_BYTES + 1);
+            if (bytes.length > WorksheetImagePreparer.MAX_BYTES) throw new CustomException(ErrorCode.FILE_TOO_LARGE);
+            return new ByteArrayResource(bytes);
+        } catch (NoSuchKeyException e) {
+            throw new CustomException(ErrorCode.FILE_NOT_FOUND);
+        } catch (CustomException e) {
+            throw e;
+        } catch (IOException | RuntimeException e) {
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
+        }
     }
 
     @Override
     public void delete(String fileUrl) {
-        if (!StringUtils.hasText(fileUrl)) {
-            log.warn("삭제 요청된 파일 URL이 비어 있습니다.");
+        if (!StringUtils.hasText(fileUrl)) return;
+        if (isLocal(fileUrl)) {
+            fallbackService.delete(fileUrl);
             return;
         }
-
-        if (fileUrl.contains("/files/")) {
-            if (fallbackService != null) {
-                fallbackService.delete(fileUrl);
-                return;
-            }
-        }
-
         String key = extractKeyFromUrl(fileUrl);
-        if (!StringUtils.hasText(key)) {
-            log.warn("S3 키를 추출할 수 없습니다: {}", fileUrl);
-            return;
-        }
-
         try {
-            DeleteObjectRequest deleteObjectRequest =
-                    DeleteObjectRequest.builder().bucket(bucket).key(key).build();
-            s3Client.deleteObject(deleteObjectRequest);
-            log.info("S3 파일 삭제 성공: bucket={}, key={}", bucket, key);
-        } catch (Exception e) {
-            log.error("S3 파일 삭제 실패: bucket={}, key={}, error={}", bucket, key, e.getMessage(), e);
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, "S3 파일 삭제에 실패했습니다.");
+            s3Client.deleteObject(
+                    DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        } catch (RuntimeException e) {
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
         }
     }
 
-    private String getExtension(String filename) {
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex == -1 || dotIndex == filename.length() - 1) {
-            throw new CustomException(ErrorCode.UNSUPPORTED_FILE_TYPE);
-        }
-        return filename.substring(dotIndex + 1);
+    private boolean isLocal(String url) {
+        return fallbackService != null && url != null && url.contains("/files/");
     }
 
-    private String calculateHash(byte[] bytes) {
+    private void cleanup(String key) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(bytes);
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, "파일 해시 계산 중 오류가 발생했습니다.");
+            s3Client.deleteObject(
+                    DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        } catch (RuntimeException ignored) {
+            log.warn("실패한 S3 업로드의 임시 객체 정리를 완료하지 못했습니다.");
         }
     }
 
-    private String determineContentType(MultipartFile file, String extension) {
-        String contentType = file.getContentType();
-        if (StringUtils.hasText(contentType) && !"application/octet-stream".equalsIgnoreCase(contentType)) {
-            return contentType;
-        }
-        return switch (extension.toLowerCase()) {
-            case "jpg", "jpeg" -> "image/jpeg";
-            case "png" -> "image/png";
-            case "pdf" -> "application/pdf";
-            case "webp" -> "image/webp";
-            default -> "application/octet-stream";
-        };
+    private String buildFileUrl(String key) {
+        return baseUrl() + "/" + key;
     }
 
-    private String buildFileUrl(String s3Key) {
-        if (StringUtils.hasText(customDomain)) {
-            String domain = customDomain.trim().replaceAll("/+$", "");
-            if (domain.startsWith("http://") || domain.startsWith("https://")) {
-                return domain + "/" + s3Key;
-            }
-            return "https://" + domain + "/" + s3Key;
-        }
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, s3Key);
+    private String baseUrl() {
+        if (!StringUtils.hasText(customDomain)) return bucketUrl();
+        String domain = customDomain.trim().replaceAll("/+$", "");
+        return domain.contains("://") ? domain : "https://" + domain;
+    }
+
+    private String bucketUrl() {
+        return "https://" + bucket + ".s3." + region + ".amazonaws.com";
     }
 
     private String extractKeyFromUrl(String fileUrl) {
         try {
+            if (!StringUtils.hasText(fileUrl)) throw new IllegalArgumentException();
             String path;
-            if (fileUrl.contains("://")) {
-                URI uri = URI.create(fileUrl);
-                path = uri.getPath();
+            if (fileUrl.startsWith(baseUrl() + "/")) {
+                path = fileUrl.substring(baseUrl().length() + 1);
+            } else if (fileUrl.startsWith(bucketUrl() + "/")) {
+                path = fileUrl.substring(bucketUrl().length() + 1);
             } else {
-                path = fileUrl;
+                URI uri = URI.create(fileUrl);
+                if (!"https".equals(uri.getScheme())
+                        || !uri.getHost().equals("s3." + region + ".amazonaws.com")
+                        || !uri.getPath().startsWith("/" + bucket + "/")) throw new IllegalArgumentException();
+                path = uri.getRawPath().substring(bucket.length() + 2);
             }
+            path = URLDecoder.decode(path, StandardCharsets.UTF_8);
+            validateKey(path);
+            return path;
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new CustomException(ErrorCode.FILE_NOT_FOUND);
+        }
+    }
 
-            if (path.startsWith("/")) {
-                path = path.substring(1);
-            }
-
-            if (StringUtils.hasText(bucket) && path.startsWith(bucket + "/")) {
-                path = path.substring(bucket.length() + 1);
-            }
-
-            return URLDecoder.decode(path, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            log.warn("URL에서 S3 키 파싱 중 예외 발생: fileUrl={}, error={}", fileUrl, e.getMessage());
-            return null;
+    private static void validateKey(String key) {
+        for (String segment : key.split("/", -1)) {
+            if (segment.isEmpty() || segment.equals(".") || segment.equals("..") || segment.contains("\\"))
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
         }
     }
 }

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "05. Generation", description = "AI 첨삭 비동기 생성 요청, 상태 조회 및 실패 재시도(F04) API")
+@Tag(name = "05. Generation", description = "첨삭 백그라운드 작업 접수·상태 조회·재시도. 설정으로 Mock 또는 Terra HTTP를 선택합니다.")
 @RestController
 @RequestMapping("/api/v1/worksheets/{worksheetId}/generations")
 @RequiredArgsConstructor
@@ -30,7 +30,7 @@ public class WorksheetGenerationController {
     @Operation(
             summary = "AI 첨삭 생성 요청 접수 (F04)",
             description =
-                    "저장된 원본과 설정으로 비동기 AI 분석을 시작하고 작업 ID를 반환합니다. Idempotency-Key 헤더를 통한 중복 방지(멱등성)를 지원합니다. (202 Accepted)")
+                    "PENDING 작업을 저장하고 202를 반환합니다. 커밋 후 워커가 같은 보정 PNG로 OCR·AI_CORRECTION을 실행하고 단계별로 저장합니다. Idempotency-Key를 지원하며 TERRA 설정에서만 외부 요청을 전송합니다.")
     @PostMapping
     public ResponseEntity<ApiResponse<GenerationResponse>> requestGeneration(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -61,7 +61,8 @@ public class WorksheetGenerationController {
 
     @Operation(
             summary = "실패한 AI 첨삭 작업 재시도 (F04)",
-            description = "재시도 가능한 최신 실패 작업을 다시 실행합니다. 원본 파일과 설정이 변경되지 않은 경우에만 접수됩니다. (202 Accepted)")
+            description =
+                    "재시도 가능한 최신 실패 작업만 접수합니다. 파일·설정이 같고 유효한 전사가 있으면 첨삭부터 실행합니다. 같은 멱등키는 같은 작업을 반환하며, 생성 요청 또는 다른 재시도의 키를 재사용하면 409입니다. (202 Accepted)")
     @PostMapping("/{generationId}/retry")
     public ResponseEntity<ApiResponse<GenerationResponse>> retryGeneration(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,

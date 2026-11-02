@@ -3,6 +3,7 @@ package com.ceos24.autedi.global.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -10,7 +11,9 @@ import static org.mockito.Mockito.when;
 import com.ceos24.autedi.domain.worksheet.entity.FileType;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
+import com.ceos24.autedi.support.TestWorksheetImages;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import javax.imageio.ImageIO;
@@ -22,9 +25,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -75,45 +83,37 @@ class S3FileStorageServiceTest {
                 .endsWith(".png");
 
         ArgumentCaptor<PutObjectRequest> requestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3Client).putObject(requestCaptor.capture(), any(RequestBody.class));
-        PutObjectRequest captured = requestCaptor.getValue();
+        verify(s3Client, times(2)).putObject(requestCaptor.capture(), any(RequestBody.class));
+        PutObjectRequest captured = requestCaptor.getAllValues().get(0);
         assertThat(captured.bucket()).isEqualTo(BUCKET);
         assertThat(captured.key()).startsWith("worksheets/42/").endsWith(".png");
         assertThat(captured.contentType()).isEqualTo("image/png");
         assertThat(captured.contentLength()).isEqualTo((long) pngBytes.length);
+        assertThat(result.preparedImageUrl()).endsWith("-prepared.png").isNotEqualTo(result.fileUrl());
+        assertThat(requestCaptor.getAllValues().get(1).contentType()).isEqualTo("image/png");
     }
 
     @Test
-    @DisplayName("PDF 업로드 성공: 기본 크기(1000x1400) 및 application/pdf Content-Type이 적용된다")
-    void upload_pdfSuccess() {
+    @DisplayName("PDF는 지원하지 않으며 가짜 페이지 크기나 S3 객체를 만들지 않는다")
+    void upload_pdfRejected() {
         // given
         byte[] pdfBytes = "%PDF-1.4 dummy pdf content".getBytes();
         MockMultipartFile file = new MockMultipartFile("file", "exam.pdf", "application/pdf", pdfBytes);
 
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
-
-        // when
-        StoredFile result = storageService.upload(file, "worksheets/10");
-
-        // then
-        assertThat(result.fileType()).isEqualTo(FileType.PDF);
-        assertThat(result.width()).isEqualTo(1000);
-        assertThat(result.height()).isEqualTo(1400);
-
-        ArgumentCaptor<PutObjectRequest> requestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3Client).putObject(requestCaptor.capture(), any(RequestBody.class));
-        assertThat(requestCaptor.getValue().contentType()).isEqualTo("application/pdf");
+        assertThatThrownBy(() -> storageService.upload(file, "worksheets/10"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNSUPPORTED_FILE_TYPE);
+        verifyNoInteractions(s3Client);
     }
 
     @Test
     @DisplayName("커스텀 도메인 설정 시 생성된 URL에 커스텀 도메인이 적용된다")
-    void upload_withCustomDomain() {
+    void upload_withCustomDomain() throws Exception {
         // given
         S3FileStorageService customDomainService =
                 new S3FileStorageService(s3Client, BUCKET, REGION, "https://cdn.autedi.com");
-        byte[] dummyBytes = "test content".getBytes();
-        MockMultipartFile file = new MockMultipartFile("file", "image.jpg", "image/jpeg", dummyBytes);
+        byte[] dummyBytes = TestWorksheetImages.png(2, 3);
+        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", dummyBytes);
 
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
@@ -151,8 +151,8 @@ class S3FileStorageServiceTest {
 
     @Test
     @DisplayName("S3 putObject 실패 시 fallbackService가 없으면 FILE_STORAGE_FAILED 예외로 전환된다")
-    void upload_s3Exception_throwsFileStorageFailed() {
-        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", "sample".getBytes());
+    void upload_s3Exception_throwsFileStorageFailed() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", TestWorksheetImages.png(2, 3));
 
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenThrow((S3Exception)
@@ -165,12 +165,12 @@ class S3FileStorageServiceTest {
 
     @Test
     @DisplayName("S3 putObject 실패 시 fallbackService가 존재하면 로컬 스토리지로 자동 폴백한다")
-    void upload_s3Exception_withFallbackService_fallbacksToLocalStorage() {
+    void upload_s3Exception_withFallbackService_fallbacksToLocalStorage() throws Exception {
         FileStorageService mockFallback = org.mockito.Mockito.mock(FileStorageService.class);
         S3FileStorageService serviceWithFallback =
                 new S3FileStorageService(s3Client, BUCKET, REGION, null, mockFallback);
 
-        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", "sample".getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", TestWorksheetImages.png(2, 3));
         StoredFile expectedFallbackFile = new StoredFile(
                 "image.png", "uuid.png", "http://localhost:8080/files/uuid.png", FileType.PNG, 6L, "hash", 100, 100);
 
@@ -245,5 +245,68 @@ class S3FileStorageServiceTest {
         assertThatThrownBy(() -> storageService.delete(fileUrl))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_STORAGE_FAILED);
+    }
+
+    @Test
+    void hdrUploadPreservesOriginalAndLoadsTheSamePreparedPngWithoutExternalIo() throws Exception {
+        java.util.Map<String, byte[]> objects = new java.util.HashMap<>();
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenAnswer(call -> {
+                    PutObjectRequest request = call.getArgument(0);
+                    RequestBody body = call.getArgument(1);
+                    try (var input = body.contentStreamProvider().newStream()) {
+                        objects.put(request.key(), input.readAllBytes());
+                    }
+                    return PutObjectResponse.builder().build();
+                });
+        when(s3Client.getObject(any(GetObjectRequest.class))).thenAnswer(call -> {
+            byte[] bytes = objects.get(((GetObjectRequest) call.getArgument(0)).key());
+            return new ResponseInputStream<>(
+                    GetObjectResponse.builder()
+                            .contentLength((long) bytes.length)
+                            .build(),
+                    AbortableInputStream.create(new ByteArrayInputStream(bytes)));
+        });
+        byte[] original = TestWorksheetImages.hdrJpeg(false);
+        StoredFile result =
+                storageService.upload(new MockMultipartFile("file", "hdr.jpg", "image/jpeg", original), "worksheets/1");
+        assertThat(result.width()).isEqualTo(3);
+        assertThat(result.height()).isEqualTo(2);
+        assertThat(storageService.load(result.fileUrl()).getContentAsByteArray())
+                .isEqualTo(original);
+        assertThat(storageService.load(result.preparedImageUrl()).getContentAsByteArray())
+                .isEqualTo(new WorksheetImagePreparer()
+                        .prepare(original, FileType.JPG)
+                        .png());
+    }
+
+    @Test
+    void preparedUploadFailureCleansBothNewKeysBeforeFallingBack() throws Exception {
+        FileStorageService fallback = org.mockito.Mockito.mock(FileStorageService.class);
+        S3FileStorageService service = new S3FileStorageService(s3Client, BUCKET, REGION, null, fallback);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build())
+                .thenThrow(S3Exception.builder().message("failed").build());
+        MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", TestWorksheetImages.png(2, 3));
+        service.upload(file, "worksheets/1");
+        ArgumentCaptor<DeleteObjectRequest> deleted = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+        verify(s3Client, times(2)).deleteObject(deleted.capture());
+        assertThat(deleted.getAllValues())
+                .allSatisfy(request -> assertThat(request.key()).startsWith("worksheets/1/"));
+        verify(fallback).upload(file, "worksheets/1");
+    }
+
+    @Test
+    void loadRejectsForeignUrlsBeforeCallingS3AndMapsMissingObjectTo404() {
+        assertThatThrownBy(() -> storageService.load("https://foreign.example/worksheets/1/file.png"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_NOT_FOUND);
+        verifyNoInteractions(s3Client);
+        when(s3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(NoSuchKeyException.builder().message("missing").build());
+        assertThatThrownBy(() -> storageService.load(
+                        "https://" + BUCKET + ".s3." + REGION + ".amazonaws.com/worksheets/1/missing.png"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_NOT_FOUND);
     }
 }

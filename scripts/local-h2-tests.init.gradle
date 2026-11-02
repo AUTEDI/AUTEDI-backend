@@ -1,0 +1,11 @@
+// 명시적으로 -I 옵션을 준 테스트 JVM에만 적용한다. bootRun·공유/운영 DB 설정은 변경하지 않는다.
+allprojects {
+    tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+        systemProperty 'spring.profiles.active', 'test'
+        systemProperty 'spring.datasource.url', 'jdbc:h2:mem:autedi_local_only;DB_CLOSE_DELAY=-1;MODE=MySQL'
+        systemProperty 'spring.datasource.driver-class-name', 'org.h2.Driver'
+        systemProperty 'spring.datasource.username', 'sa'
+        systemProperty 'spring.datasource.password', ''
+        systemProperty 'spring.jpa.hibernate.ddl-auto', 'create-drop'
+    }
+}

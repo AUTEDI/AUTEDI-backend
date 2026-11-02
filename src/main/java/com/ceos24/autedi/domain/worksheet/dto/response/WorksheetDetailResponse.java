@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.worksheet.dto.response;
 
+import com.ceos24.autedi.domain.correction.entity.RegionCoordinateUnit;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
@@ -31,7 +32,11 @@ public record WorksheetDetailResponse(
                 };
 
         FileDetailResponse fileDetail = new FileDetailResponse(
-                worksheet.getOriginalFilename(), mediaType, worksheet.getFileSize(), worksheet.getFileUrl(), null);
+                worksheet.getOriginalFilename(),
+                mediaType,
+                worksheet.getFileSize(),
+                WorksheetFileUrls.original(worksheet.getFileUrl(), worksheet.getId()),
+                null);
 
         List<PageDetailResponse> pageDetails = pages != null
                 ? pages.stream()
@@ -40,8 +45,9 @@ public record WorksheetDetailResponse(
                                 p.getPageNumber(),
                                 p.getWidth(),
                                 p.getHeight(),
-                                p.getPreviewImageUrl(),
-                                null))
+                                WorksheetFileUrls.image(p.getPreviewImageUrl(), worksheet.getId(), p.getPageNumber()),
+                                null,
+                                RegionCoordinateUnit.NORMALIZED_0_1))
                         .toList()
                 : List.of();
 

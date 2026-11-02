@@ -1,6 +1,7 @@
 HELP.md
 .gradle
 build/
+/uploads/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -39,7 +40,10 @@ out/
 .env.*
 !.env.example
 
-# Antigravity agents scratch
+# Local HTTP Client credentials
+http-client.private.env.json
+/scripts/__pycache__/
+
+# Develop agent scratch files
 .agents/
 uploads/
-

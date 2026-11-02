@@ -30,8 +30,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleMaxUploadSizeExceededException(
             org.springframework.web.multipart.MaxUploadSizeExceededException e) {
         log.warn("파일 업로드 크기 초과: {}", e.getMessage());
-        return ResponseEntity.status(ErrorCode.FILE_SIZE_EXCEEDED.getStatus())
-                .body(ApiResponse.onFailure(ErrorCode.FILE_SIZE_EXCEEDED, e.getMessage()));
+        return ResponseEntity.status(ErrorCode.FILE_TOO_LARGE.getStatus())
+                .body(ApiResponse.onFailure(ErrorCode.FILE_TOO_LARGE, "이미지 또는 요청이 업로드 크기 제한을 초과했습니다."));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

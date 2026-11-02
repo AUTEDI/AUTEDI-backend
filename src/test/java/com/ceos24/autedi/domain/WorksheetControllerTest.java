@@ -28,6 +28,7 @@ import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
+import com.ceos24.autedi.support.TestWorksheetImages;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -174,9 +175,9 @@ class WorksheetControllerTest {
     @DisplayName("POST /api/v1/worksheets - 다중 파일(files) 업로드 시 2페이지 이상 생성 성공")
     void uploadWorksheets_multiPage_success() throws Exception {
         MockMultipartFile file1 =
-                new MockMultipartFile("files", "page1.png", MediaType.IMAGE_PNG_VALUE, "dummy content 1".getBytes());
+                new MockMultipartFile("files", "page1.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
         MockMultipartFile file2 =
-                new MockMultipartFile("files", "page2.png", MediaType.IMAGE_PNG_VALUE, "dummy content 2".getBytes());
+                new MockMultipartFile("files", "page2.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(4, 2));
 
         mockMvc.perform(multipart("/api/v1/worksheets")
                         .file(file1)
@@ -193,9 +194,9 @@ class WorksheetControllerTest {
     @DisplayName("POST /api/v1/worksheets - 'file' 파라미터로 여러 이미지를 동시에 전달해도 다중 페이지 생성 성공")
     void uploadWorksheets_multiPage_usingFileParam_success() throws Exception {
         MockMultipartFile file1 =
-                new MockMultipartFile("file", "page1.png", MediaType.IMAGE_PNG_VALUE, "dummy content 1".getBytes());
+                new MockMultipartFile("file", "page1.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
         MockMultipartFile file2 =
-                new MockMultipartFile("file", "page2.png", MediaType.IMAGE_PNG_VALUE, "dummy content 2".getBytes());
+                new MockMultipartFile("file", "page2.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(4, 2));
 
         mockMvc.perform(multipart("/api/v1/worksheets")
                         .file(file1)
@@ -212,11 +213,11 @@ class WorksheetControllerTest {
     @DisplayName("POST /api/v1/worksheets - 프론트엔드 'images' 파라미터로 여러 이미지를 전달해도 다중 페이지 생성 성공")
     void uploadWorksheets_multiPage_usingImagesParam_success() throws Exception {
         MockMultipartFile file1 =
-                new MockMultipartFile("images", "sheet1.png", MediaType.IMAGE_PNG_VALUE, "img1".getBytes());
+                new MockMultipartFile("images", "sheet1.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
         MockMultipartFile file2 =
-                new MockMultipartFile("images", "sheet2.png", MediaType.IMAGE_PNG_VALUE, "img2".getBytes());
+                new MockMultipartFile("images", "sheet2.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(4, 2));
         MockMultipartFile file3 =
-                new MockMultipartFile("images", "sheet3.png", MediaType.IMAGE_PNG_VALUE, "img3".getBytes());
+                new MockMultipartFile("images", "sheet3.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(3, 2));
 
         mockMvc.perform(multipart("/api/v1/worksheets")
                         .file(file1)

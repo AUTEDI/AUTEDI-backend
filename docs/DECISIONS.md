@@ -1686,5 +1686,3 @@ class S3FileStorageServiceTest {
    - `POST /api/v1/worksheets`에서 `files: List<MultipartFile>`을 지원하여 업로드된 파일 순서대로 1, 2, ... 페이지로 자동 분할 생성 (기존 단일 `file` 파라미터와 100% 하위 호환).
 
 *상세 API I/O 명세 및 JSON 예시는 [`docs/FRONTEND_COLLABORATION_SPECS.md`](./FRONTEND_COLLABORATION_SPECS.md)를 참조한다.*
-
-

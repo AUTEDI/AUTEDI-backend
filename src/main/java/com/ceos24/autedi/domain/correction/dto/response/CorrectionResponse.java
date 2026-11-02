@@ -3,7 +3,11 @@ package com.ceos24.autedi.domain.correction.dto.response;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.entity.FeedbackType;
+import com.ceos24.autedi.domain.correction.entity.RegionCoordinateUnit;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
+import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
+import com.ceos24.autedi.domain.generation.contract.v1.AiIssueKind;
+import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationIssue;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
@@ -14,7 +18,7 @@ public record CorrectionResponse(
         @Schema(description = "첨삭 항목 고유 ID", example = "201") Long id,
         @Schema(description = "동시성 제어용 ETag", example = "\"cor_201-v1\"") String etag,
         @Schema(description = "생성 작업 ID", example = "101") Long generationId,
-        @Schema(description = "생성 주체 (항상 AI)", example = "AI") String source,
+        @Schema(description = "출처: AI 또는 실제 호출 없는 고정 예제 FIXED", example = "FIXED") String source,
         @Schema(description = "첨삭 영역", example = "GRAMMAR_SPELLING") CorrectionArea area,
         @Schema(description = "피드백 유형 (CORRECTION: 오류 수정, SUGGESTION: 개선 제안)", example = "CORRECTION")
                 FeedbackType feedbackType,
@@ -28,17 +32,28 @@ public record CorrectionResponse(
         @Schema(description = "선생님 피드백 채택/반영 여부", example = "true") Boolean isApplied,
         @Schema(description = "상태 (ACTIVE: 활성, DELETED: 소프트 삭제)", example = "ACTIVE") CorrectionStatus status,
         @Schema(description = "생성 일시", example = "2026-10-30T10:00:05") LocalDateTime createdAt,
-        @Schema(description = "수정 일시", example = "2026-10-30T10:05:00") LocalDateTime updatedAt) {
+        @Schema(description = "수정 일시", example = "2026-10-30T10:05:00") LocalDateTime updatedAt,
+        @Schema(description = "원문 교체 REPLACE 또는 내용 보완 GUIDANCE. 이전 미분류 자료는 null") AiAction action,
+        List<AiIssueKind> issueKinds,
+        CorrectionAnchorResponse anchor,
+        Boolean locationUncertain,
+        List<AiValidationIssue> warnings,
+        Boolean requiresReview,
+        RegionCoordinateUnit regionCoordinateUnit) {
     public static CorrectionResponse from(Correction correction) {
         return of(correction, correction.getEtag());
     }
 
     public static CorrectionResponse of(Correction correction, String etag) {
+        return of(correction, etag, "AI");
+    }
+
+    public static CorrectionResponse of(Correction correction, String etag, String source) {
         return new CorrectionResponse(
                 correction.getId(),
                 etag,
                 correction.getGeneration() != null ? correction.getGeneration().getId() : null,
-                "AI",
+                source,
                 correction.getArea(),
                 correction.getFeedbackType(),
                 correction.getOriginalText(),
@@ -51,6 +66,13 @@ public record CorrectionResponse(
                 Boolean.TRUE.equals(correction.getIsApplied()),
                 correction.getStatus(),
                 correction.getCreatedAt(),
-                correction.getUpdatedAt());
+                correction.getUpdatedAt(),
+                correction.getAction(),
+                correction.getIssueKinds(),
+                CorrectionAnchorResponse.from(correction.getAnchor()),
+                correction.getLocationUncertain(),
+                correction.getWarnings(),
+                correction.getRequiresReview(),
+                RegionCoordinateUnit.NORMALIZED_0_1);
     }
 }

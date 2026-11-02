@@ -18,6 +18,7 @@ import com.ceos24.autedi.domain.user.entity.Role;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.entity.UserStatus;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
+import com.ceos24.autedi.global.email.EmailSender;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
 import com.ceos24.autedi.global.util.TokenHashUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +40,9 @@ import org.springframework.web.context.WebApplicationContext;
 @SpringBootTest
 @Transactional
 class InvitationControllerTest {
+
+    @MockitoBean
+    private EmailSender emailSender;
 
     private MockMvc mockMvc;
 
