@@ -70,6 +70,7 @@
    - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
    - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
    - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
+   - 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
 
 ---
 
@@ -1118,4 +1119,285 @@ Railway 대시보드의 **Variables** 탭에 아래 환경변수가 누락 없�
   - `AWS_S3_BUCKET`: `autedi-mvp-develop-bucket`
   - `AWS_ACCESS_KEY_ID`: IAM 발급 키
   - `AWS_SECRET_ACCESS_KEY`: IAM 발급 시크릿
+
+---
+
+### 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
+
+#### 11.11.1 비동기 스레드 풀 격리 설계 (`@EnableAsync`, `AsyncConfig`, `mailExecutor`) 및 메인 HTTP 서블릿 스레드 블로킹 방지 원리
+
+##### 1. 동기 메일 발송의 치명적 병목 및 결합도 문제
+SMTP(Simple Mail Transfer Protocol)는 외부 통신 프로토콜로서 DNS 질의, TCP 3-way Handshake, STARTTLS 암호화 협상, SMTP AUTH 인증, MIME 데이터 송수신 등 다단계 네트워크 통신을 거친다. 외부 메일 서버(Gmail, AWS SES 등)의 상황에 따라 통상 500ms ~ 3,000ms 이상의 긴 레이턴시가 발생하며, 일시적 네트워크 지연 시에는 수십 초까지 지연될 수 있다.
+
+만약 HTTP 서블릿 스레드(Tomcat Worker Thread)에서 메일 발송을 동기식(`Synchronous`)으로 처리할 경우 다음과 같은 심각한 장애가 유발된다:
+1. **서블릿 스레드 고갈 및 연쇄 장애 (Thread Starvation & Cascading Failure)**:
+   - 외부 SMTP 지연 시 톰캣 워커 스레드가 응답 대기 상태로 블로킹되어 빠르게 고갈된다. 이로 인해 메일과 무관한 일반 사용자(로그인, 학습지 조회 등)의 HTTP 요청까지 타임아웃이 발생하여 시스템 전체가 마비된다.
+2. **DB 트랜잭션 및 커넥션 장기 점유 (HikariCP Connection Starvation)**:
+   - `@Transactional` 범위 내에서 동기 메일 발송을 수행하면, 메일 발송이 끝날 때까지 DB 커넥션을 반환하지 못하고 락(Lock) 및 커넥션 풀을 불필요하게 점유하여 DB 병목을 가속화한다.
+3. **사용자 경험(UX) 훼손 및 트랜잭션 오염**:
+   - 원장 선생님이 [선생님 초대] 버튼을 누른 후 메일 발송이 끝날 때까지 수 초간 로딩 스피너를 대기해야 하며, 네트워크 순시 장애로 메일 발송이 실패하면 초대 레코드 생성 트랜잭션까지 롤백되는 부작용이 발생한다.
+
+##### 2. 비동기 스레드 풀 격리 설계 (`AsyncConfig.java`)
+이러한 문제를 원천 차단하기 위해 Spring의 `@EnableAsync` 기반 전용 `ThreadPoolTaskExecutor`(`mailExecutor`)를 도입하여, 메일 발송 작업을 메인 서블릿 스레드 및 기본 스프링 작업 풀로부터 완전 물리/논리 격리하였다.
+
+```java
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean(name = "mailExecutor")
+    public Executor mailExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("mail-exec-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+* **스레드 풀 튜닝 사양**:
+  - `corePoolSize(2)`: 서버 평상시 최소 2개의 백그라운드 스레드를 유지하여 초대 메일 발송을 즉각 처리.
+  - `maxPoolSize(5)`: 특정 학원에서 다수의 교사를 일괄 초대하거나 동시 요청이 몰릴 경우 최대 5개까지 동적 확장.
+  - `queueCapacity(100)`: 최대 100건의 메일 발송 작업을 메모리 큐에 대기 버퍼링하여 트래픽 버스트 수용.
+  - `threadNamePrefix("mail-exec-")`: 로깅 및 APM(핀포인트, 데이터독 등) 모니터링 시 메일 전담 스레드를 즉시 식별 가능.
+  - `waitForTasksToCompleteOnShutdown(true)` & `awaitTerminationSeconds(30)`: 서버 무중단 배포 및 종료(SIGTERM) 시, 이미 큐에 인입된 초대 메일 발송 작업을 최대 30초간 정상 완료한 후 안전하게 종료(Graceful Shutdown)하여 메일 유실 방지.
+
+* **SMTP 연결 레벨 소켓 타임아웃 방어막 (`application.yaml`)**:
+  ```yaml
+  spring:
+    mail:
+      properties:
+        mail:
+          smtp:
+            connectiontimeout: 5000  # 소켓 연결 타임아웃 (5초)
+            timeout: 5000            # 응답 읽기 타임아웃 (5초)
+            writetimeout: 5000       # 데이터 쓰기 타임아웃 (5초)
+  ```
+  - 외부 SMTP 서버가 응답하지 않는 최악의 상황에서도 스레드가 무한정 행(Hang) 상태에 빠지지 않고 최대 5초 내에 실패 처리 및 스레드 풀로 반환되도록 보장한다.
+
+##### 3. 메인 서블릿 스레드와 비동기 워커 스레드의 상호작용 흐름
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Director as 원장 (Client)
+    participant Controller as InvitationController
+    participant Service as InvitationService
+    participant DB as MySQL (JPA)
+    participant Async as Spring @Async Proxy
+    participant Pool as mailExecutor Thread
+    participant SMTP as SMTP Server (SES/Gmail)
+
+    Director->>Controller: POST /api/v1/invitations (선생님 초대)
+    Controller->>Service: createInvitation(...)
+    activate Service
+    Service->>DB: DB 토큰 저장 및 PENDING 등록 (@Transactional)
+    DB-->>Service: Commit 완료
+    Service->>Async: emailService.sendInvitationEmail(...) 호출
+    Async-->>Pool: 비동기 발송 Task 제출 (Queue 인입)
+    Service-->>Controller: InvitationResponse 반환
+    deactivate Service
+    Controller-->>Director: 201 CREATED (응답 소요: < 20ms)
+
+    Note over Pool,SMTP: 백그라운드 스레드에서 비동기 격리 실행
+    activate Pool
+    Pool->>SMTP: STARTTLS Handshake & MimeMessage 전송 (500~2000ms)
+    alt 전송 성공
+        SMTP-->>Pool: 250 OK
+        Pool->>Pool: log.info("초대 이메일 발송 성공: to={}")
+    else 전송 실패 (SMTP 장애)
+        SMTP-->>Pool: Error (Timeout / Auth Failed)
+        Pool->>Pool: log.error("초대 이메일 발송 실패: to={}, error={}")
+        Note over Pool: try-catch 방어로 예외 격리 (DB 롤백 없음)
+    end
+    deactivate Pool
+```
+
+> [!NOTE]
+> **트랜잭션 및 비즈니스 예외 격리 원칙**:
+> `EmailService.sendInvitationEmail` 메서드는 `@Async("mailExecutor")` 애노테이션을 통해 별도 스레드에서 수행되며, 내부 `try-catch` 블록으로 모든 메일 전송 예외(`Exception`)를 캡슐화하여 로깅한다. 따라서 외부 메일 서버 장애가 발생하더라도 이미 커밋된 초대장 발급 트랜잭션(`UserInvitation`)은 안전하게 영속되며, 클라이언트에게 500 Internal Server Error가 전파되지 않는다.
+
+---
+
+#### 11.11.2 환경별(Local / Dev / Prod) 메일 발송 전략
+
+AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증 용이성, 그리고 운영 서버(AWS SES)의 엔터프라이즈급 신뢰도를 모두 충족하기 위해 3단계 환경별 발송 전략을 수립했다.
+
+| 환경 (Profile) | 발송 인프라 | 자격증명 관리 | Mocking / Fallback 동작 | 주 목적 및 기대 효과 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | • **Default**: No-op Logger (Mock)<br>• **Optional**: Gmail SMTP | `.env` 파일<br>(미설정 허용) | `JavaMailSender` 미설정 시<br>**경고 로그 + 콘솔 링크 출력**으로 대체 | 로컬 개발 시 SMTP 계정 설정 없이도<br>터미널 로그의 초대 링크로 가입 E2E 즉시 테스트 |
+| **Dev** (`dev`) | • **PaaS**: Railway SMTP<br>(Gmail 앱비밀번호 or SES Sandbox) | Railway 대시보드<br>Variables 주입 | 환경변수 미주입 시 로깅 대체,<br>주입 시 실제 이메일 발송 | 프론트-백엔드 간 실제 이메일 수신 및<br>웹메일 클라이언트 렌더링 QC 테스트베드 |
+| **Prod** (`prod`) | • **AWS SES**<br>(Simple Email Service, 서울 리전) | EC2 환경변수 /<br>AWS IAM SMTP Credential | 예외 격리 로깅 및<br>CloudWatch 모니터링 | 대규모 발송 SLA, 높은 수신 도달률(Inbox),<br>도메인 위변조 방지 및 반송률 관리 |
+
+##### 1. Local 환경: 유연한 무중단 로깅 대체(Graceful Mocking) 및 Gmail SMTP
+* **무중단 로깅 대체 (Safe Mocking Fallback)**:
+  - 신규 팀원이 프로젝트를 클론한 뒤 `.env`에 SMTP 설정을 기재하지 않더라도, 초대 API 호출 시 NullPointer나 BeanCreation 에러가 발생하지 않도록 `EmailService`에 방어 로직을 구현했다:
+    ```java
+    JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+    if (mailSender == null) {
+        log.warn("JavaMailSender가 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+        return;
+    }
+    if (mailSender instanceof JavaMailSenderImpl mailSenderImpl) {
+        if (mailSenderImpl.getHost() == null || mailSenderImpl.getHost().trim().isEmpty()) {
+            log.warn("메일 발송 호스트(MAIL_HOST)가 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+            return;
+        }
+    }
+    ```
+  - `MAIL_HOST`가 비어있을 경우, 콘솔에 다음과 같이 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다:
+    ```text
+    [초대 링크 발송] To: teacher@example.com, 학원: 강남 직영점, 링크: http://localhost:3000/signup?token=b4d8...
+    ```
+* **로컬에서 실제 메일 수신 테스트가 필요한 경우**:
+  - 개인 Google 계정에서 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
+    ```env
+    MAIL_HOST=smtp.gmail.com
+    MAIL_PORT=587
+    MAIL_USERNAME=your-account@gmail.com
+    MAIL_PASSWORD=xxxx xxxx xxxx xxxx
+    MAIL_FROM_ADDRESS=your-account@gmail.com
+    MAIL_FROM_NAME=AUTEDI-Local
+    FRONTEND_URL=http://localhost:3000
+    ```
+
+##### 2. Dev (Railway) 환경: PaaS 대시보드 환경변수 주입
+* Railway 대시보드의 **Variables** 탭에 다음 변수들을 등록하여 QC 테스트 메일 발송을 활성화한다:
+  - `MAIL_HOST`, `MAIL_PORT` (587), `MAIL_USERNAME`, `MAIL_PASSWORD`
+  - `MAIL_FROM_ADDRESS`: `noreply@autedi.com` (또는 인증된 발신자 주소)
+  - `MAIL_FROM_NAME`: `AUTEDI [Dev]`
+  - `FRONTEND_URL`: `https://dev.autedi.com` (프론트엔드 프리뷰 도메인)
+
+##### 3. Prod (AWS EC2) 환경: AWS SES 전용 인프라 연동
+* 상용 서비스 운영을 위해 AWS SES(서울 리전: `ap-northeast-2`)를 표준 SMTP 게이트웨이로 확정한다.
+* AWS SES 엔드포인트(`email-smtp.ap-northeast-2.amazonaws.com`)와 전용 IAM SMTP 자격증명을 사용하여 매월 수만 건 이상의 발송 요청을 안정적으로 처리한다.
+
+---
+
+#### 11.11.3 반응형 HTML 초대장 템플릿 표준 규격 및 발신자 정책
+
+##### 1. 발신자(Sender) 및 헤더 표준 정책
+* **발신 주소(From Address)**: `noreply@autedi.com`
+  - 도메인 네임스페이스(`autedi.com`)를 통일하여 주요 메일 서비스(Gmail, Naver, Daum, Outlook)의 발신 도메인 불일치 스팸 분류 방지.
+* **발신자 명(From Name)**: `AUTEDI`
+* **메일 제목(Subject)**: `[{academyName}] 선생님 초대장`
+  - 원장 선생님이 소속된 학원명(예: `[대치 정상어학원] 선생님 초대장`)을 동적으로 주입하여 수신 교사의 신뢰성 확보 및 피싱 오인 방지.
+* **문자셋 인코딩**: `UTF-8` 강제 (`new MimeMessageHelper(mimeMessage, false, "UTF-8")`)
+  - 한글 학원명 및 안내 본문 깨짐 현상 원천 방지.
+
+##### 2. 반응형 HTML 템플릿 디자인 사양 (`buildInvitationHtml`)
+이메일 클라이언트는 웹 브라우저와 달리 외부 CSS 파일(`<link>`) 및 `<style>` 블록을 차단하거나 제한적으로 파싱하므로, **모든 서식은 인라인 스타일(Inline CSS)**로 완결되도록 설계했다:
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:540px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:36px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+    <!-- 헤더 -->
+    <div style="margin-bottom:24px;">
+      <h2 style="margin:0 0 8px 0;color:#0f172a;font-size:22px;font-weight:700;">선생님 초대장</h2>
+      <p style="margin:0;color:#64748b;font-size:14px;">AUTEDI 초등 영어 학습지 AI 첨삭 서비스</p>
+    </div>
+    <!-- 본문 안내 -->
+    <div style="line-height:1.7;color:#334155;font-size:15px;margin-bottom:32px;">
+      <p style="margin:0 0 16px 0;">안녕하세요.<br><strong style="color:#0f172a;">{academyName}</strong>에 선생님으로 초대되었습니다.</p>
+      <p style="margin:0 0 16px 0;">아래 버튼을 클릭하여 회원가입을 완료해 주시면, 소속 학원의 학습지 첨삭 및 코멘트 작성 업무를 시작하실 수 있습니다.</p>
+      <p style="margin:0;color:#ef4444;font-size:13px;">* 본 초대 링크는 발송 시점으로부터 24시간 동안만 유효합니다.</p>
+    </div>
+    <!-- CTA 버튼 -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <a href="{inviteLink}" target="_blank" style="display:inline-block;padding:14px 28px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;box-shadow:0 2px 4px rgba(37,99,235,0.2);">초대 수락하고 회원가입하기</a>
+    </div>
+    <!-- 보안 만료 및 Fallback 링크 푸터 -->
+    <div style="border-top:1px solid #e2e8f0;padding-top:20px;font-size:12px;color:#94a3b8;line-height:1.6;">
+      <p style="margin:0 0 8px 0;">버튼이 동작하지 않을 경우 아래 링크를 브라우저 주소창에 직접 붙여넣어 주세요:</p>
+      <p style="margin:0;word-break:break-all;"><a href="{inviteLink}" style="color:#2563eb;text-decoration:underline;">{inviteLink}</a></p>
+      <p style="margin:16px 0 0 0;">본 메일은 {academyName}의 원장 선생님 요청으로 발송되었습니다.</p>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+* **템플릿 핵심 UX/보안 가이드라인**:
+  1. **모바일 최적화 레이아웃**: 최대 너비 `540px`의 카드 컨테이너와 `-apple-system` 산세리프 폰트를 적용하여 데스크톱 및 스마트폰 화면에서 가독성을 보장.
+  2. **명확한 CTA 버튼**: 고대비 블루 컬러(`#2563eb`)의 큼직한 가입 버튼을 배치하여 클릭률 극대화.
+  3. **보안 유효기간 명시**: Section 2.3 및 3.1에 명시된 정책에 따라, `24시간 유효` 경고 문구를 붉은색(`#ef4444`)으로 강조 안내.
+  4. **텍스트 뷰어 대비 Fallback URL**: 이미지/버튼 링크가 비활성화된 폐쇄망 환경을 대비하여 하단에 URL 원본 텍스트를 노출하고 `word-break: break-all`로 줄바꿈 처리.
+  5. **발송 출처 명시**: 학원 원장의 정당한 요청으로 생성되었음을 명시하여 스팸 신고 방지.
+
+---
+
+#### 11.11.4 운영 환경 AWS SES 연동 및 도메인(autedi.com) DNS(DKIM, SPF, DMARC) 인증 런북
+
+상용 B2B 서비스에서 기업 메일 서버나 대형 포털(Gmail, 네이버 등)에 이메일을 안정적으로 도달시키기 위해서는 발신 도메인에 대한 **암호학적 서명(DKIM)과 발신 서버 공인(SPF), 그리고 도메인 보호 정책(DMARC) 3대 인증**이 필수적이다. 인증이 누락될 경우 Gmail의 강력한 스팸 방어 정책(2024년 발효된 대량 발신자 의무 규정)에 의해 메일이 즉시 반송(Reject)되거나 스팸함으로 직행한다.
+
+##### 1. AWS SES 설정 및 Production 모드 전환 (Sandbox 해제)
+1. **AWS Management Console 접속**: 리전을 **`ap-northeast-2 (서울)`**로 선택 후 **Amazon Simple Email Service**로 이동.
+2. **도메인 Identity 생성**:
+   - [Configuration] ➡️ [Identities] ➡️ [Create identity] 클릭.
+   - Identity type: **Domain** 선택.
+   - Domain: `autedi.com` 입력.
+   - Advanced DKIM settings: **Easy DKIM** 선택, DKIM key length: **RSA_2048_BIT** 선택.
+   - [Create identity] 완료.
+3. **SES Production Sandbox 해제 신청**:
+   - 신규 AWS 계정의 SES는 Sandbox 모드로 시작되어 사전에 인증된 이메일 주소로만 발송이 가능하다.
+   - [Account dashboard] ➡️ [Request production access] 클릭:
+     - Mail type: **Transactional** (B2B SaaS 초대장 및 알림 메일)
+     - Website URL: `https://autedi.com`
+     - Use case description: "AUTEDI B2B SaaS 학원 선생님 초대 및 시스템 알림 메일 발송용. 모든 메일은 원장의 명시적 초대 행위로만 발송되며 마케팅 스팸 발송은 일절 없음" 기재 후 제출. (통상 24~48시간 내 승인)
+
+##### 2. DNS 3대 인증 레코드 등록 런북 (Route 53 / 호스팅 네임서버)
+도메인 네임서버 관리 콘솔(Route 53 또는 가비아/Cloudflare 등)에 아래 레코드를 정확히 등록한다:
+
+| 인증 규격 | 레코드 타입 (Type) | 이름 / 호스트 (Host/Name) | 값 / 데이터 (Value/Content) | TTL | 설명 및 역할 |
+| :--- | :---: | :--- | :--- | :---: | :--- |
+| **SPF** | **TXT** | `@` (또는 `autedi.com`) | `v=spf1 include:amazonses.com ~all` | 300 | `autedi.com` 도메인 명의로 메일을 발송할 권한이 있는 공인 발송 인프라로 AWS SES를 지정. |
+| **DKIM #1** | **CNAME** | `[token1]._domainkey.autedi.com` | `[token1].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 1번 공개키 CNAME 레코드. |
+| **DKIM #2** | **CNAME** | `[token2]._domainkey.autedi.com` | `[token2].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 2번 공개키 CNAME 레코드. |
+| **DKIM #3** | **CNAME** | `[token3]._domainkey.autedi.com` | `[token3].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 3번 공개키 CNAME 레코드 (키 로테이션용). |
+| **DMARC** | **TXT** | `_dmarc.autedi.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@autedi.com; pct=100` | 300 | SPF/DKIM 인증 실패 메일을 스팸 격리(`quarantine`) 처리하고 집계 리포트를 수신하도록 수신 메일 서버에 지시. |
+
+> [!IMPORTANT]
+> **SPF 레코드 중복 주의**:
+> DNS TXT 레코드에 `v=spf1 ...` 레코드는 도메인당 반드시 **단 1개만 존재**해야 한다. 만약 이미 구글 워크스페이스나 타 메일 서비스용 SPF가 존재한다면 두 개의 TXT 레코드를 만들지 말고 기존 레코드에 `include:amazonses.com`을 병합해야 한다:
+> `v=spf1 include:_spf.google.com include:amazonses.com ~all`
+
+##### 3. AWS SES SMTP 자격증명(Credentials) 생성
+1. SES Console ➡️ [Configuration] ➡️ [SMTP settings] 메뉴로 이동.
+2. SMTP Configuration 정보 확인:
+   - **Server Name**: `email-smtp.ap-northeast-2.amazonaws.com`
+   - **Port**: `587` (STARTTLS 지원 포트)
+3. [Create SMTP credentials] 버튼 클릭:
+   - IAM User Name 지정 (예: `ses-smtp-user.autedi`).
+   - [Create] 클릭 후 생성된 **SMTP Username**과 **SMTP Password**를 안전하게 다운로드/보관 (비밀번호는 최초 1회만 노출됨).
+
+##### 4. 운영 서버 환경변수 주입 규격 (`/srv/mvp/.env` or Docker Compose)
+운영 EC2 인스턴스의 환경변수 파일에 아래 값을 누락 없이 주입한다:
+
+```env
+# ==============================================================================
+# SMTP Mail Configuration (AWS SES Production)
+# ==============================================================================
+MAIL_HOST=email-smtp.ap-northeast-2.amazonaws.com
+MAIL_PORT=587
+MAIL_USERNAME=AKIAIOSFODNN7EXAMPLE
+MAIL_PASSWORD=BJ45...[SES_SMTP_GENERATED_PASSWORD]...
+MAIL_FROM_ADDRESS=noreply@autedi.com
+MAIL_FROM_NAME=AUTEDI
+FRONTEND_URL=https://autedi.com
+```
+
+##### 5. 발송 도메인 검증 및 수신 테스팅 체크리스트
+- [ ] AWS SES Console에서 `autedi.com` 도메인의 Verification status 및 DKIM status가 모두 **"Success (Verified)"**로 표시되는지 확인.
+- [ ] 운영 서버 기동 후 초대 API 호출 시 `mail-exec-*` 스레드에서 `초대 이메일 발송 성공: to=...` 로그 확인.
+- [ ] Gmail, Naver 메일함으로 초대장을 발송하여 **스팸함이 아닌 일반 편지함(Inbox)**으로 수신되는지 확인.
+- [ ] 수신된 메일의 원본 보기(Show Original)에서 **`SPF: PASS`, `DKIM: PASS`, `DMARC: PASS`** 3대 검증 항목이 모두 합격 판정을 받았는지 확인.
+
 

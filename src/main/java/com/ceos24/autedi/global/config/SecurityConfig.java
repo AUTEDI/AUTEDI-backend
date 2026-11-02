@@ -52,7 +52,9 @@ public class SecurityConfig {
                 "https://*.vercel.app",
                 "https://autedi-mvp.duckdns.org",
                 "https://*.autedi.com",
-                "https://autedi.com"));
+                "https://autedi.com",
+                "https://*.railway.app",
+                "https://*.up.railway.app"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.AUTHORIZATION, HttpHeaders.LOCATION));
