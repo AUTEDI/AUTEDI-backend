@@ -1,7 +1,6 @@
 package com.ceos24.autedi.domain.correction.entity;
 
 import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
-import com.ceos24.autedi.domain.generation.contract.v1.AiFeedbackType;
 import com.ceos24.autedi.domain.generation.contract.v1.AiIssueKind;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationIssue;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
@@ -30,6 +29,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -39,13 +39,12 @@ import org.hibernate.type.SqlTypes;
         check =
                 @CheckConstraint(
                         name = "CHK_corrections_contract_v1",
-                        constraint =
-                                "(action IS NULL AND feedback_type IS NULL AND issue_kinds IS NULL AND anchor IS NULL "
-                                        + "AND location_uncertain IS NULL AND warnings IS NULL AND requires_review IS NULL) OR "
-                                        + "(action IS NOT NULL AND action IN ('REPLACE','GUIDANCE') AND feedback_type IS NOT NULL "
-                                        + "AND feedback_type IN ('CORRECTION','SUGGESTION') AND issue_kinds IS NOT NULL AND anchor IS NOT NULL "
-                                        + "AND location_uncertain IS NOT NULL AND warnings IS NOT NULL AND requires_review IS NOT NULL "
-                                        + "AND (action <> 'GUIDANCE' OR area = 'CONTENT_SUMMARY'))"))
+                        constraint = "(action IS NULL AND issue_kinds IS NULL AND anchor IS NULL "
+                                + "AND location_uncertain IS NULL AND warnings IS NULL AND requires_review IS NULL) OR "
+                                + "(action IS NOT NULL AND action IN ('REPLACE','GUIDANCE') AND feedback_type IS NOT NULL "
+                                + "AND feedback_type IN ('CORRECTION','SUGGESTION') AND issue_kinds IS NOT NULL AND anchor IS NOT NULL "
+                                + "AND location_uncertain IS NOT NULL AND warnings IS NOT NULL AND requires_review IS NOT NULL "
+                                + "AND (action <> 'GUIDANCE' OR area = 'CONTENT_SUMMARY'))"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Correction extends BaseTimeEntity {
@@ -83,7 +82,7 @@ public class Correction extends BaseTimeEntity {
     private String explanation;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "regions", columnDefinition = "json", nullable = false, updatable = false)
+    @Column(name = "regions", columnDefinition = "json", nullable = false)
     private List<RegionPayload> regions;
 
     // 기존 행은 7개 필드가 모두 null인 미분류 상태로만 허용한다. v1 생성 경로는 전부 채운다.
@@ -93,7 +92,7 @@ public class Correction extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "feedback_type", length = 20, updatable = false)
-    private AiFeedbackType feedbackType;
+    private FeedbackType feedbackType;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "issue_kinds", columnDefinition = "json", updatable = false)
@@ -115,6 +114,10 @@ public class Correction extends BaseTimeEntity {
 
     @Column(name = "is_edited", nullable = false)
     private Boolean isEdited;
+
+    @Column(name = "is_applied", nullable = false)
+    @ColumnDefault("true")
+    private Boolean isApplied;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
@@ -139,12 +142,13 @@ public class Correction extends BaseTimeEntity {
             String explanation,
             List<RegionPayload> regions,
             AiAction action,
-            AiFeedbackType feedbackType,
+            FeedbackType feedbackType,
             List<AiIssueKind> issueKinds,
             CorrectionAnchor anchor,
             Boolean locationUncertain,
             List<AiValidationIssue> warnings,
-            Boolean requiresReview) {
+            Boolean requiresReview,
+            Boolean isApplied) {
         this.worksheet = worksheet;
         this.page = page;
         this.generation = generation;
@@ -155,7 +159,7 @@ public class Correction extends BaseTimeEntity {
         this.explanation = explanation;
         this.regions = List.copyOf(regions);
         this.action = action;
-        this.feedbackType = feedbackType;
+        this.feedbackType = feedbackType != null || action != null ? feedbackType : FeedbackType.CORRECTION;
         this.issueKinds = issueKinds == null ? null : List.copyOf(issueKinds);
         this.anchor = anchor;
         this.locationUncertain = locationUncertain;
@@ -163,16 +167,31 @@ public class Correction extends BaseTimeEntity {
         this.requiresReview = requiresReview;
         validateV1Fields();
         this.isEdited = false;
+        this.isApplied = isApplied != null ? isApplied : true;
         this.status = CorrectionStatus.ACTIVE;
         this.version = 1;
     }
 
     public void editContent(String newContent) {
-        if (newContent == null || action == AiAction.GUIDANCE && newContent.isBlank()) {
+        if (newContent == null || action != AiAction.REPLACE && newContent.isBlank()) {
             throw new IllegalArgumentException("내용 안내는 비어 있을 수 없으며 수정 내용은 null일 수 없습니다.");
         }
         this.content = newContent;
         this.isEdited = true;
+    }
+
+    /** 현재 표시 좌표만 편집한다. 최초 AI 좌표는 불변 생성 결과의 원본·검증 아카이브에 보존된다. */
+    public void update(String newContent, List<RegionPayload> newRegions, Boolean applied) {
+        if (newContent != null) editContent(newContent);
+        if (newRegions != null) {
+            this.regions = List.copyOf(newRegions);
+            this.isEdited = true;
+        }
+        if (applied != null) updateApplied(applied);
+    }
+
+    public void updateApplied(boolean applied) {
+        this.isApplied = applied;
     }
 
     public void delete() {
@@ -191,7 +210,6 @@ public class Correction extends BaseTimeEntity {
 
     private void validateV1Fields() {
         boolean legacy = action == null
-                && feedbackType == null
                 && issueKinds == null
                 && anchor == null
                 && locationUncertain == null

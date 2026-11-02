@@ -248,7 +248,8 @@ public class GenerationResultStorageService {
                 .explanation(original.reason())
                 .regions(regions)
                 .action(original.action())
-                .feedbackType(original.feedbackType())
+                .feedbackType(com.ceos24.autedi.domain.correction.entity.FeedbackType.valueOf(
+                        original.feedbackType().name()))
                 .issueKinds(original.issueKinds())
                 .anchor(new CorrectionAnchor(
                         transcription.getId(),

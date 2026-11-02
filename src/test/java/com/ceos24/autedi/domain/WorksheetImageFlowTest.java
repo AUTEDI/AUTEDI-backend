@@ -284,16 +284,43 @@ class WorksheetImageFlowTest {
     }
 
     @Test
-    void rejectsMultipleImagesInsteadOfSilentlyUsingOnlyTheFirstOne() throws Exception {
+    void multipleImagesPreservePageOrderAndUsePreparedPngForEveryPage() throws Exception {
         byte[] png = TestWorksheetImages.png(2, 3);
         long before = worksheets.count();
-        mvc.perform(multipart("/api/v1/worksheets")
+        var uploaded = mvc.perform(multipart("/api/v1/worksheets")
                         .file(new MockMultipartFile("file", "one.png", "image/png", png))
                         .file(new MockMultipartFile("file", "two.png", "image/png", png))
                         .header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.result.pages.length()").value(2))
+                .andReturn();
+        long id = JSON.readTree(uploaded.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .at("/result/id")
+                .longValue();
+        for (int page = 1; page <= 2; page++) {
+            var prepared = service.getPreparedImage(academy.getId(), id, page);
+            assertTrue(prepared.imageUrl().endsWith("/pages/" + page + "/image"));
+            assertArrayEquals(
+                    new WorksheetImagePreparer()
+                            .prepare(png, com.ceos24.autedi.domain.worksheet.entity.FileType.PNG)
+                            .png(),
+                    prepared.png());
+        }
+        assertEquals(before + 1, worksheets.count());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void invalidLaterPageRollsBackEarlierFilesAndDoesNotCreateAWorksheet() throws Exception {
+        long before = worksheets.count(), filesBefore = fileCount();
+        mvc.perform(multipart("/api/v1/worksheets")
+                        .file(new MockMultipartFile("files", "one.png", "image/png", TestWorksheetImages.png(2, 3)))
+                        .file(new MockMultipartFile("files", "bad.png", "image/png", new byte[] {1, 2, 3}))
+                        .header(HttpHeaders.AUTHORIZATION, bearer))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("COMMON_001"));
+                .andExpect(jsonPath("$.code").value("FILE_004"));
         assertEquals(before, worksheets.count());
+        assertEquals(filesBefore, fileCount());
     }
 
     @Test

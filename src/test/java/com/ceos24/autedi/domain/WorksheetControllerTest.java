@@ -28,6 +28,7 @@ import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
+import com.ceos24.autedi.support.TestWorksheetImages;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -168,6 +169,79 @@ class WorksheetControllerTest {
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.result.id").value(worksheetA.getId()))
                 .andExpect(jsonPath("$.result.file.name").value("test_worksheet.png"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/worksheets - 다중 파일(files) 업로드 시 2페이지 이상 생성 성공")
+    void uploadWorksheets_multiPage_success() throws Exception {
+        MockMultipartFile file1 =
+                new MockMultipartFile("files", "page1.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
+        MockMultipartFile file2 =
+                new MockMultipartFile("files", "page2.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(4, 2));
+
+        mockMvc.perform(multipart("/api/v1/worksheets")
+                        .file(file1)
+                        .file(file2)
+                        .header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.pages.length()").value(2))
+                .andExpect(jsonPath("$.result.pages[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.result.pages[1].pageNumber").value(2));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/worksheets - 'file' 파라미터로 여러 이미지를 동시에 전달해도 다중 페이지 생성 성공")
+    void uploadWorksheets_multiPage_usingFileParam_success() throws Exception {
+        MockMultipartFile file1 =
+                new MockMultipartFile("file", "page1.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
+        MockMultipartFile file2 =
+                new MockMultipartFile("file", "page2.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(4, 2));
+
+        mockMvc.perform(multipart("/api/v1/worksheets")
+                        .file(file1)
+                        .file(file2)
+                        .header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.pages.length()").value(2))
+                .andExpect(jsonPath("$.result.pages[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.result.pages[1].pageNumber").value(2));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/worksheets - 프론트엔드 'images' 파라미터로 여러 이미지를 전달해도 다중 페이지 생성 성공")
+    void uploadWorksheets_multiPage_usingImagesParam_success() throws Exception {
+        MockMultipartFile file1 =
+                new MockMultipartFile("images", "sheet1.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
+        MockMultipartFile file2 =
+                new MockMultipartFile("images", "sheet2.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(4, 2));
+        MockMultipartFile file3 =
+                new MockMultipartFile("images", "sheet3.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(3, 2));
+
+        mockMvc.perform(multipart("/api/v1/worksheets")
+                        .file(file1)
+                        .file(file2)
+                        .file(file3)
+                        .header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.pages.length()").value(3))
+                .andExpect(jsonPath("$.result.pages[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.result.pages[1].pageNumber").value(2))
+                .andExpect(jsonPath("$.result.pages[2].pageNumber").value(3));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/worksheets - 빈 파일 전달 시 400 EMPTY_FILE 차단")
+    void uploadWorksheet_emptyFile_throwsEmptyFile() throws Exception {
+        MockMultipartFile emptyFile =
+                new MockMultipartFile("file", "empty.png", MediaType.IMAGE_PNG_VALUE, new byte[0]);
+
+        mockMvc.perform(multipart("/api/v1/worksheets").file(emptyFile).header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("FILE_001"));
     }
 
     @Test

@@ -144,6 +144,7 @@ public class GenerationWorkStore {
                     .page(page)
                     .generation(job)
                     .area(draft.area())
+                    .feedbackType(draft.feedbackType())
                     .originalText(draft.originalText())
                     .aiInitialContent(draft.aiInitialContent())
                     .content(draft.aiInitialContent())

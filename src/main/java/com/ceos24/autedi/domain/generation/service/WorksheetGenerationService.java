@@ -98,6 +98,9 @@ public class WorksheetGenerationService {
                 : configuredClient != null
                         ? configuredClient
                         : fixedResponseEnabled ? GenerationClientMode.FIXED : GenerationClientMode.LEGACY_MOCK;
+        if (worksheet.getPageCount() != 1 && mode != GenerationClientMode.LEGACY_MOCK)
+            throw new CustomException(
+                    ErrorCode.INVALID_INPUT_VALUE, "실제 AI 연동과 고정 응답 검증은 이미지 한 장만 지원합니다. 페이지별로 학습지를 업로드해 주세요.");
         Long transcriptionId = previous == null ? null : transcriptionReuse.findForRetry(previous, mode);
         WorksheetGeneration generation = generations.save(WorksheetGeneration.builder()
                 .worksheet(worksheet)

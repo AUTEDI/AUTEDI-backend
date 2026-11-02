@@ -1213,6 +1213,78 @@ class FixedResponseReviewApiTest {
         verifyNoInteractions(terra, aiClient);
     }
 
+    @Test
+    void teacherRegionsAndAppliedFlagsPersistWithoutChangingInitialAiArchive() throws Exception {
+        generate("partial-edit");
+        JsonNode initialReview = review();
+        JsonNode initial = card(initialReview, AiAction.REPLACE);
+        long archiveId = initialReview.at("/aiResults/0/id").longValue();
+        var archive = archives.restoreResult(academyId, archiveId);
+        String url = base() + "/corrections/" + initial.get("id").longValue();
+        var region = Map.of(
+                "pageId", initial.at("/regions/0/pageId").longValue(), "x", 0.2, "y", 0.3, "width", 0.1, "height", 0.2);
+        JsonNode updated = result(patch(url)
+                .header(HttpHeaders.IF_MATCH, initial.get("etag").asString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(JSON.writeValueAsString(Map.of("regions", List.of(region), "isApplied", false))));
+        assertFalse(updated.get("isApplied").asBoolean());
+        assertEquals(0.2, updated.at("/regions/0/x").doubleValue(), 1e-12);
+        JsonNode reloaded = result(get(url));
+        assertEquals(updated.get("regions"), reloaded.get("regions"));
+        assertEquals(updated.get("etag"), reloaded.get("etag"));
+        for (String key : List.of(
+                "aiInitialContent", "originalText", "content", "explanation", "feedbackType", "anchor", "warnings"))
+            assertEquals(initial.get(key), reloaded.get(key), key);
+        assertEquals(archive, archives.restoreResult(academyId, archiveId));
+        JsonNode filtered = result(get(base() + "/corrections")
+                .param("feedbackType", initial.get("feedbackType").asString())
+                .param("isApplied", "false"));
+        assertEquals(1, filtered.get("total").intValue());
+        assertEquals("FIXED", filtered.at("/items/0/source").asString());
+        mvc.perform(patch(url + "/apply")
+                        .param("applied", "true")
+                        .header(HttpHeaders.AUTHORIZATION, bearer)
+                        .header(HttpHeaders.IF_MATCH, initial.get("etag").asString()))
+                .andExpect(status().isPreconditionFailed());
+        mvc.perform(patch(url)
+                        .header(HttpHeaders.AUTHORIZATION, bearer)
+                        .header(HttpHeaders.IF_MATCH, reloaded.get("etag").asString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSON.writeValueAsString(Map.of(
+                                "regions",
+                                List.of(Map.of("pageId", -1, "x", 0.2, "y", 0.3, "width", 0.1, "height", 0.2))))))
+                .andExpect(status().isBadRequest());
+        JsonNode applied = result(patch(url + "/apply")
+                .param("applied", "true")
+                .header(HttpHeaders.IF_MATCH, reloaded.get("etag").asString()));
+        assertTrue(applied.get("isApplied").asBoolean());
+        assertNotEquals(reloaded.get("etag"), applied.get("etag"));
+        assertEquals(archive, archives.restoreResult(academyId, archiveId));
+    }
+
+    @Test
+    void multiPageUploadDoesNotSilentlyGenerateOnlyTheFirstPage() throws Exception {
+        worksheetId = body(mvc.perform(multipart("/api/v1/worksheets")
+                                .file(new MockMultipartFile(
+                                        "files", "one.png", "image/png", TestWorksheetImages.png(2, 3)))
+                                .file(new MockMultipartFile(
+                                        "files", "two.png", "image/png", TestWorksheetImages.png(3, 2)))
+                                .header(HttpHeaders.AUTHORIZATION, bearer))
+                        .andExpect(status().isCreated())
+                        .andReturn())
+                .get("id")
+                .longValue();
+        configure(true);
+        assertEquals(
+                400,
+                attempt(base() + "/generations", "multi-page-guard", bearer)
+                        .getResponse()
+                        .getStatus());
+        assertEquals(0, count("worksheet_generations"));
+        assertEquals("DRAFT", result(get(base())).get("status").asString());
+        verifyNoInteractions(terra, aiClient);
+    }
+
     private void useTerra(FakeResponsesServer upstream) {
         terraProperties.setEndpoint(upstream.endpoint());
         ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.TERRA);

@@ -21,7 +21,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("CustomException: code={}, message={}", errorCode.getCode(), e.getMessage());
-        return ResponseEntity.status(errorCode.getStatus()).body(ApiResponse.onFailure(errorCode, null));
+        Object errorDetail =
+                (e.getMessage() != null && !e.getMessage().equals(errorCode.getMessage())) ? e.getMessage() : null;
+        return ResponseEntity.status(errorCode.getStatus()).body(ApiResponse.onFailure(errorCode, errorDetail));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        log.warn("파일 업로드 크기 초과: {}", e.getMessage());
+        return ResponseEntity.status(ErrorCode.FILE_TOO_LARGE.getStatus())
+                .body(ApiResponse.onFailure(ErrorCode.FILE_TOO_LARGE, "이미지 또는 요청이 업로드 크기 제한을 초과했습니다."));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

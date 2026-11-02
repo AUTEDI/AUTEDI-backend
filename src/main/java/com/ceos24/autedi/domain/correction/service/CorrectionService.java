@@ -7,6 +7,8 @@ import com.ceos24.autedi.domain.correction.dto.response.CorrectionListResponse;
 import com.ceos24.autedi.domain.correction.dto.response.CorrectionResponse;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
+import com.ceos24.autedi.domain.correction.entity.FeedbackType;
+import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
 import com.ceos24.autedi.domain.generation.dto.response.GenerationResponse;
@@ -133,11 +135,33 @@ public class CorrectionService {
 
     public CorrectionListResponse getCorrections(
             Long academyId, Long worksheetId, String statusParam, Long pageId, CorrectionArea area) {
+        return getCorrections(academyId, worksheetId, statusParam, pageId, area, null, null);
+    }
+
+    public CorrectionListResponse getCorrections(
+            Long academyId,
+            Long worksheetId,
+            String statusParam,
+            Long pageId,
+            CorrectionArea area,
+            FeedbackType feedbackType) {
+        return getCorrections(academyId, worksheetId, statusParam, pageId, area, feedbackType, null);
+    }
+
+    public CorrectionListResponse getCorrections(
+            Long academyId,
+            Long worksheetId,
+            String statusParam,
+            Long pageId,
+            CorrectionArea area,
+            FeedbackType feedbackType,
+            Boolean isApplied) {
         findWorksheetAndValidateReady(academyId, worksheetId);
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
-        var entities = correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area);
+        var entities =
+                correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area, feedbackType, isApplied);
         var sources = sources(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(entities.stream()
                 .map(card -> card.getGeneration().getId())
                 .distinct()
@@ -169,14 +193,66 @@ public class CorrectionService {
         }
 
         String content = request.content();
-        if (content == null || correction.getAction() != AiAction.REPLACE && content.isBlank()) {
+        if (content == null && request.regions() == null && request.isApplied() == null)
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "수정할 내용·좌표·반영 여부 중 하나가 필요합니다.");
+        if (content != null && correction.getAction() != AiAction.REPLACE && content.isBlank()) {
             throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "내용 보완 안내와 기존 첨삭 내용은 비어 있을 수 없습니다.");
         }
-        correction.editContent(correction.getAction() == AiAction.REPLACE ? content : content.trim());
+        List<RegionPayload> regions = request.regions() == null
+                ? null
+                : request.regions().stream()
+                        .map(region ->
+                                validatedRegion(region, correction.getPage().getId()))
+                        .toList();
+        correction.update(
+                content == null || correction.getAction() == AiAction.REPLACE ? content : content.trim(),
+                regions,
+                request.isApplied());
         correctionRepository.flush();
         log.info("첨삭 내용 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
         return response(correction);
+    }
+
+    @Transactional
+    public CorrectionResponse toggleCorrectionApplied(
+            Long academyId, Long worksheetId, Long correctionId, boolean applied) {
+        return toggleCorrectionApplied(academyId, worksheetId, correctionId, null, applied);
+    }
+
+    @Transactional
+    public CorrectionResponse toggleCorrectionApplied(
+            Long academyId, Long worksheetId, Long correctionId, String ifMatch, boolean applied) {
+        findWorksheetAndValidateReady(academyId, worksheetId);
+        Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
+        // develop의 기존 토글 요청은 헤더 없이도 허용한다. 헤더가 있으면 충돌을 검사한다.
+        if (ifMatch != null && !ifMatch.isBlank()) validateIfMatch(ifMatch, correction.getEtag());
+        if (correction.getStatus() == CorrectionStatus.DELETED)
+            throw new CustomException(ErrorCode.CANNOT_MODIFY_DELETED_CORRECTION);
+        correction.updateApplied(applied);
+        correctionRepository.flush();
+        return response(correction);
+    }
+
+    private static RegionPayload validatedRegion(RegionPayload region, Long pageId) {
+        if (region == null
+                || region.pageId() != null && !region.pageId().equals(pageId)
+                || region.x() == null
+                || region.y() == null
+                || region.width() == null
+                || region.height() == null
+                || !Double.isFinite(region.x())
+                || !Double.isFinite(region.y())
+                || !Double.isFinite(region.width())
+                || !Double.isFinite(region.height())
+                || region.x() < 0
+                || region.y() < 0
+                || region.width() <= 0
+                || region.height() <= 0
+                || region.x() + region.width() > 1 + 1e-12
+                || region.y() + region.height() > 1 + 1e-12)
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "좌표는 해당 페이지의 0~1 정규화 영역이어야 합니다.");
+        return new RegionPayload(pageId, region.x(), region.y(), region.width(), region.height(), region.polygon());
     }
 
     @Transactional

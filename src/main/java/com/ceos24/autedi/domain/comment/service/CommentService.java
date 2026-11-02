@@ -75,6 +75,10 @@ public class CommentService {
                 .page(page)
                 .user(user)
                 .highlightType(request.highlightType())
+                .color(
+                        request.color() != null
+                                ? request.color()
+                                : com.ceos24.autedi.domain.comment.entity.CommentColor.BLUE)
                 .regions(request.regions())
                 .content(request.content().trim())
                 .build();
@@ -94,8 +98,8 @@ public class CommentService {
 
         validateIfMatch(ifMatch, comment.getEtag());
 
-        comment.updateContent(request.content().trim());
-        log.info("교사 코멘트 내용 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
+        comment.updateContent(request.content().trim(), request.color());
+        log.info("교사 코멘트 내용/색상 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
 
         String nextEtag = "\"com_" + comment.getId() + "-v" + (comment.getVersion() + 1) + "\"";
         return CommentResponse.of(comment, nextEtag);

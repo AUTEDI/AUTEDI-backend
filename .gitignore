@@ -43,3 +43,7 @@ out/
 # Local HTTP Client credentials
 http-client.private.env.json
 /scripts/__pycache__/
+
+# Develop agent scratch files
+.agents/
+uploads/

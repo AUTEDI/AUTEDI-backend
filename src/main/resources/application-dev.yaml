@@ -19,20 +19,20 @@ spring:
 cloud:
   aws:
     region:
-      static: ${AWS_REGION:ap-northeast-2}
+      static: ${AWS_REGION:${AWS_DEFAULT_REGION:ap-northeast-2}}
     s3:
-      bucket: ${AWS_S3_BUCKET:autedi-mvp-develop-bucket}
+      bucket: ${AWS_S3_BUCKET:${S3_BUCKET:autedi-mvp-develop-bucket}}
     credentials:
-      access-key: ${AWS_ACCESS_KEY_ID:}
-      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+      access-key: ${AWS_ACCESS_KEY_ID:${AWS_ACCESS_KEY:}}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:${AWS_SECRET_KEY:}}
 
 aws:
-  region: ${AWS_REGION:ap-northeast-2}
+  region: ${AWS_REGION:${AWS_DEFAULT_REGION:ap-northeast-2}}
   s3:
-    bucket: ${AWS_S3_BUCKET:autedi-mvp-develop-bucket}
+    bucket: ${AWS_S3_BUCKET:${S3_BUCKET:autedi-mvp-develop-bucket}}
   credentials:
-    access-key: ${AWS_ACCESS_KEY_ID:}
-    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+    access-key: ${AWS_ACCESS_KEY_ID:${AWS_ACCESS_KEY:}}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:${AWS_SECRET_KEY:}}
 
 springdoc:
   api-docs:
@@ -42,3 +42,13 @@ springdoc:
 
 server:
   port: ${PORT:8080}
+
+app:
+  storage:
+    type: ${STORAGE_TYPE:s3}
+  mail:
+    type: ${MAIL_TYPE:http}
+    http:
+      api-key: ${RESEND_API_KEY:}
+      endpoint: ${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}
+      from: ${MAIL_HTTP_FROM:onboarding@resend.dev}

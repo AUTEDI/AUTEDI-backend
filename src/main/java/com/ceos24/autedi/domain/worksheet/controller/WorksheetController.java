@@ -46,18 +46,42 @@ public class WorksheetController {
     private final WorksheetService worksheetService;
 
     @Operation(
-            summary = "학습지 원본 파일 업로드 (F02)",
-            description = "JPG/JPEG·PNG 한 장의 원본을 보존하고 EXIF 보정 PNG를 준비해 DRAFT 상태로 등록합니다. PDF는 이번 연동 범위에서 지원하지 않습니다.")
+            summary = "학습지 원본 파일(들) 업로드 (F02)",
+            description =
+                    "JPG/JPEG·PNG 원본과 EXIF 보정 PNG를 보존합니다. files/file/images의 다중 이미지는 순서대로 페이지가 됩니다. 실제 AI 생성은 현재 이미지 한 장만 지원하며 PDF는 지원하지 않습니다.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<WorksheetDetailResponse>> uploadWorksheet(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
-            @Parameter(description = "업로드할 JPG/JPEG·PNG 한 장 (원본·보정 PNG 각각 최대 20MB)", required = true)
-                    @RequestParam("file")
-                    MultipartFile file,
-            @Parameter(hidden = true) MultipartHttpServletRequest multipartRequest) {
-        checkSingleImage(multipartRequest);
+            @Parameter(description = "업로드할 학습지 파일 목록 (다중 페이지 지원: files)", required = false)
+                    @RequestParam(value = "files", required = false)
+                    java.util.List<MultipartFile> files,
+            @Parameter(description = "학습지 파일 (단일 또는 다중 업로드 호환: file)", required = false)
+                    @RequestParam(value = "file", required = false)
+                    java.util.List<MultipartFile> file,
+            @Parameter(description = "업로드할 학습지 이미지 목록 (프론트엔드 다중 이미지 호환: images)", required = false)
+                    @RequestParam(value = "images", required = false)
+                    java.util.List<MultipartFile> images) {
+        java.util.List<MultipartFile> targetFiles = new java.util.ArrayList<>();
+        if (files != null) {
+            targetFiles.addAll(
+                    files.stream().filter(f -> f != null && !f.isEmpty()).toList());
+        }
+        if (file != null) {
+            targetFiles.addAll(
+                    file.stream().filter(f -> f != null && !f.isEmpty()).toList());
+        }
+        if (images != null) {
+            targetFiles.addAll(
+                    images.stream().filter(f -> f != null && !f.isEmpty()).toList());
+        }
+
+        if (targetFiles.isEmpty()) {
+            throw new com.ceos24.autedi.global.exception.CustomException(
+                    com.ceos24.autedi.global.exception.ErrorCode.EMPTY_FILE);
+        }
+
         WorksheetDetailResponse response =
-                worksheetService.uploadWorksheet(principal.userId(), principal.academyId(), file);
+                worksheetService.uploadWorksheets(principal.userId(), principal.academyId(), targetFiles);
         URI location = URI.create("/api/v1/worksheets/" + response.id());
         return ResponseEntity.created(location)
                 .header(HttpHeaders.ETAG, response.etag())
