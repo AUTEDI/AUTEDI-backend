@@ -5,8 +5,8 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 25MB
+      max-file-size: 30MB
+      max-request-size: 100MB
   jpa:
     open-in-view: false
   mail:
@@ -27,8 +27,13 @@ spring:
 
 app:
   mail:
+    type: ${MAIL_TYPE:smtp}
     from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}
     from-name: ${MAIL_FROM_NAME:AUTEDI}
+    http:
+      api-key: ${RESEND_API_KEY:}
+      endpoint: ${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}
+      from: ${MAIL_HTTP_FROM:onboarding@resend.dev}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
   storage:
     type: ${STORAGE_TYPE:s3}

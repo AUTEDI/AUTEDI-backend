@@ -36,10 +36,15 @@ public class S3Config {
         log.info("AWS S3Client 초기화: region={}", region);
         S3ClientBuilder builder = S3Client.builder().region(Region.of(region));
 
-        if (StringUtils.hasText(accessKey) && StringUtils.hasText(secretKey)) {
+        String cleanAccessKey =
+                accessKey != null ? accessKey.trim().replace("\"", "").replace("'", "") : "";
+        String cleanSecretKey =
+                secretKey != null ? secretKey.trim().replace("\"", "").replace("'", "") : "";
+
+        if (StringUtils.hasText(cleanAccessKey) && StringUtils.hasText(cleanSecretKey)) {
             log.info("AWS S3Client: StaticCredentialsProvider (AccessKey 주입) 사용");
             builder.credentialsProvider(
-                    StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey.trim(), secretKey.trim())));
+                    StaticCredentialsProvider.create(AwsBasicCredentials.create(cleanAccessKey, cleanSecretKey)));
         } else {
             log.info("AWS S3Client: DefaultCredentialsProvider (IAM Role / 환경변수) 사용");
             builder.credentialsProvider(DefaultCredentialsProvider.create());

@@ -14,7 +14,7 @@ public record CommentCreateRequest(
         @Schema(description = "코멘트를 작성할 대상 페이지 ID", example = "10") @NotNull(message = "페이지 ID를 지정해 주세요.") Long pageId,
         @Schema(
                         description =
-                                "강조 방식 (HIGHLIGHT: 형광펜, UNDERLINE: 밑줄, ARROW: 화살표, TEXTBOX: 텍스트 상자, CARET: 삽입 기호)",
+                                "강조 방식 (HIGHLIGHT: 형광펜, UNDERLINE: 밑줄, STRIKETHROUGH: 취소선, ARROW: 화살표, TEXTBOX: 텍스트 상자, CARET: 삽입 기호)",
                         example = "HIGHLIGHT")
                 @NotNull(message = "강조 유형을 선택해 주세요.")
                 HighlightType highlightType,

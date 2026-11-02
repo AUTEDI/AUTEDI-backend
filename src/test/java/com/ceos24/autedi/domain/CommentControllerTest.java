@@ -170,6 +170,25 @@ class CommentControllerTest {
     }
 
     @Test
+    @DisplayName("POST /comments - 취소선(STRIKETHROUGH) 코멘트 작성 성공")
+    void createComment_withStrikethrough_success() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest(
+                testPage.getId(),
+                HighlightType.STRIKETHROUGH,
+                CommentColor.BLUE,
+                List.of(new RegionPayload(0.1, 0.2, 0.3, 0.05)),
+                "불필요한 문장이므로 삭제합니다.");
+
+        mockMvc.perform(post("/api/v1/worksheets/{worksheetId}/comments", testWorksheet.getId())
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.result.highlightType").value("STRIKETHROUGH"))
+                .andExpect(jsonPath("$.result.content").value("불필요한 문장이므로 삭제합니다."));
+    }
+
+    @Test
     @DisplayName("GET /comments & GET /comments/{commentId} - 코멘트 목록 및 단건 조회 성공")
     void getComments_success() throws Exception {
         Comment comment = commentRepository.save(Comment.builder()

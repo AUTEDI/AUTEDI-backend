@@ -190,6 +190,60 @@ class WorksheetControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/worksheets - 'file' 파라미터로 여러 이미지를 동시에 전달해도 다중 페이지 생성 성공")
+    void uploadWorksheets_multiPage_usingFileParam_success() throws Exception {
+        MockMultipartFile file1 =
+                new MockMultipartFile("file", "page1.png", MediaType.IMAGE_PNG_VALUE, "dummy content 1".getBytes());
+        MockMultipartFile file2 =
+                new MockMultipartFile("file", "page2.png", MediaType.IMAGE_PNG_VALUE, "dummy content 2".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/worksheets")
+                        .file(file1)
+                        .file(file2)
+                        .header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.pages.length()").value(2))
+                .andExpect(jsonPath("$.result.pages[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.result.pages[1].pageNumber").value(2));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/worksheets - 프론트엔드 'images' 파라미터로 여러 이미지를 전달해도 다중 페이지 생성 성공")
+    void uploadWorksheets_multiPage_usingImagesParam_success() throws Exception {
+        MockMultipartFile file1 =
+                new MockMultipartFile("images", "sheet1.png", MediaType.IMAGE_PNG_VALUE, "img1".getBytes());
+        MockMultipartFile file2 =
+                new MockMultipartFile("images", "sheet2.png", MediaType.IMAGE_PNG_VALUE, "img2".getBytes());
+        MockMultipartFile file3 =
+                new MockMultipartFile("images", "sheet3.png", MediaType.IMAGE_PNG_VALUE, "img3".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/worksheets")
+                        .file(file1)
+                        .file(file2)
+                        .file(file3)
+                        .header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.pages.length()").value(3))
+                .andExpect(jsonPath("$.result.pages[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.result.pages[1].pageNumber").value(2))
+                .andExpect(jsonPath("$.result.pages[2].pageNumber").value(3));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/worksheets - 빈 파일 전달 시 400 EMPTY_FILE 차단")
+    void uploadWorksheet_emptyFile_throwsEmptyFile() throws Exception {
+        MockMultipartFile emptyFile =
+                new MockMultipartFile("file", "empty.png", MediaType.IMAGE_PNG_VALUE, new byte[0]);
+
+        mockMvc.perform(multipart("/api/v1/worksheets").file(emptyFile).header(HttpHeaders.AUTHORIZATION, tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("FILE_001"));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/worksheets/{id} - [테넌트 격리] 타 학원 학습지 접근 시 404 자원 은닉")
     void getWorksheet_tenantIsolation_returnsNotFound() throws Exception {
         // Academy B의 유저가 Academy A의 학습지 상세 조회를 시도할 때 404 반환

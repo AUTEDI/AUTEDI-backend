@@ -42,6 +42,7 @@ public enum ErrorCode implements BaseErrorCode {
     EMPTY_FILE(HttpStatus.BAD_REQUEST, "FILE_001", "업로드할 파일이 비어 있습니다."),
     UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "FILE_002", "지원하지 않는 파일 형식입니다. JPG, PNG, PDF 파일만 허용됩니다."),
     FILE_STORAGE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FILE_003", "파일 저장 중 오류가 발생했습니다."),
+    FILE_SIZE_EXCEEDED(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_004", "업로드 가능한 최대 파일 크기를 초과했습니다."),
 
     // Generation
     GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "GENERATION_001", "이미 생성 작업이 진행 중입니다."),

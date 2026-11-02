@@ -29,16 +29,23 @@ public class S3FileStorageService implements FileStorageService {
     private final String bucket;
     private final String region;
     private final String customDomain;
+    private final FileStorageService fallbackService;
 
-    public S3FileStorageService(S3Client s3Client, String bucket, String region, String customDomain) {
+    public S3FileStorageService(
+            S3Client s3Client, String bucket, String region, String customDomain, FileStorageService fallbackService) {
         this.s3Client = s3Client;
         this.bucket = bucket;
         this.region = region;
         this.customDomain = customDomain;
+        this.fallbackService = fallbackService;
+    }
+
+    public S3FileStorageService(S3Client s3Client, String bucket, String region, String customDomain) {
+        this(s3Client, bucket, region, customDomain, null);
     }
 
     public S3FileStorageService(S3Client s3Client, String bucket, String region) {
-        this(s3Client, bucket, region, null);
+        this(s3Client, bucket, region, null, null);
     }
 
     @Override
@@ -100,7 +107,11 @@ public class S3FileStorageService implements FileStorageService {
             log.info("S3 파일 업로드 성공: bucket={}, key={}", bucket, s3Key);
         } catch (Exception e) {
             log.error("S3 파일 업로드 실패: bucket={}, key={}, error={}", bucket, s3Key, e.getMessage(), e);
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, "S3 파일 업로드에 실패했습니다.");
+            if (fallbackService != null) {
+                log.warn("S3 파일 업로드 실패로 LocalStorageService로 자동 폴백합니다: bucket={}, key={}", bucket, s3Key);
+                return fallbackService.upload(file, subDir);
+            }
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, "S3 파일 업로드에 실패했습니다: " + e.getMessage());
         }
 
         String fileUrl = buildFileUrl(s3Key);
@@ -114,6 +125,13 @@ public class S3FileStorageService implements FileStorageService {
         if (!StringUtils.hasText(fileUrl)) {
             log.warn("삭제 요청된 파일 URL이 비어 있습니다.");
             return;
+        }
+
+        if (fileUrl.contains("/files/")) {
+            if (fallbackService != null) {
+                fallbackService.delete(fileUrl);
+                return;
+            }
         }
 
         String key = extractKeyFromUrl(fileUrl);

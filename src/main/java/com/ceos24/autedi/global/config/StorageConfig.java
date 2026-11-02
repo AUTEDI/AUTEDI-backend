@@ -23,9 +23,12 @@ public class StorageConfig {
             S3Client s3Client,
             @Value("${aws.s3.bucket:${cloud.aws.s3.bucket:autedi-mvp-develop-bucket}}") String bucket,
             @Value("${aws.region:${cloud.aws.region.static:ap-northeast-2}}") String region,
-            @Value("${aws.s3.custom-domain:}") String customDomain) {
+            @Value("${aws.s3.custom-domain:}") String customDomain,
+            @Value("${app.storage.upload-dir:uploads}") String uploadDir,
+            @Value("${app.backend-url:${app.frontend-url:http://localhost:8080}}") String backendUrl) {
         log.info("스토리지 빈 활성화: S3FileStorageService (bucket={}, region={})", bucket, region);
-        return new S3FileStorageService(s3Client, bucket, region, customDomain);
+        LocalStorageService fallbackService = new LocalStorageService(uploadDir, backendUrl);
+        return new S3FileStorageService(s3Client, bucket, region, customDomain, fallbackService);
     }
 
     @Bean

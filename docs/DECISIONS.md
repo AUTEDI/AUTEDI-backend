@@ -1227,23 +1227,53 @@ sequenceDiagram
 
 ---
 
-#### 11.11.2 환경별(Local / Dev / Prod) 메일 발송 전략
+#### 11.11.2 환경별(Local / Dev / Prod) 다형성 메일 발송 아키텍처
 
-AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증 용이성, 그리고 운영 서버(AWS SES)의 엔터프라이즈급 신뢰도를 모두 충족하기 위해 3단계 환경별 발송 전략을 수립했다.
+AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway)의 SMTP 포트(587) 방화벽 제한 회피, 그리고 운영 서버(AWS SES)의 엔터프라이즈급 신뢰도를 모두 충족하기 위해 **인터페이스 기반 다형성(DIP)과 조건부 빈 등록(`MailConfig`)**을 통한 환경별 발송 전략을 수립했다.
 
-| 환경 (Profile) | 발송 인프라 | 자격증명 관리 | Mocking / Fallback 동작 | 주 목적 및 기대 효과 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Local** (`local`) | • **Default**: No-op Logger (Mock)<br>• **Optional**: Gmail SMTP | `.env` 파일<br>(미설정 허용) | `JavaMailSender` 미설정 시<br>**경고 로그 + 콘솔 링크 출력**으로 대체 | 로컬 개발 시 SMTP 계정 설정 없이도<br>터미널 로그의 초대 링크로 가입 E2E 즉시 테스트 |
-| **Dev** (`dev`) | • **PaaS**: Railway SMTP<br>(Gmail 앱비밀번호 or SES Sandbox) | Railway 대시보드<br>Variables 주입 | 환경변수 미주입 시 로깅 대체,<br>주입 시 실제 이메일 발송 | 프론트-백엔드 간 실제 이메일 수신 및<br>웹메일 클라이언트 렌더링 QC 테스트베드 |
-| **Prod** (`prod`) | • **AWS SES**<br>(Simple Email Service, 서울 리전) | EC2 환경변수 /<br>AWS IAM SMTP Credential | 예외 격리 로깅 및<br>CloudWatch 모니터링 | 대규모 발송 SLA, 높은 수신 도달률(Inbox),<br>도메인 위변조 방지 및 반송률 관리 |
+```mermaid
+classDiagram
+    class EmailService {
+        -EmailSender emailSender
+        -String frontendUrl
+        +sendInvitationEmail(toEmail, academyName, rawToken)
+    }
+
+    class EmailSender {
+        <<Interface>>
+        +send(toEmail, fromAddress, fromName, subject, htmlContent) void
+    }
+
+    class SmtpEmailSender {
+        -ObjectProvider~JavaMailSender~ mailSenderProvider
+        +send() void
+    }
+
+    class HttpEmailSender {
+        -RestClient restClient
+        -String apiKey
+        -String endpoint
+        +send() void
+    }
+
+    EmailService --> EmailSender : 의존성 역전(DIP)
+    SmtpEmailSender ..|> EmailSender : SMTP 표준 (Local/Prod)
+    HttpEmailSender ..|> EmailSender : HTTPS 443 REST API (Railway Dev)
+```
+
+| 환경 (Profile) | 활성 구현체 (`EmailSender`) | 프로토콜 및 포트 | 자격증명 관리 | Mocking / Fallback 동작 | 주 목적 및 기대 효과 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | `SmtpEmailSender`<br>(Default Fallback) | SMTP (포트 587/465) | `.env` 파일<br>(미설정 허용) | `JavaMailSender` 미설정 시<br>**경고 로그 + 콘솔 링크 출력**으로 대체 | 로컬 개발 시 SMTP 계정 설정 없이도<br>터미널 로그의 초대 링크로 가입 E2E 즉시 테스트 |
+| **Dev** (`dev`) | `HttpEmailSender`<br>(Railway 전용) | **HTTPS (포트 443)**<br>(REST API) | Railway 대시보드<br>`RESEND_API_KEY` | API 키 미입력 시 로깅 대체,<br>입력 시 443 포트로 실제 발송 | **Railway Hobby 플랜의 SMTP 포트(587) 차단 방화벽을 100% 회피**하여 안정적 메일 수신 |
+| **Prod** (`prod`) | `SmtpEmailSender`<br>(or AWS SES SDK) | HTTPS (포트 443)<br>or SMTP | EC2 IAM Role /<br>AWS SES Credential | 예외 격리 로깅 및<br>CloudWatch 모니터링 | 대규모 발송 SLA, 높은 수신 도달률(Inbox),<br>도메인 위변조 방지 및 반송률 관리 |
 
 ##### 1. Local 환경: 유연한 무중단 로깅 대체(Graceful Mocking) 및 팀 Gmail SMTP
 * **무중단 로깅 대체 (Safe Mocking Fallback)**:
-  - 신규 팀원이 프로젝트를 클론한 뒤 `.env`에 SMTP 설정을 기재하지 않더라도, 초대 API 호출 시 NullPointer나 BeanCreation 에러가 발생하지 않도록 `EmailService`에 방어 로직을 구현했다:
+  - 신규 팀원이 프로젝트를 클론한 뒤 `.env`에 SMTP 설정을 기재하지 않더라도, 초대 API 호출 시 NullPointer나 BeanCreation 에러가 발생하지 않도록 `SmtpEmailSender`에 방어 로직을 구현했다:
     ```java
     JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
     if (mailSender == null) {
-        log.warn("JavaMailSender가 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+        log.warn("JavaMailSender가 설정되지 않아 메일 발송을 로깅으로 대체합니다. (To: {}, Subject: {})", toEmail, subject);
         return;
     }
     if (mailSender instanceof JavaMailSenderImpl mailSenderImpl) {
@@ -1256,14 +1286,11 @@ AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증
         }
     }
     ```
-  - `MAIL_USERNAME` 또는 `MAIL_HOST`가 비어있을 경우, 콘솔에 다음과 같이 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다:
-    ```text
-    [초대 링크 발송] To: teacher@example.com, 학원: 에이플러스 학원, 링크: http://localhost:3000/signup?token=b4d8...
-    ```
-* **MVP 및 시연 단계: 팀 공용 Gmail SMTP 연동 확정**:
-  - 도메인 구매 전 MVP 시연 및 프론트엔드 연동 테스트를 위해 **팀 공용 Gmail 계정 + 구글 앱 비밀번호(16자리)** 방식을 채택했다.
-  - Gmail 계정의 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
+  - `MAIL_USERNAME` 또는 `MAIL_HOST`가 비어있을 경우, 콘솔에 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다.
+* **로컬에서 실제 메일 발송 테스트 (Gmail SMTP)**:
+  - 개인/팀 Gmail 계정의 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
     ```env
+    MAIL_TYPE=smtp
     MAIL_HOST=smtp.gmail.com
     MAIL_PORT=587
     MAIL_USERNAME=autedi.team@gmail.com
@@ -1272,19 +1299,27 @@ AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway) QC 검증
     MAIL_FROM_NAME=AUTEDI
     FRONTEND_URL=http://localhost:3000
     ```
-  - **Gmail 발신자 일치 보장 정책**: Gmail SMTP는 보안 정책상 인증 계정과 `From` 헤더의 주소가 다르면 `550 Sender Rejected`로 메일을 거부한다. 이를 방지하기 위해 `application.yaml`에서 `from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}` fallback 구조를 적용하여, 별도 `MAIL_FROM_ADDRESS`를 지정하지 않더라도 로그인 계정 주소가 발신자로 자동 일치되도록 구현했다.
 
-##### 2. Dev (Railway) 환경: PaaS 대시보드 환경변수 주입
-* Railway 대시보드의 **Variables** 탭에 팀 Gmail 계정 정보를 주입하여 배포 환경에서도 실제 이메일 발송을 활성화한다:
-  - `MAIL_HOST`: `smtp.gmail.com`
-  - `MAIL_PORT`: `587`
-  - `MAIL_USERNAME`: `autedi.team@gmail.com`
-  - `MAIL_PASSWORD`: `[구글_16자리_앱비밀번호]`
-  - `MAIL_FROM_NAME`: `AUTEDI`
-  - `FRONTEND_URL`: `https://autedi-mvp.vercel.app` (프론트엔드 배포 도메인)
+##### 2. Dev (Railway) 환경: HTTPS 443 포트 REST API (`HttpEmailSender`)로 방화벽 회피
+* **도입 배경**:
+  - Railway는 스팸 방지 보안 정책상 Hobby 플랜을 포함한 기본 티어에서 외부 SMTP 포트(25, 465, 587)로의 아웃바운드 연결을 방화벽에서 강제로 차단(`SocketTimeoutException: Connect timed out`)한다.
+  - 이를 해결하기 위해 웹 표준 포트인 **HTTPS (443 포트)**를 통해 이메일을 전송하는 `HttpEmailSender`를 신설하고, `application-dev.yaml`에서 `app.mail.type: http`를 기본값으로 지정했다.
+* **Resend API 연동 규격**:
+  - 엔드포인트: `POST https://api.resend.com/emails` (포트 443)
+  - 헤더: `Authorization: Bearer {RESEND_API_KEY}`
+  - JSON 페이로드:
+    ```json
+    {
+      "from": "AUTEDI <onboarding@resend.dev>",
+      "to": ["teacher@example.com"],
+      "subject": "[에이플러스 학원] 선생님 초대장",
+      "html": "<!DOCTYPE html>..."
+    }
+    ```
+  - Railway 대시보드의 **Variables** 탭에 `RESEND_API_KEY` 환경변수만 등록하면, 추가 포트 개방 없이 100% 정상 발송된다.
 
 ##### 3. Prod (AWS EC2) 환경: 정식 서비스 런칭 시 AWS SES 전용 인프라 전환
-* 정식 상용화 시점에는 `autedi.com` 커스텀 도메인 등록 후 AWS SES(서울 리전: `ap-northeast-2`)를 표준 게이트웨이로 전환하여, `noreply@autedi.com` 발신 전용 체계로 무제한/고신뢰도 발송을 운영한다.
+* 정식 상용화 시점에는 `autedi.com` 커스텀 도메인 등록 후 AWS SES(서울 리전: `ap-northeast-2`)를 표준 게이트웨이로 전환하여, `noreply@autedi.com` 발신 전용 체계로 무제한/고신뢰도 발송을 운영한다. AWS 환경에서는 보안 그룹 기본 규칙상 아웃바운드 포트가 차단되지 않으며, AWS SDK(HTTPS 443)로도 완벽히 호환된다.
 
 ---
 
@@ -1642,7 +1677,7 @@ class S3FileStorageServiceTest {
 1. **피드백 채택 상태 머신 (`Correction.isApplied`)**:
    - AI 첨삭 항목의 채택/반영 여부를 즉시 토글하는 경량 엔드포인트(`PATCH /corrections/{id}/apply?applied=true/false`)를 신설하여 캔버스 상의 원클릭 인터랙션을 보장.
 2. **교사 캔버스 그리기 도구 확장 (`HighlightType`)**:
-   - `HIGHLIGHT`, `UNDERLINE` 외에 `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
+   - `HIGHLIGHT`, `UNDERLINE` 외에 `STRIKETHROUGH`(취소선), `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
 3. **교사 표시 색상 스키마 (`CommentColor`)**:
    - `Comment.color` 컬럼(`RED`, `BLUE`, `YELLOW`, `GREEN`)을 추가하여 교사의 시각적 코멘트 강조를 다채화 (기본값: `BLUE`).
 4. **AI 바운딩 박스 동적 좌표 갱신 (`CorrectionUpdateRequest.regions`)**:
