@@ -715,13 +715,15 @@ flowchart LR
 
 ### 11.3 EC2 2GB RAM OOM 방어 및 메모리 배분 설계
 
-#### 11.3.1 Swap 메모리 (2GB) 필수 활성화
+#### 11.3.1 Swap 메모리 (4GB) 및 `vm.swappiness=10` 커널 튜닝
 
-물리 메모리(2GB)가 순간적으로 고갈될 때 Linux 커널의 OOM Killer가 주요 프로세스를 강제 종료하지 않도록, 디스크(EBS)를 가상 메모리로 확장하는 Swap 메모리를 최초 프로비저닝 시 반드시 설정합니다:
+단일 2GB RAM EC2 내에서 **운영(Prod)**과 **개발/QA(Dev)** 두 개의 백엔드 컨테이너 및 MySQL을 동시에 안정적으로 구동하기 위해, 디스크(EBS) 가상 메모리를 4GB로 확장하고 리눅스 커널의 스왑 사용 적극성을 제어하는 `vm.swappiness=10` 튜닝을 필수로 적용합니다:
 
 ```bash
-# 1. 2GB 스왑 파일 생성 및 권한 설정
-sudo fallocate -l 2G /swapfile
+# 1. 4GB 스왑 파일 생성 및 권한 설정
+sudo swapoff -a || true
+sudo rm -f /swapfile
+sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 
 # 2. 스왑 포맷팅 및 활성화
@@ -729,20 +731,29 @@ sudo mkswap /swapfile
 sudo swapon /swapfile
 
 # 3. 재부팅 시 자동 마운트 등록 (/etc/fstab)
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+if ! grep -q '/swapfile none swap sw 0 0' /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+fi
 
-# 4. 스왑 활성화 확인
+# 4. 커널 vm.swappiness=10 최적화 (물리 RAM 90% 이상 차기 전까지 디스크 I/O 억제)
+sudo sysctl vm.swappiness=10
+if ! grep -q 'vm.swappiness=10' /etc/sysctl.conf; then
+    echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+fi
+
+# 5. 스왑 활성화 확인 (물리 2GB + 스왑 4GB = 총 6GB 풀 확보)
 free -h
 ```
 
-#### 11.3.2 컨테이너별 메모리 다이어트 예산 (2GB RAM 기준)
+#### 11.3.2 컨테이너별 메모리 다이어트 예산 (단일 EC2 Prod+Dev 통합 기준)
 
 | 계층 / 컨테이너 | 할당 목표치 | 튜닝 및 제약 옵션 |
 | --- | --- | --- |
 | **Host OS + Docker Daemon + Nginx** | **~ 250 MB** | Alpine 기반 Nginx 경량 이미지, 불필요한 OS 백그라운드 서비스 비활성화 |
-| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=50` |
-| **Spring Boot Container** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC` 강제 |
-| **비상 예비 물리 메모리 (Buffer)** | **~ 850 MB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
+| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=60` |
+| **Spring Boot (운영: Prod)** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC`, Docker 리밋 700M |
+| **Spring Boot (개발: Dev/QA)** | **~ 450 MB** | JVM 옵션 `-Xms128m -Xmx384m -XX:+UseSerialGC`, Docker 리밋 512M |
+| **여유 버퍼 및 스왑 확장 풀** | **물리 ~450 MB + 스왑 4GB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
 
 #### 11.3.3 Nginx 설정 시 필수 주의사항 (사진 업로드 용량 및 AI 타임아웃)
 
