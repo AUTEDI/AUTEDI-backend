@@ -98,6 +98,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-prototype.vercel.app}
+      APP_AI_CLIENT: ${APP_AI_CLIENT:-TERRA}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       - mysql
     deploy:
