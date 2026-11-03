@@ -50,6 +50,8 @@ public class SecurityConfig {
                 "http://localhost:*",
                 "http://127.0.0.1:*",
                 "https://*.vercel.app",
+                "https://*.duckdns.org",
+                "http://*.duckdns.org",
                 "https://autedi-mvp.duckdns.org",
                 "https://*.autedi.com",
                 "https://autedi.com",
