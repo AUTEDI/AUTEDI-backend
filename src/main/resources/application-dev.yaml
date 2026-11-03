@@ -2,20 +2,20 @@ spring:
   application:
     name: autedi
   datasource:
-    url: jdbc:mysql://${MYSQLHOST}:${MYSQLPORT}/${MYSQLDATABASE}?allowPublicKeyRetrieval=true&useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
-    username: ${MYSQLUSER}
-    password: ${MYSQLPASSWORD}
+    url: ${DEV_DB_URL:${DB_URL:jdbc:mysql://${DB_HOST:${MYSQLHOST:mysql}}:${DB_PORT:${MYSQLPORT:3306}}/${DB_NAME:${MYSQLDATABASE:autedi_dev}}?allowPublicKeyRetrieval=true&useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul}}
+    username: ${DEV_DB_USERNAME:${DB_USERNAME:${DB_USER:${MYSQLUSER:autedi}}}}
+    password: ${DEV_DB_PASSWORD:${DB_PASSWORD:${MYSQLPASSWORD:autedi2026!}}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.MySQLDialect
-    show-sql: true
+    show-sql: ${SHOW_SQL:false}
 
-# AWS S3 개발 배포 설정 (Railway 환경변수 주입)
+# AWS S3 개발 배포 설정 (EC2 / Railway 공용 환경변수 주입)
 cloud:
   aws:
     region:
@@ -47,8 +47,10 @@ app:
   storage:
     type: ${STORAGE_TYPE:s3}
   mail:
-    type: ${MAIL_TYPE:http}
+    type: ${MAIL_TYPE:smtp}
     http:
       api-key: ${RESEND_API_KEY:}
       endpoint: ${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}
       from: ${MAIL_HTTP_FROM:onboarding@resend.dev}
+  generation:
+    dispatch-interval-ms: ${GENERATION_DISPATCH_INTERVAL_MS:30000}

@@ -41,6 +41,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /srv/mvp
-            docker compose pull
-            docker compose up -d
+            docker compose pull spring-app
+            docker compose up -d spring-app
             docker image prune -f

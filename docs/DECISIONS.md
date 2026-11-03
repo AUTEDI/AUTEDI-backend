@@ -73,6 +73,7 @@
    - 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
    - 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
    - 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
+   - 11.14 단일 EC2 멀티 컨테이너(Prod + Dev/QA) 통합 아키텍처 및 CI/CD 분리 운영 규격 (Single EC2 Multi-Container Consolidation & CI/CD)
 
 ---
 
@@ -715,13 +716,15 @@ flowchart LR
 
 ### 11.3 EC2 2GB RAM OOM 방어 및 메모리 배분 설계
 
-#### 11.3.1 Swap 메모리 (2GB) 필수 활성화
+#### 11.3.1 Swap 메모리 (4GB) 및 `vm.swappiness=10` 커널 튜닝
 
-물리 메모리(2GB)가 순간적으로 고갈될 때 Linux 커널의 OOM Killer가 주요 프로세스를 강제 종료하지 않도록, 디스크(EBS)를 가상 메모리로 확장하는 Swap 메모리를 최초 프로비저닝 시 반드시 설정합니다:
+단일 2GB RAM EC2 내에서 **운영(Prod)**과 **개발/QA(Dev)** 두 개의 백엔드 컨테이너 및 MySQL을 동시에 안정적으로 구동하기 위해, 디스크(EBS) 가상 메모리를 4GB로 확장하고 리눅스 커널의 스왑 사용 적극성을 제어하는 `vm.swappiness=10` 튜닝을 필수로 적용합니다:
 
 ```bash
-# 1. 2GB 스왑 파일 생성 및 권한 설정
-sudo fallocate -l 2G /swapfile
+# 1. 4GB 스왑 파일 생성 및 권한 설정
+sudo swapoff -a || true
+sudo rm -f /swapfile
+sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 
 # 2. 스왑 포맷팅 및 활성화
@@ -729,20 +732,29 @@ sudo mkswap /swapfile
 sudo swapon /swapfile
 
 # 3. 재부팅 시 자동 마운트 등록 (/etc/fstab)
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+if ! grep -q '/swapfile none swap sw 0 0' /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+fi
 
-# 4. 스왑 활성화 확인
+# 4. 커널 vm.swappiness=10 최적화 (물리 RAM 90% 이상 차기 전까지 디스크 I/O 억제)
+sudo sysctl vm.swappiness=10
+if ! grep -q 'vm.swappiness=10' /etc/sysctl.conf; then
+    echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+fi
+
+# 5. 스왑 활성화 확인 (물리 2GB + 스왑 4GB = 총 6GB 풀 확보)
 free -h
 ```
 
-#### 11.3.2 컨테이너별 메모리 다이어트 예산 (2GB RAM 기준)
+#### 11.3.2 컨테이너별 메모리 다이어트 예산 (단일 EC2 Prod+Dev 통합 기준)
 
 | 계층 / 컨테이너 | 할당 목표치 | 튜닝 및 제약 옵션 |
 | --- | --- | --- |
 | **Host OS + Docker Daemon + Nginx** | **~ 250 MB** | Alpine 기반 Nginx 경량 이미지, 불필요한 OS 백그라운드 서비스 비활성화 |
-| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=50` |
-| **Spring Boot Container** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC` 강제 |
-| **비상 예비 물리 메모리 (Buffer)** | **~ 850 MB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
+| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=60` |
+| **Spring Boot (운영: Prod)** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC`, Docker 리밋 700M |
+| **Spring Boot (개발: Dev/QA)** | **~ 450 MB** | JVM 옵션 `-Xms128m -Xmx384m -XX:+UseSerialGC`, Docker 리밋 512M |
+| **여유 버퍼 및 스왑 확장 풀** | **물리 ~450 MB + 스왑 4GB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
 
 #### 11.3.3 Nginx 설정 시 필수 주의사항 (사진 업로드 용량 및 AI 타임아웃)
 
@@ -1686,3 +1698,162 @@ class S3FileStorageServiceTest {
    - `POST /api/v1/worksheets`에서 `files: List<MultipartFile>`을 지원하여 업로드된 파일 순서대로 1, 2, ... 페이지로 자동 분할 생성 (기존 단일 `file` 파라미터와 100% 하위 호환).
 
 *상세 API I/O 명세 및 JSON 예시는 [`docs/FRONTEND_COLLABORATION_SPECS.md`](./FRONTEND_COLLABORATION_SPECS.md)를 참조한다.*
+
+---
+
+### 11.14 단일 EC2 멀티 컨테이너(Prod + Dev/QA) 통합 아키텍처 및 CI/CD 분리 운영 규격 (Single EC2 Multi-Container Consolidation & CI/CD)
+
+#### 11.14.1 도입 배경 및 해결 과제
+1. **환경 패리티(Dev/Prod Parity) 붕괴 해결**:
+   - 기존 Railway 개발 배포 환경은 보안 정책상 외부 SMTP 587/465 포트가 차단되어 초대 이메일 발송(`SmtpEmailSender`)이 실패하고, 이를 회피하기 위한 임시 REST API(`HttpEmailSender`)로 인해 운영(AWS)과 개발 환경의 코드가 이원화되는 문제가 있었다.
+2. **비용 0원 증설 원칙 (AWS 잔여 크레딧 $41 내 완결)**:
+   - 개발 및 QA 전용 서버를 별도 인스턴스(월 $15~$35)로 분리 증설하지 않고, 기존 운영 AWS EC2 인스턴스(`t4g.small`, 2GB RAM) 1대 내부에서 Docker Compose 멀티 컨테이너로 통합하여 **추가 인프라 비용 0원**을 유지한다.
+3. **QA와 개발 배포의 안정적 공존**:
+   - 일상적인 프론트엔드 연동 테스트베드와 릴리즈 전 QA 검증 환경을 단일 Dev 컨테이너로 수용하되, **QA 집중 기간 `develop` 머지 동결(Merge Freeze)** 협업 규칙을 통해 환경 간섭을 차단한다.
+
+---
+
+#### 11.14.2 통합 아키텍처 다이어그램 및 리소스 예산
+
+```mermaid
+flowchart TD
+    subgraph Client["외부 클라이언트"]
+        User["실제 사용자 (학원 교사/원장)"]
+        Tester["프론트엔드 개발자 / QA 테스터"]
+    end
+
+    subgraph AWS_EC2["AWS EC2 Host (3.39.135.10, 2GB RAM + 4GB Swap = 6GB Pool)"]
+        subgraph Nginx_Proxy["Nginx Reverse Proxy (포트 80 / 443 SSL)"]
+            Router{"도메인 기반 라우팅\n(Dynamic DNS Resolver 127.0.0.11)"}
+        end
+
+        subgraph Docker_Prod["운영 환경 (spring-app)"]
+            SpringProd["Spring Boot (Prod)\n- Port: 8080 (내부)\n- JVM: -Xms256m -Xmx512m\n- Docker Limit: 700M\n- Profile: prod"]
+        end
+
+        subgraph Docker_Dev["개발 / QA 환경 (spring-app-dev)"]
+            SpringDev["Spring Boot (Dev/QA)\n- Port: 8080 (내부)\n- JVM: -Xms128m -Xmx384m\n- Docker Limit: 512M\n- Profile: dev"]
+        end
+
+        subgraph Docker_MySQL["공유 MySQL 8.0 (mvp-mysql, Limit: 400M)"]
+            DB_Prod[("autedi_mvp_db (Prod)\nDDL: validate")]
+            DB_Dev[("autedi_dev (Dev/QA)\nDDL: update")]
+        end
+    end
+
+    User -->|"https://autedi-mvp.duckdns.org"| Router
+    Tester -->|"https://autedi-mvp-dev.duckdns.org"| Router
+
+    Router -->|"Host: autedi-mvp.duckdns.org"| SpringProd
+    Router -->|"Host: autedi-mvp-dev.duckdns.org"| SpringDev
+
+    SpringProd -->|"JDBC :3306/autedi_mvp_db"| DB_Prod
+    SpringDev -->|"JDBC :3306/autedi_dev"| DB_Dev
+```
+
+| 서비스 / 계층 | 컨테이너명 | JVM / 프로세스 설정 | Docker 메모리 한도 | 데이터베이스 스키마 | 외부 도메인 및 SSL |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Nginx 프록시** | `mvp-nginx` | 경량 Alpine Nginx | `100M` | - | 포트 80 ➔ 443 강제 리다이렉트 |
+| **운영 백엔드 (Prod)** | `mvp-spring` | `-Xms256m -Xmx512m -XX:+UseSerialGC` | `700M` | `autedi_mvp_db` (`validate`) | `autedi-mvp.duckdns.org` (Let's Encrypt) |
+| **개발/QA 백엔드 (Dev)**| `mvp-spring-dev` | `-Xms128m -Xmx384m -XX:+UseSerialGC` | `512M` | `autedi_dev` (`update`) | `autedi-mvp-dev.duckdns.org` (Let's Encrypt) |
+| **공유 데이터베이스** | `mvp-mysql` | buffer-pool: `128M`, connections: `50` | `400M` | 논리 DB 분리 | 로컬 도커 네트워크 격리 |
+| **OS + 가상 메모리** | 호스트 커널 | 4GB 스왑 파일, `vm.swappiness = 10` | 총 6GB 풀 | - | OOM Killer 방어 및 디스크 I/O 억제 |
+
+---
+
+#### 11.14.3 Nginx 독립 라우팅 및 동적 리졸버 규격 (`infra/nginx/conf.d/dev.conf`)
+
+개발/QA 컨테이너(`spring-app-dev`)가 배포 중 재시작되거나 일시 정지되더라도 운영 컨테이너(`spring-app`)에 영향이 없도록 Docker 내부 DNS(`127.0.0.11`) 기반 동적 리졸버 설정을 적용한다:
+
+```nginx
+server {
+    listen 80;
+    server_name autedi-mvp-dev.duckdns.org auteddi-mvp-dev.duckdns.org;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name autedi-mvp-dev.duckdns.org auteddi-mvp-dev.duckdns.org;
+
+    ssl_certificate /etc/letsencrypt/live/autedi-mvp-dev.duckdns.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/autedi-mvp-dev.duckdns.org/privkey.pem;
+
+    client_max_body_size 25M;
+
+    # Docker 내부 DNS 리졸버 적용: 컨테이너 부재 시에도 Nginx 구동 실패 방지
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $dev_backend spring-app-dev:8080;
+
+    location / {
+        proxy_pass http://$dev_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # OCR 및 첨삭 응답 타임아웃 여유 확보
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 60s;
+    }
+}
+```
+
+---
+
+#### 11.14.4 CI/CD 배포 파이프라인 분리 운영 규격
+
+운영 배포와 개발 배포의 트리거 브랜치와 타겟 컨테이너를 명확히 분리하여 배포 충돌을 원천 방지한다:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as 개발자
+    participant Git as GitHub Repository
+    participant Actions as GitHub Actions
+    participant DockerHub as Docker Hub
+    participant EC2 as AWS EC2 Host
+
+    alt 1. 개발 / QA 배포 파이프라인 (deploy-dev.yml)
+        Dev->>Git: PR 머지 to develop 브랜치
+        Git->>Actions: deploy-dev.yml 트리거
+        Actions->>Actions: Gradle clean bootJar -x test
+        Actions->>DockerHub: docker build & push :dev 태그
+        Actions->>EC2: SSH 실행 (docker compose pull spring-app-dev && up -d)
+        EC2-->>Actions: 배포 완료 (포트 8080 바인딩, Swagger /autedi-docs 활성화)
+    else 2. 운영 배포 파이프라인 (deploy.yml)
+        Dev->>Git: PR 머지 to main 브랜치 (릴리즈 승인 후)
+        Git->>Actions: deploy.yml 트리거
+        Actions->>Actions: Gradle clean bootJar -x test
+        Actions->>DockerHub: docker build & push :latest 태그
+        Actions->>EC2: SSH 실행 (docker compose pull spring-app && up -d)
+        EC2-->>Actions: 운영 컨테이너만 무중단 갱신 완료
+    end
+```
+
+---
+
+#### 11.14.5 개발 환경 설정 최적화 (`application-dev.yaml`)
+1. **SMTP 587 STARTTLS 기본화**:
+   - `app.mail.type: smtp` 및 Gmail SMTP(포트 587) 설정을 기본값으로 복원하여 운영 환경과 100% 동일한 이메일 발송 파이프라인 검증.
+2. **콘솔 로그 폴링 노이즈 억제**:
+   - 첨삭 디스패처 2초 폴링 쿼리로 인한 콘솔 도배를 방지하기 위해 `jpa.show-sql: false` 적용 및 디스패치 인터벌을 30초(`dispatch-interval-ms: 30000`)로 조정.
+3. **CORS 도메인 확장**:
+   - `SecurityConfig`에 `https://*.duckdns.org` 및 `http://*.duckdns.org`를 허용하여 Vercel 및 DuckDNS 간의 통신 보장.
+
+---
+
+#### 11.14.6 팀 협업 및 릴리즈 QA 운영 규칙 (Operational Rules)
+- **평시 (일반 개발 연동 기간)**:
+  - 프론트엔드-백엔드 연동 개발은 `autedi-mvp-dev.duckdns.org` 엔드포인트를 사용한다.
+  - `develop` 브랜치 머지는 단위 테스트 통과 시 상시 허용된다.
+- **QA 집중 기간 (릴리즈 1~2일 전)**:
+  - 프론트엔드와 백엔드 팀 전체가 주요 플로우를 전수 검증하는 기간에는 **`develop` 브랜치 머지를 전면 동결(Merge Freeze)**한다.
+  - QA 중 발견된 결함은 별도의 핫픽스 브랜치에서 일괄 검증 후 한 번에 머지하여 테스트베드의 연속성을 보장한다.

@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # ========================================================
+  # 1. Nginx Reverse Proxy (SSL Termination & Subdomain Routing)
+  # ========================================================
+  nginx:
+    image: nginx:alpine
+    container_name: mvp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /srv/mvp-data/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /srv/mvp-data/certbot/conf:/etc/letsencrypt:ro
+      - /srv/mvp-data/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - spring-app
+      - spring-app-dev
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+
+  # ========================================================
+  # 2. Production Backend (Port 8080 internal)
+  # ========================================================
+  spring-app:
+    image: ${DOCKER_IMAGE_NAME:-autedi/autedi-mvp-backend}:latest
+    container_name: mvp-spring
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:+UseSerialGC"
+      DB_URL: jdbc:mysql://mysql:3306/${DB_NAME:-autedi}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: ${DB_USER:-autedi}
+      DB_PASSWORD: ${DB_PASSWORD}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-autedi-mvp-bucket}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      SWAGGER_ENABLED: "false"
+      SWAGGER_USERNAME: ${SWAGGER_USERNAME:-autedi}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-autedi2026!}
+      MAIL_TYPE: smtp
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      FRONTEND_URL: ${PROD_FRONTEND_URL:-https://autedi.com}
+    depends_on:
+      - mysql
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+
+  # ========================================================
+  # 3. Dev / QA Backend (Port 8080 internal, Dev profile)
+  # ========================================================
+  spring-app-dev:
+    image: ${DOCKER_IMAGE_NAME:-autedi/autedi-mvp-backend}:dev
+    container_name: mvp-spring-dev
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:+UseSerialGC"
+      DEV_DB_URL: jdbc:mysql://mysql:3306/${DEV_DB_NAME:-autedi_dev}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DEV_DB_USERNAME: ${DB_USER:-autedi}
+      DEV_DB_PASSWORD: ${DB_PASSWORD}
+      AWS_S3_BUCKET: ${DEV_AWS_S3_BUCKET:-autedi-mvp-develop-bucket}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      SWAGGER_ENABLED: "true"
+      SWAGGER_USERNAME: ${SWAGGER_USERNAME:-autedi}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-autedi2026!}
+      MAIL_TYPE: smtp
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-prototype.vercel.app}
+    depends_on:
+      - mysql
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ========================================================
+  # 4. Shared MySQL 8.0 Instance (autedi_prod & autedi_dev schemas)
+  # ========================================================
+  mysql:
+    image: mysql:8.0
+    container_name: mvp-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-autedi}
+      MYSQL_USER: ${DB_USER:-autedi}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --performance-schema=OFF
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=60
+    volumes:
+      - /srv/mvp-data/mysql:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          memory: 400M
