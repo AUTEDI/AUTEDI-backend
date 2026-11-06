@@ -14,11 +14,13 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
@@ -26,7 +28,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** 검증한 A 방식의 두 요청. 호출 루프·자동 재시도·응답/키 로깅은 없다. */
+/** 검증한 A 방식의 두 요청. 사용량·시간 메타데이터만 기록하며 응답 원문·키는 기록하지 않는다. */
+@Slf4j
 public class TerraGenerationClient {
     private static final JsonMapper JSON = JsonMapper.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -60,9 +63,14 @@ public class TerraGenerationClient {
         this.properties = properties;
     }
 
-    public List<String> transcribe(PreparedWorksheetImage image) {
+    public List<String> transcribe(Long generationId, PreparedWorksheetImage image) {
         String output = request(
-                image, TRANSCRIPTION_INSTRUCTIONS, dimensions(image), "autedi_transcription_v1", TRANSCRIPTION_SCHEMA);
+                generationId,
+                image,
+                TRANSCRIPTION_INSTRUCTIONS,
+                dimensions(image),
+                "autedi_transcription_v1",
+                TRANSCRIPTION_SCHEMA);
         try {
             JsonNode parsed = JSON.readTree(output);
             if (!parsed.isObject() || parsed.size() != 1 || !parsed.path("text").isString()) throw invalid();
@@ -78,7 +86,10 @@ public class TerraGenerationClient {
     }
 
     public String correct(
-            PreparedWorksheetImage image, StoredTranscription transcription, Map<AiArea, AiCorrectionLevel> settings) {
+            Long generationId,
+            PreparedWorksheetImage image,
+            StoredTranscription transcription,
+            Map<AiArea, AiCorrectionLevel> settings) {
         if (!image.worksheetId().equals(transcription.worksheetId())
                 || !image.pageId().equals(transcription.pageId())
                 || !image.sha256().equals(transcription.sourceImageHash())
@@ -93,6 +104,7 @@ public class TerraGenerationClient {
         // 전송 스키마는 Structured Outputs의 부분집합을 사용한다. 중복 종류는 기존 서버 파서가 검사한다.
         ((ObjectNode) schema.at("/$defs/item/properties/issue_kinds")).remove("uniqueItems");
         return request(
+                generationId,
                 image,
                 prompt.instructions(),
                 dimensions(image) + "\n" + prompt.inputText(),
@@ -101,7 +113,12 @@ public class TerraGenerationClient {
     }
 
     private String request(
-            PreparedWorksheetImage image, String instructions, String text, String schemaName, Object schema) {
+            Long generationId,
+            PreparedWorksheetImage image,
+            String instructions,
+            String text,
+            String schemaName,
+            Object schema) {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new GenerationClientFailure("TERRA_TRANSACTION_ACTIVE", "HTTP 대기 중 DB 트랜잭션을 열 수 없습니다.", false);
         checkConfiguration();
@@ -141,31 +158,122 @@ public class TerraGenerationClient {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body), StandardCharsets.UTF_8))
                 .build();
+        long startedAt = System.nanoTime();
         var pending = http.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response = null;
+        JsonNode envelope = null;
+        Long elapsedMs = null;
+        String errorCode = null;
         try {
             // 헤더뿐 아니라 응답 본문이 멈춘 경우에도 전체 대기를 제한한다.
-            HttpResponse<String> response =
-                    pending.get(Math.max(1, properties.getRequestTimeout().toMillis()), TimeUnit.MILLISECONDS);
+            response = pending.get(Math.max(1, properties.getRequestTimeout().toMillis()), TimeUnit.MILLISECONDS);
+            elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+            envelope = readEnvelope(response.body());
             if (response.statusCode() != 200) throw httpFailure(response.statusCode(), response.body());
-            return output(response.body());
+            if (envelope == null) throw invalid();
+            return output(envelope);
         } catch (TimeoutException e) {
             pending.cancel(true);
+            errorCode = "TERRA_TIMEOUT";
             throw new GenerationClientFailure("TERRA_TIMEOUT", "Terra 응답 대기 시간이 초과되었습니다.", true);
         } catch (InterruptedException e) {
             pending.cancel(true);
             Thread.currentThread().interrupt();
+            errorCode = "WORKER_INTERRUPTED";
             throw new GenerationClientFailure("WORKER_INTERRUPTED", "Terra 요청 대기가 중단되었습니다.", true);
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof HttpTimeoutException)
+            if (e.getCause() instanceof HttpTimeoutException) {
+                errorCode = "TERRA_TIMEOUT";
                 throw new GenerationClientFailure("TERRA_TIMEOUT", "Terra 응답 대기 시간이 초과되었습니다.", true);
+            }
+            errorCode = "TERRA_CONNECTION_FAILED";
             throw new GenerationClientFailure("TERRA_CONNECTION_FAILED", "Terra HTTP 통신이 실패했습니다.", true);
+        } catch (GenerationClientFailure e) {
+            errorCode = e.code();
+            throw e;
+        } finally {
+            logCall(
+                    generationId,
+                    image,
+                    schemaName,
+                    elapsedMs != null ? elapsedMs : TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt),
+                    response,
+                    envelope,
+                    errorCode);
         }
     }
 
-    private static String output(String body) {
+    private static JsonNode readEnvelope(String body) {
         try {
-            if (body.length() > 4 * 1024 * 1024) throw invalid();
-            JsonNode root = JSON.readTree(body);
+            if (body.length() > 4 * 1024 * 1024) return null;
+            return JSON.readTree(body);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static void logCall(
+            Long generationId,
+            PreparedWorksheetImage image,
+            String schemaName,
+            long elapsedMs,
+            HttpResponse<String> response,
+            JsonNode envelope,
+            String errorCode) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("generation_id", generationId);
+        fields.put("worksheet_id", image.worksheetId());
+        fields.put("page_id", image.pageId());
+        fields.put("operation", schemaName);
+        fields.put("elapsed_ms", elapsedMs);
+        fields.put("http_status", response != null ? response.statusCode() : null);
+        fields.put("error_code", errorCode);
+        fields.put(
+                "request_id",
+                response != null
+                        ? safeLogText(
+                                response.headers().firstValue("x-request-id").orElse(null))
+                        : null);
+        fields.put("response_id", logText(envelope, "/id"));
+        fields.put("requested_model", AiCorrectionPromptComposer.MODEL);
+        fields.put("model", logText(envelope, "/model"));
+        fields.put("service_tier", logText(envelope, "/service_tier"));
+        fields.put("response_status", logText(envelope, "/status"));
+        fields.put("input_tokens", logTokens(envelope, "/usage/input_tokens"));
+        fields.put("cached_tokens", logTokens(envelope, "/usage/input_tokens_details/cached_tokens"));
+        fields.put("cache_write_tokens", logTokens(envelope, "/usage/input_tokens_details/cache_write_tokens"));
+        fields.put(
+                "cache_write_30m_tokens",
+                logTokens(envelope, "/usage/input_tokens_details/cache_write_tokens_details/ttl_30m_tokens"));
+        fields.put(
+                "cache_write_12h_tokens",
+                logTokens(envelope, "/usage/input_tokens_details/cache_write_tokens_details/ttl_12h_tokens"));
+        fields.put("output_tokens", logTokens(envelope, "/usage/output_tokens"));
+        fields.put("reasoning_tokens", logTokens(envelope, "/usage/output_tokens_details/reasoning_tokens"));
+        fields.put("total_tokens", logTokens(envelope, "/usage/total_tokens"));
+        log.info("AI_API_CALL {}", JSON.writeValueAsString(fields));
+    }
+
+    private static String logText(JsonNode envelope, String pointer) {
+        if (envelope == null) return null;
+        JsonNode value = envelope.at(pointer);
+        return value.isString() ? safeLogText(value.asString()) : null;
+    }
+
+    private static String safeLogText(String value) {
+        return value != null && value.matches("[A-Za-z0-9_.:-]{1,128}") ? value : null;
+    }
+
+    private static Long logTokens(JsonNode envelope, String pointer) {
+        if (envelope == null) return null;
+        JsonNode value = envelope.at(pointer);
+        return value.isIntegralNumber() && value.canConvertToLong() && value.longValue() >= 0
+                ? value.longValue()
+                : null;
+    }
+
+    private static String output(JsonNode root) {
+        try {
             String status = root.path("status").asString("");
             if (!"completed".equals(status)) {
                 if ("incomplete".equals(status)) {
