@@ -36,7 +36,7 @@ public class GenerationWorker {
             var transcription = inputStep.reused();
             if (transcription == null) {
                 var lines = work.mode() == GenerationClientMode.TERRA
-                        ? terra.transcribe(image)
+                        ? terra.transcribe(work.id(), image)
                         : fixed.transcribe(image, work.mode());
                 transcription = store.transcribed(work, image, lines);
             }
@@ -49,7 +49,7 @@ public class GenerationWorker {
                 return;
             }
             String raw = work.mode() == GenerationClientMode.TERRA
-                    ? terra.correct(image, transcription, work.settings())
+                    ? terra.correct(work.id(), image, transcription, work.settings())
                     : fixed.correct(image, transcription);
             AiCorrectionResponse parsed;
             try {
