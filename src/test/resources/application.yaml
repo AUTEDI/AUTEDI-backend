@@ -59,5 +59,9 @@ app:
   qr:
     base-url: http://localhost:3000
     expiration-minutes: 3
+    rate-limit:
+      scan-per-minute: 1000
+      token-per-minute: 1000
+      status-per-minute: 1000
   storage:
     type: ${STORAGE_TYPE:local}

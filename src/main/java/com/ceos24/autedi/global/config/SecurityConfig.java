@@ -3,6 +3,7 @@ package com.ceos24.autedi.global.config;
 import com.ceos24.autedi.global.security.CustomAccessDeniedHandler;
 import com.ceos24.autedi.global.security.CustomAuthenticationEntryPoint;
 import com.ceos24.autedi.global.security.JwtAuthenticationFilter;
+import com.ceos24.autedi.global.security.QrRateLimitFilter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +38,21 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
+
+    @Value("${app.qr.rate-limit.enabled:true}")
+    private boolean qrRateLimitEnabled;
+
+    @Value("${app.qr.rate-limit.scan-per-minute:10}")
+    private int scanPerMinute;
+
+    @Value("${app.qr.rate-limit.token-per-minute:10}")
+    private int tokenPerMinute;
+
+    @Value("${app.qr.rate-limit.status-per-minute:90}")
+    private int statusPerMinute;
+
+    @Value("${app.qr.rate-limit.client-ip-header:}")
+    private String clientIpHeader;
 
     @Value("${swagger.user:autedi}")
     private String swaggerUser;
@@ -101,6 +117,10 @@ public class SecurityConfig {
     @Bean
     @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // 서블릿 필터로 중복 등록되지 않도록 빈이 아니라 체인에서만 생성한다.
+        QrRateLimitFilter qrRateLimitFilter = new QrRateLimitFilter(
+                qrRateLimitEnabled, scanPerMinute, tokenPerMinute, statusPerMinute, clientIpHeader);
+
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -125,6 +145,7 @@ public class SecurityConfig {
                         .permitAll()
                         .anyRequest()
                         .authenticated())
+                .addFilterBefore(qrRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
