@@ -120,7 +120,7 @@ Java 21 환경에서 프로젝트 루트를 기준으로 실행한다.
 
 **현재 테스트 통과는 v1.1 파서·검증기 구현 완료나 AI 품질 검증을 뜻하지 않는다.** 다음 단계에서:
 
-1. 실제 v1.1 DTO·Schema·파서를 만들고 각 `response_file`을 읽어 `parse_result`와 비교한다.
+1. [v1.1 DTO·Schema](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-DTO-Schema.md)는 별도로 추가되었다. 다음으로 엄격한 파서를 만들고 각 `response_file`의 실제 파싱 결과를 `parse_result`와 비교한다.
 2. 파싱된 결과와 `context`를 검증기에 전달한다.
 3. 정상·확인·제외 후보, 원문 연결, 좌표, 개수·정렬을 `expected`와 비교한다.
 4. 저장·조회·표시 테스트에서는 `expected.cards`를 기준으로 서비스 DTO와 렌더링을 검증한다.
