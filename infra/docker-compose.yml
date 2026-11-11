@@ -50,6 +50,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       FRONTEND_URL: ${PROD_FRONTEND_URL:-https://autedi.com}
+      QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql
     deploy:
@@ -84,6 +85,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-prototype.vercel.app}
+      QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql
     deploy:

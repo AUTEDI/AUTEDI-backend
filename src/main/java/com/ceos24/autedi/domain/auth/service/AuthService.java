@@ -53,8 +53,15 @@ public class AuthService {
             throw new CustomException(ErrorCode.USER_LOCKED);
         }
 
+        user.updateLastLoginAt(LocalDateTime.now());
+
+        return issueTokens(user);
+    }
+
+    /** Access/Refresh Token을 발급하고 Refresh Token을 저장한다. 일반 로그인과 QR 로그인이 공유한다. */
+    @Transactional
+    public LoginResponse issueTokens(User user) {
         LocalDateTime now = LocalDateTime.now();
-        user.updateLastLoginAt(now);
 
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getId(),

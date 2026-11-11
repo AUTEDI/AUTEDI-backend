@@ -13,6 +13,7 @@ public enum ErrorCode implements BaseErrorCode {
     INVALID_INPUT_VALUE(HttpStatus.BAD_REQUEST, "COMMON_001", "요청 값이 올바르지 않습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "COMMON_002", "허용되지 않은 HTTP 메서드입니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_003", "서버 내부 오류가 발생했습니다."),
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "COMMON_429", "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
 
     // Auth & Security
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "AUTH_001", "인증이 필요합니다."),
@@ -24,6 +25,11 @@ public enum ErrorCode implements BaseErrorCode {
     USER_INACTIVE(HttpStatus.FORBIDDEN, "AUTH_007", "비활성화된 계정입니다."),
     USER_LOCKED(HttpStatus.FORBIDDEN, "AUTH_008", "잠금 처리된 계정입니다."),
     ALREADY_REGISTERED_EMAIL(HttpStatus.CONFLICT, "AUTH_009", "이미 가입된 이메일입니다."),
+
+    // QR Login
+    QR_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "QR_001", "유효하지 않은 QR입니다."),
+    QR_SESSION_EXPIRED(HttpStatus.GONE, "QR_002", "만료된 QR입니다. 새로 생성해 주세요."),
+    QR_SESSION_INVALID_STATE(HttpStatus.CONFLICT, "QR_003", "이미 사용되었거나 처리할 수 없는 QR 상태입니다."),
 
     // Academy
     ACADEMY_NOT_FOUND(HttpStatus.NOT_FOUND, "ACADEMY_001", "존재하지 않는 학원입니다."),
