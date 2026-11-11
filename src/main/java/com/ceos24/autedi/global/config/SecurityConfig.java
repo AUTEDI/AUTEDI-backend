@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -109,6 +110,12 @@ public class SecurityConfig {
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/qr-sessions/scan",
+                                "/api/v1/auth/qr-sessions/status",
+                                "/api/v1/auth/qr-sessions/token")
+                        .permitAll()
+                        .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/signup",
                                 "/api/v1/auth/refresh",
