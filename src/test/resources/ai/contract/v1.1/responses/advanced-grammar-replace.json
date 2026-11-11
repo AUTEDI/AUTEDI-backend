@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "go",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "goes",
+      "guidance": null,
+      "reason": "주어 She에 맞춰 동사를 goes로 수정합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.3,
+          0.2,
+          0.45,
+          0.24
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "goes",
+        "position": null
+      }
+    }
+  ]
+}

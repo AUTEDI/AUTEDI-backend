@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "look forward",
+          "occurrence": 1
+        },
+        {
+          "line_id": 2,
+          "original": "to meet",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "look forward to meeting",
+      "guidance": null,
+      "reason": "look forward to 뒤에는 동명사 meeting을 사용합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.15,
+          0.2,
+          0.65,
+          0.24
+        ],
+        [
+          0.1,
+          0.3,
+          0.4,
+          0.34
+        ]
+      ],
+      "revision_scope": "PHRASE",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "look forward to meeting",
+        "position": null
+      }
+    }
+  ]
+}

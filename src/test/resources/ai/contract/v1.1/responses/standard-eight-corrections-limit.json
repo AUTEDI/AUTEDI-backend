@@ -1,0 +1,268 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "go",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "goes",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.05,
+          0.35,
+          0.08
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "goes",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 2,
+          "original": "play",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "plays",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.13,
+          0.35,
+          0.16
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "plays",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 3,
+          "original": "was",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "were",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.21,
+          0.35,
+          0.24
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "were",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 4,
+          "original": "is",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "are",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.29,
+          0.35,
+          0.32
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "are",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 5,
+          "original": "have",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "has",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.37,
+          0.35,
+          0.4
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "has",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 6,
+          "original": "do",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "does",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.45,
+          0.35,
+          0.48
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "does",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 7,
+          "original": "has",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "have",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.53,
+          0.35,
+          0.56
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "have",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 8,
+          "original": "look",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "looks",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.61,
+          0.35,
+          0.64
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "looks",
+        "position": null
+      }
+    }
+  ]
+}

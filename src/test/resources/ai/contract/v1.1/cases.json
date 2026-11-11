@@ -1,0 +1,2909 @@
+{
+  "fixture_format_version": 1,
+  "contract_version": "AUTEDI-AI-CONTRACT-v1.1",
+  "source": "SYNTHETIC",
+  "cases": [
+    {
+      "id": "standard-insert-before",
+      "category": "valid",
+      "description": "관사는 dog 앞에 삽입하고 이미지에는 a만 표시한다.",
+      "tags": [
+        "INSERT_BEFORE"
+      ],
+      "response_file": "responses/standard-insert-before.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "dog",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 7,
+                "end": 10
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.36,
+                0.23
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "caret",
+              "category": "error",
+              "color": "red",
+              "correction_text": "a"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-insert-after",
+      "category": "valid",
+      "description": "문장 끝 마침표 삽입은 AFTER로 표시한다.",
+      "tags": [
+        "INSERT_AFTER",
+        "PUNCTUATION"
+      ],
+      "response_file": "responses/standard-insert-after.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I like apples"
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "apples",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 7,
+                "end": 13
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "caret",
+              "category": "error",
+              "color": "red",
+              "correction_text": "."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-delete-word",
+      "category": "valid",
+      "description": "삭제의 빈 문자열과 적용되지 않는 필드의 null을 구분한다.",
+      "tags": [
+        "DELETE"
+      ],
+      "response_file": "responses/standard-delete-word.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I can to swim."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "to",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 6,
+                "end": 8
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": ""
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-grammar-replace",
+      "category": "valid",
+      "description": "레벨과 관계없이 같은 주어·동사 일치 오류를 수정한다.",
+      "tags": [
+        "REPLACE",
+        "LEVEL_COMPARISON"
+      ],
+      "response_file": "responses/standard-grammar-replace.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 4,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      },
+      "comparison_group": "same-objective-error"
+    },
+    {
+      "id": "advanced-grammar-replace",
+      "category": "valid",
+      "description": "레벨과 관계없이 같은 주어·동사 일치 오류를 수정한다.",
+      "tags": [
+        "REPLACE",
+        "LEVEL_COMPARISON"
+      ],
+      "response_file": "responses/advanced-grammar-replace.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 4,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      },
+      "comparison_group": "same-objective-error"
+    },
+    {
+      "id": "standard-vocabulary-replace",
+      "category": "valid",
+      "description": "어휘 영역에서도 잘못된 연어만 최소 수정한다.",
+      "tags": [
+        "VOCABULARY",
+        "REPLACE"
+      ],
+      "response_file": "responses/standard-vocabulary-replace.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I made my homework."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "made",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 2,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "did"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-correct-structure-empty",
+      "category": "valid",
+      "description": "올바른 문장들의 선택적 연결 개선을 Standard는 반환하지 않는다.",
+      "tags": [
+        "EMPTY_ITEMS",
+        "LEVEL_COMPARISON"
+      ],
+      "response_file": "responses/standard-correct-structure-empty.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I finished my homework."
+          },
+          {
+            "line_id": 2,
+            "text": "I took a shower."
+          },
+          {
+            "line_id": 3,
+            "text": "I went to bed."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      },
+      "comparison_group": "valid-but-monotonous-structure"
+    },
+    {
+      "id": "advanced-structure-multiline",
+      "category": "valid",
+      "description": "Advanced는 인접한 여러 줄을 하나의 문장 구조 개선으로 연결한다.",
+      "tags": [
+        "RESTRUCTURE",
+        "MULTILINE",
+        "LEVEL_COMPARISON"
+      ],
+      "response_file": "responses/advanced-structure-multiline.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I finished my homework."
+          },
+          {
+            "line_id": 2,
+            "text": "I took a shower."
+          },
+          {
+            "line_id": 3,
+            "text": "I went to bed."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "I finished my homework.\nI took a shower.\nI went to bed.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 23
+              },
+              {
+                "line_id": 2,
+                "start": 0,
+                "end": 16
+              },
+              {
+                "line_id": 3,
+                "start": 0,
+                "end": 14
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.7,
+                0.24
+              ],
+              [
+                0.1,
+                0.3,
+                0.55,
+                0.34
+              ],
+              [
+                0.1,
+                0.4,
+                0.5,
+                0.44
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "After finishing my homework and taking a shower, I went to bed."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      },
+      "comparison_group": "valid-but-monotonous-structure"
+    },
+    {
+      "id": "advanced-content-guidance",
+      "category": "valid",
+      "description": "선택적 내용 보충은 안내 카드이며 이미지 주석은 만들지 않는다.",
+      "tags": [
+        "GUIDANCE",
+        "OPTIONAL_CONTENT"
+      ],
+      "response_file": "responses/advanced-content-guidance.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Volunteering is good for students."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "Volunteering is good for students.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 34
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.85,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": null,
+            "auto_place": false
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-required-content-guidance",
+      "category": "valid",
+      "description": "이해에 필요한 설명의 명백한 누락은 Standard의 필수 안내로 처리한다.",
+      "tags": [
+        "GUIDANCE",
+        "REQUIRED_CONTENT"
+      ],
+      "response_file": "responses/standard-required-content-guidance.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I prefer this option because."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "because",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 21,
+                "end": 28
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.85,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": null,
+            "auto_place": false
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "review-image-problem",
+      "category": "valid",
+      "description": "원문 위치 없는 REVIEW는 빈 anchors·박스와 null 수정 필드를 갖는다.",
+      "tags": [
+        "REVIEW"
+      ],
+      "response_file": "responses/review-image-problem.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I like this book."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "model_review"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "grammar-phrase-across-lines",
+      "category": "valid",
+      "description": "전사 줄이 둘이어도 언어적 범위가 PHRASE이면 문법 영역에서 처리한다.",
+      "tags": [
+        "MULTILINE",
+        "PHRASE"
+      ],
+      "response_file": "responses/grammar-phrase-across-lines.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I look forward"
+          },
+          {
+            "line_id": 2,
+            "text": "to meet you."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "look forward\nto meet",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 2,
+                "end": 14
+              },
+              {
+                "line_id": 2,
+                "start": 0,
+                "end": 7
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.15,
+                0.2,
+                0.65,
+                0.24
+              ],
+              [
+                0.1,
+                0.3,
+                0.4,
+                0.34
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "look forward to meeting"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "occurrence-utf16-and-blank-line",
+      "category": "edge",
+      "description": "등장 순서·빈 줄 번호·보조 평면 문자의 UTF-16 인덱스를 보존한다.",
+      "tags": [
+        "REPEATED_OCCURRENCE",
+        "UTF16",
+        "EMPTY_LINE"
+      ],
+      "response_file": "responses/occurrence-utf16-and-blank-line.json",
+      "context": {
+        "page_number": 2,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "😀 I go home, and she go home."
+          },
+          {
+            "line_id": 2,
+            "text": ""
+          },
+          {
+            "line_id": 3,
+            "text": "The cat is sleeping."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 22,
+                "end": 24
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "uncertain-location-card",
+      "category": "edge",
+      "description": "원문은 맞고 위치만 불확실하면 카드와 경고를 보존하고 자동 배치는 막는다.",
+      "tags": [
+        "UNCERTAIN_LOCATION"
+      ],
+      "response_file": "responses/uncertain-location-card.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 4,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [],
+            "requires_review": true,
+            "issue_tags": [
+              "location_uncertain"
+            ],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": false
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "partial-invalid-boxes",
+      "category": "edge",
+      "description": "역전된 박스만 제거하고 유효 좌표·카드·경고를 보존한다.",
+      "tags": [
+        "PARTIAL_INVALID_BOXES"
+      ],
+      "response_file": "responses/partial-invalid-boxes.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 4,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.3,
+                0.2,
+                0.45,
+                0.24
+              ]
+            ],
+            "requires_review": true,
+            "issue_tags": [
+              "invalid_target_box"
+            ],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-eight-corrections-limit",
+      "category": "edge",
+      "description": "Standard도 최대 7개이며 여덟 번째 후보는 사유와 함께 제외한다.",
+      "tags": [
+        "CARD_LIMIT"
+      ],
+      "response_file": "responses/standard-eight-corrections-limit.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          },
+          {
+            "line_id": 2,
+            "text": "He play tennis."
+          },
+          {
+            "line_id": 3,
+            "text": "We was late."
+          },
+          {
+            "line_id": 4,
+            "text": "They is happy."
+          },
+          {
+            "line_id": 5,
+            "text": "She have a dog."
+          },
+          {
+            "line_id": 6,
+            "text": "He do his homework."
+          },
+          {
+            "line_id": 7,
+            "text": "I has a pen."
+          },
+          {
+            "line_id": 8,
+            "text": "It look nice."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 4,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.05,
+                0.35,
+                0.08
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 1,
+            "original_text": "play",
+            "resolved_anchors": [
+              {
+                "line_id": 2,
+                "start": 3,
+                "end": 7
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.13,
+                0.35,
+                0.16
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "plays"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 2,
+            "original_text": "was",
+            "resolved_anchors": [
+              {
+                "line_id": 3,
+                "start": 3,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.21,
+                0.35,
+                0.24
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "were"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 3,
+            "original_text": "is",
+            "resolved_anchors": [
+              {
+                "line_id": 4,
+                "start": 5,
+                "end": 7
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.29,
+                0.35,
+                0.32
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "are"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 4,
+            "original_text": "have",
+            "resolved_anchors": [
+              {
+                "line_id": 5,
+                "start": 4,
+                "end": 8
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.37,
+                0.35,
+                0.4
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "has"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 5,
+            "original_text": "do",
+            "resolved_anchors": [
+              {
+                "line_id": 6,
+                "start": 3,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.45,
+                0.35,
+                0.48
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "does"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 6,
+            "original_text": "has",
+            "resolved_anchors": [
+              {
+                "line_id": 7,
+                "start": 2,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.53,
+                0.35,
+                0.56
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "have"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [
+          {
+            "candidate_index": 7,
+            "issue_tags": [
+              "card_limit_exceeded"
+            ]
+          }
+        ],
+        "display_order": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 7,
+            "displayed_count": 7,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "advanced-corrections-before-suggestion",
+      "category": "edge",
+      "description": "개선이 먼저 반환돼도 오류 7개를 우선 표시하고 REVIEW는 한도를 쓰지 않는다.",
+      "tags": [
+        "CARD_LIMIT",
+        "CORRECTION_PRIORITY",
+        "REVIEW"
+      ],
+      "response_file": "responses/advanced-corrections-before-suggestion.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "If I was taller, I could reach the shelf."
+          },
+          {
+            "line_id": 2,
+            "text": "She go to school."
+          },
+          {
+            "line_id": 3,
+            "text": "He play tennis."
+          },
+          {
+            "line_id": 4,
+            "text": "We was late."
+          },
+          {
+            "line_id": 5,
+            "text": "They is happy."
+          },
+          {
+            "line_id": 6,
+            "text": "She have a dog."
+          },
+          {
+            "line_id": 7,
+            "text": "He do his homework."
+          },
+          {
+            "line_id": 8,
+            "text": "I has a pen."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 1,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 2,
+                "start": 4,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.12,
+                0.35,
+                0.15
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "goes"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 2,
+            "original_text": "play",
+            "resolved_anchors": [
+              {
+                "line_id": 3,
+                "start": 3,
+                "end": 7
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.2,
+                0.35,
+                0.23
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "plays"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 3,
+            "original_text": "was",
+            "resolved_anchors": [
+              {
+                "line_id": 4,
+                "start": 3,
+                "end": 6
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.28,
+                0.35,
+                0.31
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "were"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 4,
+            "original_text": "is",
+            "resolved_anchors": [
+              {
+                "line_id": 5,
+                "start": 5,
+                "end": 7
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.36,
+                0.35,
+                0.39
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "are"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 5,
+            "original_text": "have",
+            "resolved_anchors": [
+              {
+                "line_id": 6,
+                "start": 4,
+                "end": 8
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.44,
+                0.35,
+                0.47
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "has"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 6,
+            "original_text": "do",
+            "resolved_anchors": [
+              {
+                "line_id": 7,
+                "start": 3,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.52,
+                0.35,
+                0.55
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "does"
+            },
+            "auto_place": true
+          },
+          {
+            "candidate_index": 7,
+            "original_text": "has",
+            "resolved_anchors": [
+              {
+                "line_id": 8,
+                "start": 2,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.2,
+                0.6,
+                0.35,
+                0.63
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "have"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [
+          {
+            "candidate_index": 8,
+            "issue_tags": [
+              "model_review"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "card_limit_exceeded"
+            ]
+          }
+        ],
+        "display_order": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 7,
+            "displayed_count": 7,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "standard-suggestion-excluded",
+      "category": "validation",
+      "description": "Standard의 SUGGESTION은 오류로 재분류하지 않고 정상 카드에서 제외한다.",
+      "tags": [
+        "STANDARD_SUGGESTION"
+      ],
+      "response_file": "responses/standard-suggestion-excluded.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I finished my homework."
+          },
+          {
+            "line_id": 2,
+            "text": "I took a shower."
+          },
+          {
+            "line_id": 3,
+            "text": "I went to bed."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "standard_suggestion"
+            ]
+          }
+        ],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "disabled-area-excluded",
+      "category": "validation",
+      "description": "선택하지 않은 어휘 영역의 후보는 제외한다.",
+      "tags": [
+        "DISABLED_AREA"
+      ],
+      "response_file": "responses/disabled-area-excluded.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I made my homework."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "area_not_selected"
+            ]
+          }
+        ],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "grammar-sentence-scope-review",
+      "category": "validation",
+      "description": "문법 영역에서 문장 묶음을 재작성하면 확인 목록으로 분리한다.",
+      "tags": [
+        "AREA_SCOPE_VIOLATION"
+      ],
+      "response_file": "responses/grammar-sentence-scope-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I finished my homework."
+          },
+          {
+            "line_id": 2,
+            "text": "I took a shower."
+          },
+          {
+            "line_id": 3,
+            "text": "I went to bed."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "area_scope_violation"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "anchor-not-found-review",
+      "category": "validation",
+      "description": "원문이 전사문에 없으면 제안을 보존하고 확인 목록으로 분리한다.",
+      "tags": [
+        "ANCHOR_MISMATCH"
+      ],
+      "response_file": "responses/anchor-not-found-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "anchor_not_found"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "noncontiguous-anchors-review",
+      "category": "validation",
+      "description": "중간 줄을 건너뛴 원문을 부분 적용하지 않는다.",
+      "tags": [
+        "NONCONTIGUOUS_ANCHORS"
+      ],
+      "response_file": "responses/noncontiguous-anchors-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I finished my homework."
+          },
+          {
+            "line_id": 2,
+            "text": "I took a shower."
+          },
+          {
+            "line_id": 3,
+            "text": "I went to bed."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "anchors_not_contiguous"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "edit-replacement-mismatch-review",
+      "category": "validation",
+      "description": "교체안 goes와 표시 문구 went의 불일치를 확인 목록으로 분리한다.",
+      "tags": [
+        "EDIT_MISMATCH"
+      ],
+      "response_file": "responses/edit-replacement-mismatch-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "She go to school."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "edit_replacement_mismatch"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "replace-with-guidance-review",
+      "category": "validation",
+      "description": "REPLACE에 안내문까지 들어간 동작별 조합 오류를 분리한다.",
+      "tags": [
+        "INVALID_ACTION_FIELDS"
+      ],
+      "response_file": "responses/replace-with-guidance-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "invalid_action_fields"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "guidance-over-ten-words-review",
+      "category": "validation",
+      "description": "11단어 안내문을 일반 카드로 공개하지 않는다.",
+      "tags": [
+        "GUIDANCE_TOO_LONG"
+      ],
+      "response_file": "responses/guidance-over-ten-words-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Volunteering is good for students."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "guidance_too_long"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "insert-changes-source-review",
+      "category": "validation",
+      "description": "삽입으로 신고한 제안이 기존 dog를 cat으로 바꾸면 분리한다.",
+      "tags": [
+        "INSERT_SOURCE_CHANGED"
+      ],
+      "response_file": "responses/insert-changes-source-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "insert_source_changed"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing-edit-field",
+      "category": "parser",
+      "description": "nullable 여부와 관계없이 필수 edit 키가 없으면 읽기를 거부한다.",
+      "tags": [
+        "MISSING_FIELD"
+      ],
+      "response_file": "responses/missing-edit-field.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "REJECT",
+        "generation_status": "FAILED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [],
+        "summary": [],
+        "parse_issue_tag": "missing_required_field"
+      }
+    },
+    {
+      "id": "legacy-v1-fields",
+      "category": "parser",
+      "description": "v1의 anchor·boxes 객체를 v1.1으로 자동 해석하지 않는다.",
+      "tags": [
+        "LEGACY_FIELDS"
+      ],
+      "response_file": "responses/legacy-v1-fields.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "REJECT",
+        "generation_status": "FAILED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [],
+        "summary": [],
+        "parse_issue_tag": "legacy_v1_shape"
+      }
+    },
+    {
+      "id": "unexpected-ai-color-field",
+      "category": "parser",
+      "description": "색상은 서버가 만들므로 AI 항목의 추가 color 키는 거절한다.",
+      "tags": [
+        "ADDITIONAL_FIELD"
+      ],
+      "response_file": "responses/unexpected-ai-color-field.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "REJECT",
+        "generation_status": "FAILED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [],
+        "summary": [],
+        "parse_issue_tag": "additional_field"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "parser",
+      "description": "JSON 문법을 읽을 수 없으면 생성 실패 대상으로 보존한다.",
+      "tags": [
+        "MALFORMED_JSON"
+      ],
+      "response_file": "responses/malformed-json.txt",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "I have dog."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "REJECT",
+        "generation_status": "FAILED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [],
+        "summary": [],
+        "parse_issue_tag": "malformed_json"
+      }
+    }
+  ]
+}
