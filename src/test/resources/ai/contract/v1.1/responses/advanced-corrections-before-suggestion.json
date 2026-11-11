@@ -1,0 +1,284 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "SUGGESTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "was",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "were",
+      "guidance": null,
+      "reason": "비격식 표현에서 was도 쓰입니다. 가정법의 격식을 분명히 하는 선택적 were 표현을 제안합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.15,
+          0.04,
+          0.22,
+          0.07
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "were",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 2,
+          "original": "go",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "goes",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.12,
+          0.35,
+          0.15
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "goes",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 3,
+          "original": "play",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "plays",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.2,
+          0.35,
+          0.23
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "plays",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 4,
+          "original": "was",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "were",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.28,
+          0.35,
+          0.31
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "were",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 5,
+          "original": "is",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "are",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.36,
+          0.35,
+          0.39
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "are",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 6,
+          "original": "have",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "has",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.44,
+          0.35,
+          0.47
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "has",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 7,
+          "original": "do",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "does",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.52,
+          0.35,
+          0.55
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "does",
+        "position": null
+      }
+    },
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 8,
+          "original": "has",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "have",
+      "guidance": null,
+      "reason": "원문의 오류를 해당 부분만 수정하는 제안입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.2,
+          0.6,
+          0.35,
+          0.63
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "have",
+        "position": null
+      }
+    },
+    {
+      "action": "REVIEW",
+      "feedback_type": null,
+      "area": null,
+      "issue_kinds": [
+        "image_problem"
+      ],
+      "anchors": [],
+      "replacement": null,
+      "guidance": null,
+      "reason": "사진 하단이 잘려 추가 글이 있는지 확인이 필요합니다.",
+      "location_uncertain": true,
+      "target_boxes": [],
+      "revision_scope": null,
+      "edit": null
+    }
+  ]
+}

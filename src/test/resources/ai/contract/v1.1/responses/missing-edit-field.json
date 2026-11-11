@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "dog",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "a dog",
+      "guidance": null,
+      "reason": "단수 가산명사 dog 앞에 관사 a가 필요합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.3,
+          0.2,
+          0.36,
+          0.23
+        ]
+      ],
+      "revision_scope": "WORD"
+    }
+  ]
+}

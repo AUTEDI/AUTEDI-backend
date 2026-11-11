@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "action": "GUIDANCE",
+      "feedback_type": "CORRECTION",
+      "area": "CONTENT_SUMMARY",
+      "issue_kinds": [
+        "content"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "because",
+          "occurrence": 1
+        }
+      ],
+      "replacement": null,
+      "guidance": "Explain why you prefer this option.",
+      "reason": "because 뒤에 이유가 빠져 의도한 설명을 완성하려면 이유를 직접 보충해야 합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.85,
+          0.24
+        ]
+      ],
+      "revision_scope": null,
+      "edit": null
+    }
+  ]
+}

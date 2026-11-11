@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "action": "GUIDANCE",
+      "feedback_type": "SUGGESTION",
+      "area": "CONTENT_SUMMARY",
+      "issue_kinds": [
+        "content"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "Volunteering is good for students.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": null,
+      "guidance": "Explain clearly how volunteering helps students develop useful practical skills today.",
+      "reason": "원문은 올바르며 구체적인 이유를 직접 보충하면 좋은 선택적 개선입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.85,
+          0.24
+        ]
+      ],
+      "revision_scope": null,
+      "edit": null
+    }
+  ]
+}
