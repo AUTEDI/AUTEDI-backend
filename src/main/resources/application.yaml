@@ -35,6 +35,9 @@ app:
       endpoint: ${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}
       from: ${MAIL_HTTP_FROM:onboarding@resend.dev}
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  qr:
+    base-url: ${QR_BASE_URL:${FRONTEND_URL:http://localhost:3000}}
+    expiration-minutes: ${QR_EXPIRATION_MINUTES:3}
   storage:
     type: ${STORAGE_TYPE:s3}
 

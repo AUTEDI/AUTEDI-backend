@@ -56,5 +56,8 @@ jwt:
   refresh-token-expiration-days: ${JWT_REFRESH_EXPIRATION_DAYS:14}
 
 app:
+  qr:
+    base-url: http://localhost:3000
+    expiration-minutes: 3
   storage:
     type: ${STORAGE_TYPE:local}
