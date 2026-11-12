@@ -29,6 +29,7 @@ import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.service.WorksheetService;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
+import com.ceos24.autedi.global.sse.SseEventPublisher;
 import com.ceos24.autedi.global.storage.LocalStorageService;
 import com.ceos24.autedi.support.FakeResponsesServer;
 import com.ceos24.autedi.support.TestWorksheetImages;
@@ -135,6 +136,9 @@ class FixedResponseReviewApiTest {
 
     @MockitoSpyBean
     FixedResponseGenerationService fixed;
+
+    @MockitoSpyBean
+    SseEventPublisher sse;
 
     @Autowired
     GenerationWorkStore workStore;
@@ -554,6 +558,86 @@ class FixedResponseReviewApiTest {
                 result(get(base() + "/generations/" + failed.get("id").longValue()))
                         .get("status")
                         .asString());
+    }
+
+    @Test
+    void successPublishesStartedProgressAndSucceededToTheOwnerOnly() throws Exception {
+        JsonNode done = generate("event-success");
+        long id = done.get("id").longValue();
+        Map<String, Object> ids = Map.of("worksheetId", worksheetId, "generationId", id);
+        Long otherUserId = jdbc.queryForObject("select id from users where id <> ?", Long.class, userId);
+
+        verify(sse, timeout(5000)).publish(eq(userId), eq("generation.started"), eq(ids));
+        verify(sse, timeout(5000))
+                .publish(
+                        eq(userId),
+                        eq("generation.progress"),
+                        eq(Map.of("worksheetId", worksheetId, "generationId", id, "stage", "AI_CORRECTION")));
+        verify(sse, timeout(5000)).publish(eq(userId), eq("generation.succeeded"), eq(ids));
+        verify(sse, never()).publish(eq(otherUserId), any(), any());
+        verify(sse, never()).publish(any(), eq("generation.failed"), any());
+    }
+
+    @Test
+    void failurePublishesFailedWithErrorCodeAndRetryableAndNoSuccess() throws Exception {
+        ReflectionTestUtils.setField(fixed, "failAt", "OCR");
+        long id = generate("event-failure").get("id").longValue();
+
+        verify(sse, timeout(5000)).publish(eq(userId), eq("generation.started"), any());
+        verify(sse, timeout(5000))
+                .publish(
+                        eq(userId),
+                        eq("generation.failed"),
+                        eq(Map.of(
+                                "worksheetId",
+                                worksheetId,
+                                "generationId",
+                                id,
+                                "errorCode",
+                                "OCR_FAILED",
+                                "retryable",
+                                true)));
+        verify(sse, never()).publish(any(), eq("generation.succeeded"), any());
+        verify(sse, never()).publish(any(), eq("generation.progress"), any());
+    }
+
+    @Test
+    void retryAfterCorrectionFailureStillPublishesProgressWhenTranscriptionIsReused() throws Exception {
+        ReflectionTestUtils.setField(fixed, "failAt", "AI_CORRECTION");
+        JsonNode failed = generate("event-reuse-failed");
+        ReflectionTestUtils.setField(fixed, "failAt", "NONE");
+        JsonNode accepted = body(
+                mvc.perform(post(base() + "/generations/" + failed.get("id").longValue() + "/retry")
+                                .header(HttpHeaders.AUTHORIZATION, bearer)
+                                .header("Idempotency-Key", "event-reuse-retry"))
+                        .andExpect(status().isAccepted())
+                        .andReturn());
+        long retryId = accepted.get("id").longValue();
+        awaitTerminal(retryId);
+
+        verify(sse, timeout(5000))
+                .publish(
+                        eq(userId),
+                        eq("generation.progress"),
+                        eq(Map.of("worksheetId", worksheetId, "generationId", retryId, "stage", "AI_CORRECTION")));
+        verify(sse, timeout(5000))
+                .publish(
+                        eq(userId),
+                        eq("generation.succeeded"),
+                        eq(Map.of("worksheetId", worksheetId, "generationId", retryId)));
+    }
+
+    @Test
+    void sseDeliveryFailureDoesNotChangeTheGenerationOutcome() throws Exception {
+        doThrow(new IllegalStateException("sse down")).when(sse).publish(any(), any(), any());
+
+        JsonNode done = generate("event-sse-down");
+
+        assertEquals("SUCCEEDED", done.get("status").asString());
+        assertEquals(
+                WorksheetStatus.READY,
+                worksheets.findById(worksheetId).orElseThrow().getStatus());
+        verify(sse, timeout(5000)).publish(eq(userId), eq("generation.succeeded"), any());
     }
 
     @Test

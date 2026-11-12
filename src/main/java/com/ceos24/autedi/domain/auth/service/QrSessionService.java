@@ -130,7 +130,7 @@ public class QrSessionService {
 
         User managed = userRepository.findById(user.getId()).orElseThrow();
         managed.updateLastLoginAt(now);
-        return authService.issueTokens(managed);
+        return authService.issueTokens(managed, session.getSessionId());
     }
 
     @Transactional

@@ -12,6 +12,9 @@ import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
 import com.ceos24.autedi.domain.generation.entity.GenerationStage;
 import com.ceos24.autedi.domain.generation.entity.GenerationStatus;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
+import com.ceos24.autedi.domain.generation.event.GenerationFinished;
+import com.ceos24.autedi.domain.generation.event.GenerationProgressed;
+import com.ceos24.autedi.domain.generation.event.GenerationStarted;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
@@ -26,11 +29,14 @@ import com.ceos24.autedi.domain.worksheet.service.PreparedWorksheetImage;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 단계별 짧은 트랜잭션. 이 클래스 안에서는 클라이언트를 호출하지 않는다. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -41,6 +47,7 @@ public class GenerationWorkStore {
     private final CorrectionRepository corrections;
     private final GenerationResultStorageService archives;
     private final GenerationTranscriptionReuse transcriptionReuse;
+    private final ApplicationEventPublisher events;
 
     public record Work(
             Long id,
@@ -62,6 +69,7 @@ public class GenerationWorkStore {
             return null;
         }
         job.start();
+        publishQuietly(new GenerationStarted(ownerId(job), job.getWorksheet().getId(), job.getId()));
         return new Work(
                 id,
                 job.getWorksheet().getAcademy().getId(),
@@ -77,6 +85,7 @@ public class GenerationWorkStore {
         Long id = archives.recordTranscription(
                 work.academyId(), work.id(), image, lines, GenerationClientProfiles.model(work.mode()));
         job.useTranscription(id);
+        publishProgress(job);
         return archives.restoreTranscription(work.academyId(), id);
     }
 
@@ -85,7 +94,10 @@ public class GenerationWorkStore {
         WorksheetGeneration job = running(work.id(), GenerationStage.OCR);
         if (job == null) return null;
         var saved = transcriptionReuse.resolve(job, work.mode(), job.getInputTranscriptionId(), image);
-        if (saved != null) job.useTranscription(saved.id());
+        if (saved != null) {
+            job.useTranscription(saved.id());
+            publishProgress(job);
+        }
         return new TranscriptionInput(saved);
     }
 
@@ -205,11 +217,33 @@ public class GenerationWorkStore {
                 .forEach(Correction::delete);
         job.succeed();
         job.getWorksheet().updateStatus(WorksheetStatus.READY);
+        publishQuietly(
+                GenerationFinished.success(ownerId(job), job.getWorksheet().getId(), job.getId()));
     }
 
     private void failJob(WorksheetGeneration job, String code, String message, boolean retryable) {
         job.fail(code, message, retryable);
         if (current(job) && job.getWorksheet().getStatus() == WorksheetStatus.PROCESSING)
             job.getWorksheet().updateStatus(WorksheetStatus.FAILED);
+        publishQuietly(
+                GenerationFinished.failure(ownerId(job), job.getWorksheet().getId(), job.getId(), code, retryable));
+    }
+
+    private void publishProgress(WorksheetGeneration job) {
+        publishQuietly(
+                new GenerationProgressed(ownerId(job), job.getWorksheet().getId(), job.getId(), job.getCurrentStage()));
+    }
+
+    private static Long ownerId(WorksheetGeneration job) {
+        return job.getWorksheet().getUser().getId();
+    }
+
+    /** 알림 발행 실패가 첨삭 작업의 상태 전이와 커밋에 영향을 주지 않도록 삼킨다. */
+    private void publishQuietly(Object event) {
+        try {
+            events.publishEvent(event);
+        } catch (RuntimeException e) {
+            log.warn("생성 이벤트 발행 실패: event={}", event.getClass().getSimpleName());
+        }
     }
 }

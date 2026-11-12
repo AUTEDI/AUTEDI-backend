@@ -33,6 +33,30 @@ public class EventController {
     @Operation(
             summary = "SSE 구독 (인증)",
             description = "Authorization: Bearer 헤더로 연결합니다. 액세스 토큰 만료 시각이 지나면 서버가 연결을 닫습니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description =
+                        "text/event-stream. 형식: id/event/data({eventId, occurredAt, ...payload}). 이벤트: qr.scanned, worksheet.created, worksheet.file_replaced, generation.started, generation.progress, generation.succeeded, generation.failed. 25초마다 ': ping' 주석, 토큰 만료 시 서버가 연결을 닫음.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "text/event-stream",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "event: generation.failed\ndata: {\"eventId\":\"e1\",\"occurredAt\":\"2026-11-11T14:31:02\",\"worksheetId\":12,\"generationId\":34,\"errorCode\":\"OCR_FAILED\",\"retryable\":true}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}")))
+    })
     @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> subscribe(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
