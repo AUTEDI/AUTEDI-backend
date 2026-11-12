@@ -252,17 +252,16 @@ public class WorksheetService {
     }
 
     /**
-     * QR 로그인 토큰이면 연결된 QR 세션을 반환한다. 일반 토큰(null)이거나 세션이 이미 정리되었으면 null이다.
-     * 세션 소유자와 토큰 사용자가 다르면 거부한다.
+     * QR 로그인 토큰이면 연결된 QR 세션을 반환한다. 일반 토큰(null)이면 null이다. QR 표시가 있는데 세션 행이 이미 정리됐다면 일반 요청으로
+     * 취급하지 않고 QR_002로 거절해 QR을 다시 찍게 한다. 세션 소유자와 토큰 사용자가 다르면 거부한다.
      */
     private QrSession resolveQrTarget(String qrSessionId, Long userId) {
         if (qrSessionId == null) {
             return null;
         }
-        QrSession qr = qrSessionRepository.findBySessionId(qrSessionId).orElse(null);
-        if (qr == null) {
-            return null;
-        }
+        QrSession qr = qrSessionRepository
+                .findBySessionId(qrSessionId)
+                .orElseThrow(() -> new CustomException(ErrorCode.QR_SESSION_EXPIRED));
         if (userId != null && !qr.isOwnedBy(userId)) {
             throw new CustomException(ErrorCode.QR_TARGET_MISMATCH);
         }

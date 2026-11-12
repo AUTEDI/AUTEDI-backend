@@ -260,8 +260,8 @@ class WorksheetQrUploadEventTest {
     }
 
     @Test
-    @DisplayName("QR 로그인 refresh 토큰은 세션이 유효하면 QR 표시를 이어가고, 만료되면 일반 토큰이 된다")
-    void refreshCarriesQrSessionOnlyWhileValid() {
+    @DisplayName("QR 로그인 refresh 토큰은 QR 세션이 만료돼도 토큰 갱신 때마다 QR 표시를 그대로 이어간다")
+    void refreshKeepsQrSessionEvenAfterExpiry() {
         QrSession session = saveSession(owner.getId(), null);
         String raw = TokenHashUtil.generateRawToken();
         saveRefresh(raw, session.getSessionId());
@@ -276,9 +276,39 @@ class WorksheetQrUploadEventTest {
         qrSessionRepository.flush();
 
         var second = authService.refresh(new TokenRefreshRequest(first.refreshToken()));
-        assertThat(principalOf(second.accessToken()).qrSessionId()).isNull();
+        assertThat(principalOf(second.accessToken()).qrSessionId()).isEqualTo(session.getSessionId());
         var third = authService.refresh(new TokenRefreshRequest(second.refreshToken()));
-        assertThat(principalOf(third.accessToken()).qrSessionId()).isNull();
+        assertThat(principalOf(third.accessToken()).qrSessionId()).isEqualTo(session.getSessionId());
+    }
+
+    @Test
+    @DisplayName("일반 로그인 refresh 토큰은 갱신 후에도 일반 토큰이다")
+    void refreshKeepsPlainTokenPlain() {
+        String raw = TokenHashUtil.generateRawToken();
+        saveRefresh(raw, null);
+
+        var refreshed = authService.refresh(new TokenRefreshRequest(raw));
+
+        assertThat(principalOf(refreshed.accessToken()).qrSessionId()).isNull();
+    }
+
+    @Test
+    @DisplayName("QR 세션 행이 삭제된 뒤 QR 토큰의 업로드와 파일 교체는 QR_002(410)로 명시적으로 거절된다")
+    void deletedSessionRejectsUploadExplicitly() throws Exception {
+        long existing = idOf(upload("/api/v1/worksheets", plainToken(owner), "files", 201));
+        QrSession session = saveSession(owner.getId(), existing);
+        String token = qrToken(owner, session);
+        qrSessionRepository.deleteAll();
+
+        String createBody = upload("/api/v1/worksheets", token, "files", 410);
+        String replaceBody = upload("/api/v1/worksheets/" + existing + "/file", token, "file", 410, true);
+
+        assertThat(createBody).contains("QR_002");
+        assertThat(replaceBody).contains("QR_002");
+        assertThat(worksheetRepository.count()).isEqualTo(1);
+
+        // 일반 토큰은 영향이 없다
+        upload("/api/v1/worksheets", plainToken(owner), "files", 201);
     }
 
     // ---------- helpers ----------

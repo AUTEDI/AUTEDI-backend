@@ -6,7 +6,6 @@ import com.ceos24.autedi.domain.auth.dto.request.TokenRefreshRequest;
 import com.ceos24.autedi.domain.auth.dto.response.LoginResponse;
 import com.ceos24.autedi.domain.auth.dto.response.TokenRefreshResponse;
 import com.ceos24.autedi.domain.auth.entity.RefreshToken;
-import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.auth.repository.RefreshTokenRepository;
 import com.ceos24.autedi.domain.user.dto.response.UserResponse;
 import com.ceos24.autedi.domain.user.entity.User;
@@ -31,7 +30,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final QrSessionRepository qrSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -112,8 +110,9 @@ public class AuthService {
         // Refresh Token Rotation: 기존 토큰 폐기 및 새 토큰 발급
         token.revoke(now);
 
-        // QR 세션이 아직 유효할 때만 QR 표시를 이어간다. 만료되었거나 삭제되었으면 일반 토큰이 된다.
-        String qrSessionId = carriedQrSessionId(token, now);
+        // QR 표시는 QR 세션 만료와 상관없이 그대로 이어간다. 표시를 버리면 폰이 조용히 일반 토큰이 되어 업로드가 데스크톱과
+        // 연동되지 않는다. 세션 행이 이미 삭제됐다면 업로드 시점에 QR_002로 명시적으로 거절된다(WorksheetService.resolveQrTarget).
+        String qrSessionId = token.getQrSessionId();
 
         String newRawRefreshToken = TokenHashUtil.generateRawToken();
         String newTokenHash = TokenHashUtil.hashToken(newRawRefreshToken);
@@ -134,17 +133,6 @@ public class AuthService {
                 qrSessionId);
 
         return new TokenRefreshResponse(newAccessToken, newRawRefreshToken);
-    }
-
-    private String carriedQrSessionId(RefreshToken token, LocalDateTime now) {
-        if (token.getQrSessionId() == null) {
-            return null;
-        }
-        return qrSessionRepository
-                .findBySessionId(token.getQrSessionId())
-                .filter(s -> !s.isExpired(now))
-                .map(s -> s.getSessionId())
-                .orElse(null);
     }
 
     @Transactional
