@@ -4,6 +4,7 @@ import com.ceos24.autedi.global.security.CustomAccessDeniedHandler;
 import com.ceos24.autedi.global.security.CustomAuthenticationEntryPoint;
 import com.ceos24.autedi.global.security.JwtAuthenticationFilter;
 import com.ceos24.autedi.global.security.QrRateLimitFilter;
+import jakarta.servlet.DispatcherType;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -129,7 +130,13 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDeniedHandler))
-                .authorizeHttpRequests(auth -> auth.requestMatchers(
+                .authorizeHttpRequests(auth -> auth
+                        // SSE 등 비동기 응답은 연결 종료 시 ASYNC 디스패치로 한 번 더 필터 체인을 지난다.
+                        // 이 시점에는 JWT 필터가 실행되지 않아(OncePerRequestFilter 기본 동작) 인증 정보가 없으므로
+                        // 인가 검사를 건너뛴다. 최초 요청(REQUEST 디스패치)의 인증은 그대로 검사된다.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR)
+                        .permitAll()
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/auth/qr-sessions/scan",
                                 "/api/v1/auth/qr-sessions/status",
