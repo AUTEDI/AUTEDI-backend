@@ -6,6 +6,7 @@ import com.ceos24.autedi.domain.auth.dto.response.QrSessionCreateResponse;
 import com.ceos24.autedi.domain.auth.dto.response.QrSessionStatusResponse;
 import com.ceos24.autedi.domain.auth.entity.QrSession;
 import com.ceos24.autedi.domain.auth.entity.QrSessionStatus;
+import com.ceos24.autedi.domain.auth.event.QrSessionLinked;
 import com.ceos24.autedi.domain.auth.event.QrSessionScanned;
 import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.user.entity.User;
@@ -89,6 +90,42 @@ public class QrSessionService {
                 .findByQrToken(qrToken)
                 .orElseThrow(() -> new CustomException(ErrorCode.QR_SESSION_NOT_FOUND));
         eventPublisher.publishEvent(new QrSessionScanned(session.getUserId(), session.getSessionId(), deviceInfo));
+    }
+
+    /**
+     * 이미 로그인된 폰이 승인 없이 QR 세션에 연결한다. 토큰의 사용자와 세션 사용자가 같을 때만 PENDING에서 바로 COMPLETED로 전환하고 새
+     * qrSessionId가 담긴 토큰을 발급한다. 모든 사용자 검증은 상태 변경 UPDATE 전에 끝낸다.
+     */
+    @Transactional(noRollbackFor = CustomException.class)
+    public LoginResponse link(Long userId, String qrToken, String deviceInfo) {
+        QrSession session = qrSessionRepository
+                .findByQrToken(qrToken)
+                .orElseThrow(() -> new CustomException(ErrorCode.QR_SESSION_NOT_FOUND));
+        LocalDateTime now = LocalDateTime.now();
+        if (session.getStatus() != QrSessionStatus.PENDING || session.isExpired(now)) {
+            throw failure(session, now);
+        }
+        if (!session.isOwnedBy(userId)) {
+            throw new CustomException(ErrorCode.QR_USER_MISMATCH);
+        }
+
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        if (!user.isActive()) {
+            throw new CustomException(ErrorCode.USER_INACTIVE);
+        }
+
+        // 동시 요청 중 단 하나만 영향 행 1을 얻는다. 이후에는 CustomException을 던지지 않는다.
+        int claimed = qrSessionRepository.transitionByQrTokenAndUser(
+                qrToken, userId, QrSessionStatus.PENDING, QrSessionStatus.COMPLETED, now);
+        if (claimed == 0) {
+            throw failureByQrToken(qrToken);
+        }
+
+        User managed = userRepository.findById(userId).orElseThrow();
+        managed.updateLastLoginAt(now);
+        LoginResponse response = authService.issueTokens(managed, session.getSessionId());
+        eventPublisher.publishEvent(new QrSessionLinked(userId, session.getSessionId(), deviceInfo));
+        return response;
     }
 
     @Transactional(noRollbackFor = CustomException.class)

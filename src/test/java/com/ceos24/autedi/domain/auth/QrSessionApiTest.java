@@ -11,6 +11,7 @@ import com.ceos24.autedi.domain.academy.entity.SubscriptionStatus;
 import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
 import com.ceos24.autedi.domain.auth.entity.QrSession;
 import com.ceos24.autedi.domain.auth.entity.QrSessionStatus;
+import com.ceos24.autedi.domain.auth.event.QrSessionLinked;
 import com.ceos24.autedi.domain.auth.event.QrSessionScanned;
 import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.auth.repository.RefreshTokenRepository;
@@ -448,6 +449,172 @@ class QrSessionApiTest {
         assertThat(refreshTokenRepository.count()).isZero();
     }
 
+    // ---------- link ----------
+
+    @Test
+    @DisplayName("link: 인증 없이 호출하면 401")
+    void link_unauthenticated_401() throws Exception {
+        QrSession s = saveSession(QrSessionStatus.PENDING, LocalDateTime.now().plusMinutes(3));
+
+        mockMvc.perform(post(BASE + "/link")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tokenBody(s.getQrToken())))
+                .andExpect(status().isUnauthorized());
+        assertThat(reload(s).getStatus()).isEqualTo(QrSessionStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("link: 같은 사용자는 승인 없이 성공, /token과 같은 응답 형식, 새 토큰에 새 qrSessionId, qr.linked 발행")
+    void link_sameUser_ok() throws Exception {
+        QrSession s = saveSession(QrSessionStatus.PENDING, LocalDateTime.now().plusMinutes(3));
+
+        ResultActions result = linkRequest(bearer(owner), s.getQrToken(), "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.result.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.result.user.userId").value(owner.getId()))
+                .andExpect(jsonPath("$.result.user.email").value(owner.getEmail()))
+                .andExpect(jsonPath("$.result.user.academyId").value(academy.getId()));
+
+        // /token과 같은 응답 구조(result 키 집합)
+        QrSession approvedSession = qrSessionRepository.save(approved(owner.getId()));
+        JsonNode tokenResult = json(postToken("/token", approvedSession.getQrToken())
+                        .andExpect(status().isOk()))
+                .at("/result");
+        JsonNode linkResult = json(result).at("/result");
+        assertThat(fieldNames(linkResult)).isEqualTo(fieldNames(tokenResult));
+        assertThat(fieldNames(linkResult.get("user"))).isEqualTo(fieldNames(tokenResult.get("user")));
+
+        // 새 액세스 토큰과 리프레시 토큰에 새 qrSessionId
+        String accessToken = linkResult.get("accessToken").asText();
+        var principal = (com.ceos24.autedi.global.security.CustomUserPrincipal)
+                jwtTokenProvider.getAuthentication(accessToken).getPrincipal();
+        assertThat(principal.qrSessionId()).isEqualTo(s.getSessionId());
+        String tokenHash =
+                TokenHashUtil.hashToken(linkResult.get("refreshToken").asText());
+        assertThat(refreshTokenRepository
+                        .findByTokenHash(tokenHash)
+                        .orElseThrow()
+                        .getQrSessionId())
+                .isEqualTo(s.getSessionId());
+
+        assertThat(reload(s).getStatus()).isEqualTo(QrSessionStatus.COMPLETED);
+        postToken("/token", s.getQrToken()).andExpect(status().isConflict());
+
+        var linked = events.stream(QrSessionLinked.class).toList();
+        assertThat(linked).hasSize(1);
+        assertThat(linked.get(0).userId()).isEqualTo(owner.getId());
+        assertThat(linked.get(0).sessionId()).isEqualTo(s.getSessionId());
+        assertThat(linked.get(0).deviceInfo()).isEqualTo("iPhone");
+        assertThat(linked.get(0).toString()).doesNotContain(s.getQrToken()).doesNotContain(accessToken);
+    }
+
+    @Test
+    @DisplayName("link: 다른 사용자는 QR_005(403)로 거절되고 세션은 PENDING 그대로여서 정상 흐름이 계속된다")
+    void link_otherUser_rejected() throws Exception {
+        QrSession s = saveSession(QrSessionStatus.PENDING, LocalDateTime.now().plusMinutes(3));
+        long tokensBefore = refreshTokenRepository.count();
+
+        linkRequest(bearer(other), s.getQrToken(), null)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("QR_005"));
+
+        assertThat(reload(s).getStatus()).isEqualTo(QrSessionStatus.PENDING);
+        assertThat(refreshTokenRepository.count()).isEqualTo(tokensBefore);
+        assertThat(events.stream(QrSessionLinked.class).count()).isZero();
+
+        // 정상 흐름: scan → approve → token
+        postToken("/scan", s.getQrToken()).andExpect(status().isOk());
+        mockMvc.perform(post(BASE + "/" + s.getSessionId() + "/approve")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner)))
+                .andExpect(status().isOk());
+        postToken("/token", s.getQrToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("link: 없는 qrToken은 404, 만료는 410(EXPIRED 전환), 이미 사용/스캔된 세션은 409")
+    void link_invalidSessions() throws Exception {
+        linkRequest(bearer(owner), "no-such-token", null)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("QR_001"));
+
+        QrSession expired =
+                saveSession(QrSessionStatus.PENDING, LocalDateTime.now().minusSeconds(1));
+        linkRequest(bearer(owner), expired.getQrToken(), null)
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("QR_002"));
+        assertThat(reload(expired).getStatus()).isEqualTo(QrSessionStatus.EXPIRED);
+
+        for (QrSessionStatus used : new QrSessionStatus[] {
+            QrSessionStatus.SCANNED, QrSessionStatus.APPROVED, QrSessionStatus.COMPLETED, QrSessionStatus.REJECTED
+        }) {
+            QrSession s = saveSession(used, LocalDateTime.now().plusMinutes(3));
+            linkRequest(bearer(owner), s.getQrToken(), null)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("QR_003"));
+            assertThat(reload(s).getStatus()).isEqualTo(used);
+        }
+        assertThat(refreshTokenRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("link: 같은 QR을 두 번 link하면 두 번째는 409")
+    void link_twice() throws Exception {
+        QrSession s = saveSession(QrSessionStatus.PENDING, LocalDateTime.now().plusMinutes(3));
+
+        linkRequest(bearer(owner), s.getQrToken(), null).andExpect(status().isOk());
+        linkRequest(bearer(owner), s.getQrToken(), null).andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("동시 link: 성공은 정확히 1건, refresh token 행도 1개, 이벤트도 1건")
+    void concurrentLink() throws Exception {
+        QrSession s = saveSession(QrSessionStatus.PENDING, LocalDateTime.now().plusMinutes(3));
+        long before = refreshTokenRepository.count();
+
+        int success = runConcurrently(8, () -> qrSessionService.link(owner.getId(), s.getQrToken(), "iPhone"));
+
+        assertThat(success).isEqualTo(1);
+        assertThat(refreshTokenRepository.count()).isEqualTo(before + 1);
+        assertThat(reload(s).getStatus()).isEqualTo(QrSessionStatus.COMPLETED);
+        assertThat(events.stream(QrSessionLinked.class).count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("link와 scan이 동시에 와도 PENDING 전이를 가져간 쪽 하나만 성공한다")
+    void concurrentLinkAndScan() throws Exception {
+        QrSession s = saveSession(QrSessionStatus.PENDING, LocalDateTime.now().plusMinutes(3));
+
+        AtomicInteger counter = new AtomicInteger();
+        int success = runConcurrently(8, () -> {
+            if (counter.getAndIncrement() % 2 == 0) {
+                qrSessionService.link(owner.getId(), s.getQrToken(), "iPhone");
+            } else {
+                qrSessionService.scan(s.getQrToken(), "iPhone");
+            }
+        });
+
+        assertThat(success).isEqualTo(1);
+        assertThat(reload(s).getStatus()).isIn(QrSessionStatus.COMPLETED, QrSessionStatus.SCANNED);
+    }
+
+    @Test
+    @DisplayName("link: 비활성 사용자는 거절되고 세션은 PENDING으로 남는다")
+    void link_inactiveUser() throws Exception {
+        User locked = newUser("locked", UserStatus.LOCKED);
+        QrSession s = qrSessionRepository.save(QrSession.builder()
+                .sessionId(UUID.randomUUID().toString())
+                .qrToken(TokenHashUtil.generateRawToken())
+                .userId(locked.getId())
+                .expiresAt(LocalDateTime.now().plusMinutes(3))
+                .build());
+
+        linkRequest(bearer(locked), s.getQrToken(), null).andExpect(status().isForbidden());
+
+        assertThat(reload(s).getStatus()).isEqualTo(QrSessionStatus.PENDING);
+        assertThat(refreshTokenRepository.count()).isZero();
+    }
+
     // ---------- 기존 로그인 호환 ----------
 
     @Test
@@ -522,8 +689,13 @@ class QrSessionApiTest {
                 s.scan();
                 s.approve();
             }
+            case COMPLETED -> {
+                s.scan();
+                s.approve();
+                s.complete();
+            }
+            case REJECTED -> s.reject();
             case EXPIRED -> s.expire();
-            default -> throw new IllegalArgumentException(target.name());
         }
         return qrSessionRepository.save(s);
     }
@@ -559,6 +731,24 @@ class QrSessionApiTest {
                         academy.getId(),
                         user.getEmail(),
                         user.getRole().name());
+    }
+
+    private ResultActions linkRequest(String authorization, String qrToken, String userAgent) throws Exception {
+        var request = post(BASE + "/link")
+                .header(HttpHeaders.AUTHORIZATION, authorization)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(tokenBody(qrToken));
+        if (userAgent != null) {
+            request.header(HttpHeaders.USER_AGENT, userAgent);
+        }
+        return mockMvc.perform(request);
+    }
+
+    private java.util.List<String> fieldNames(JsonNode node) {
+        var names = new java.util.ArrayList<String>();
+        node.fieldNames().forEachRemaining(names::add);
+        java.util.Collections.sort(names);
+        return names;
     }
 
     private String tokenBody(String qrToken) {

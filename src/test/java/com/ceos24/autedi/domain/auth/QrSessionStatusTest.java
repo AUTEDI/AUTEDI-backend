@@ -49,13 +49,22 @@ class QrSessionStatusTest {
     }
 
     @Test
-    @DisplayName("건너뛰기 전이 거부: PENDING→APPROVED, PENDING→COMPLETED, SCANNED→COMPLETED")
+    @DisplayName("건너뛰기 전이 거부: PENDING→APPROVED, SCANNED→COMPLETED (PENDING→COMPLETED는 link 경로로만 허용)")
     void skipRejected() {
         assertThatThrownBy(() -> newSession().approve()).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> newSession().complete()).isInstanceOf(IllegalStateException.class);
         QrSession s = newSession();
         s.scan();
         assertThatThrownBy(s::complete).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("link 경로: PENDING→COMPLETED 직접 전이 허용")
+    void pendingToCompletedAllowedForLink() {
+        assertThat(QrSessionStatus.PENDING.canTransitionTo(QrSessionStatus.COMPLETED))
+                .isTrue();
+        QrSession s = newSession();
+        s.complete();
+        assertThat(s.getStatus()).isEqualTo(QrSessionStatus.COMPLETED);
     }
 
     @Test

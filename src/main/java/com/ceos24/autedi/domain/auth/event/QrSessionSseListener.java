@@ -18,6 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class QrSessionSseListener {
 
     public static final String EVENT_QR_SCANNED = "qr.scanned";
+    public static final String EVENT_QR_LINKED = "qr.linked";
 
     private final SseEventPublisher publisher;
 
@@ -28,5 +29,14 @@ public class QrSessionSseListener {
         payload.put("sessionId", event.sessionId());
         payload.put("deviceInfo", event.deviceInfo());
         publisher.publish(event.userId(), EVENT_QR_SCANNED, payload);
+    }
+
+    @Async("sseExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onLinked(QrSessionLinked event) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sessionId", event.sessionId());
+        payload.put("deviceInfo", event.deviceInfo());
+        publisher.publish(event.userId(), EVENT_QR_LINKED, payload);
     }
 }

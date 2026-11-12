@@ -24,7 +24,8 @@ import org.springframework.web.context.WebApplicationContext;
         properties = {
             "app.qr.rate-limit.scan-per-minute=3",
             "app.qr.rate-limit.token-per-minute=2",
-            "app.qr.rate-limit.status-per-minute=5"
+            "app.qr.rate-limit.status-per-minute=5",
+            "app.qr.rate-limit.link-per-minute=2"
         })
 class QrRateLimitTest {
 
@@ -93,5 +94,16 @@ class QrRateLimitTest {
         for (int i = 0; i < 10; i++) {
             mockMvc.perform(post(BASE)).andExpect(status().isUnauthorized());
         }
+    }
+
+    @Test
+    @DisplayName("link도 scan과 같은 방식으로 rate limit이 적용된다 (한도 이내는 인증 오류 401, 초과 시 429)")
+    void linkIsLimited() throws Exception {
+        for (int i = 0; i < 2; i++) {
+            assertThat(call("/link", "10.0.0.9")).isEqualTo(401);
+        }
+        assertThat(call("/link", "10.0.0.9")).isEqualTo(429);
+        // 다른 IP는 독립 버킷
+        assertThat(call("/link", "10.0.0.10")).isEqualTo(401);
     }
 }

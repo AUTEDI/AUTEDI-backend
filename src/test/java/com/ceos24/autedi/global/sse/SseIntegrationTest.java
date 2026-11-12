@@ -69,6 +69,9 @@ class SseIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private com.ceos24.autedi.domain.auth.repository.RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     private AcademyRepository academyRepository;
 
     @Autowired
@@ -110,6 +113,7 @@ class SseIntegrationTest {
     void tearDown() {
         clients.forEach(SseClient::close);
         qrSessionRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
         academyRepository.deleteAll();
     }
@@ -143,6 +147,27 @@ class SseIntegrationTest {
         heartbeat.runOnce();
 
         await(() -> client.lines.contains(": ping"));
+    }
+
+    @Test
+    @DisplayName("QR link 후 qr.linked를 수신하고, payload에 qrToken과 토큰류는 포함되지 않는다")
+    void qrLinkedDelivered() throws Exception {
+        SseClient mine = connect(owner);
+        QrSession session = saveSession(owner.getId());
+
+        var response = qrSessionService.link(owner.getId(), session.getQrToken(), "iPhone");
+
+        await(() -> mine.lines.stream().anyMatch(l -> l.startsWith("event:")));
+        assertThat(mine.lines).contains("event:qr.linked");
+        String data = mine.lines.stream()
+                .filter(l -> l.startsWith("data:"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(data).contains("\"sessionId\":\"" + session.getSessionId() + "\"");
+        assertThat(data).contains("\"deviceInfo\":\"iPhone\"");
+        String all = String.join("\n", mine.lines);
+        assertThat(all).doesNotContain(session.getQrToken());
+        assertThat(all).doesNotContain(response.accessToken()).doesNotContain(response.refreshToken());
     }
 
     @Test

@@ -26,6 +26,17 @@ public interface QrSessionRepository extends JpaRepository<QrSession, Long> {
             @Param("to") QrSessionStatus to,
             @Param("now") LocalDateTime now);
 
+    /** 이미 로그인된 폰의 link 전이. 사용자 조건을 쿼리에 포함해 다른 사용자의 연결을 원자적으로 막는다. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE QrSession q SET q.status = :to "
+            + "WHERE q.qrToken = :qrToken AND q.userId = :userId AND q.status = :from AND q.expiresAt > :now")
+    int transitionByQrTokenAndUser(
+            @Param("qrToken") String qrToken,
+            @Param("userId") Long userId,
+            @Param("from") QrSessionStatus from,
+            @Param("to") QrSessionStatus to,
+            @Param("now") LocalDateTime now);
+
     /** 노트북 측 전이(approve, reject). 소유자 조건을 쿼리에 포함한다. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE QrSession q SET q.status = :to "

@@ -52,6 +52,9 @@ public class SecurityConfig {
     @Value("${app.qr.rate-limit.status-per-minute:90}")
     private int statusPerMinute;
 
+    @Value("${app.qr.rate-limit.link-per-minute:10}")
+    private int linkPerMinute;
+
     @Value("${app.qr.rate-limit.client-ip-header:}")
     private String clientIpHeader;
 
@@ -120,7 +123,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         // 서블릿 필터로 중복 등록되지 않도록 빈이 아니라 체인에서만 생성한다.
         QrRateLimitFilter qrRateLimitFilter = new QrRateLimitFilter(
-                qrRateLimitEnabled, scanPerMinute, tokenPerMinute, statusPerMinute, clientIpHeader);
+                qrRateLimitEnabled, scanPerMinute, tokenPerMinute, statusPerMinute, linkPerMinute, clientIpHeader);
 
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)

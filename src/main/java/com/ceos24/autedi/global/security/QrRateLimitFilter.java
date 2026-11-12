@@ -20,7 +20,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * QR 로그인 비인증 엔드포인트(scan, status, token)의 클라이언트 IP별 rate limit 필터.
+ * QR 로그인 qrToken 수신 엔드포인트(scan, status, token, link)의 클라이언트 IP별 rate limit 필터.
  *
  * <p>Bucket4j 토큰 버킷을 인메모리(Caffeine, 미사용 10분 후 제거)로 관리하는 단일 인스턴스용 구현이다. 요청 바디(qrToken)는 읽지 않으며 로그에도
  * 남기지 않는다.
@@ -38,13 +38,19 @@ public class QrRateLimitFilter extends OncePerRequestFilter {
             .build();
 
     public QrRateLimitFilter(
-            boolean enabled, int scanPerMinute, int tokenPerMinute, int statusPerMinute, String clientIpHeader) {
+            boolean enabled,
+            int scanPerMinute,
+            int tokenPerMinute,
+            int statusPerMinute,
+            int linkPerMinute,
+            String clientIpHeader) {
         this.enabled = enabled;
         this.clientIpHeader = clientIpHeader;
         this.limitsPerMinute = Map.of(
                 BASE + "/scan", scanPerMinute,
                 BASE + "/token", tokenPerMinute,
-                BASE + "/status", statusPerMinute);
+                BASE + "/status", statusPerMinute,
+                BASE + "/link", linkPerMinute);
     }
 
     @Override

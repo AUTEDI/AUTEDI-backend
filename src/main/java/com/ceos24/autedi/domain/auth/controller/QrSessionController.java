@@ -24,7 +24,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "01-1. Auth (QR 로그인)", description = "휴대폰 QR 로그인 세션 API. scan/status/token은 인증 없이 qrToken으로만 동작합니다.")
+@Tag(
+        name = "01-1. Auth (QR 로그인)",
+        description = "휴대폰 QR 로그인 세션 API. scan/status/token은 인증 없이 qrToken으로만 동작하고, link는 인증이 필요합니다.")
 @RestController
 @RequestMapping("/api/v1/auth/qr-sessions")
 @RequiredArgsConstructor
@@ -425,6 +427,111 @@ public class QrSessionController {
     public ResponseEntity<ApiResponse<LoginResponse>> token(@Valid @RequestBody QrTokenRequest request) {
         LoginResponse response = qrSessionService.issueToken(request.qrToken());
         return ResponseEntity.ok(ApiResponse.onSuccess("로그인에 성공했습니다.", response));
+    }
+
+    @Operation(
+            summary = "QR 연결 (인증, 같은 사용자만)",
+            description = "이미 로그인된 폰이 새 QR을 찍었을 때 승인 없이 연결합니다. PENDING → COMPLETED. "
+                    + "폰의 Bearer 액세스 토큰 사용자와 QR 세션 사용자가 같을 때만 성공하며, 다르면 QR_005로 거절됩니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description =
+                        "연결 성공. /token과 같은 LoginResponse를 반환하며 새 토큰에는 새 qrSessionId가 들어갑니다. 세션 소유자 노트북에 qr.linked 이벤트가 전송됩니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"QR 연결에 성공했습니다.\",\"result\":{\"accessToken\":\"eyJhbGciOi...\",\"refreshToken\":\"3f1c2b8e7a414f0e9c520d2b6a1e8f77\",\"user\":{\"userId\":45,\"email\":\"teacher@autedi.com\",\"name\":\"김선생\",\"role\":\"TEACHER\",\"academyId\":1,\"academyName\":\"에이플러스 학원\",\"subscriptionStatus\":\"ACTIVE\"}},\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "COMMON_001: qrToken 누락",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "COMMON_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"COMMON_001\",\"message\":\"요청 값이 올바르지 않습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "QR_005: 토큰의 사용자와 QR 세션의 사용자가 다름. 클라이언트는 scan → 데스크톱 승인 → token 흐름으로 전환합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_005",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_005\",\"message\":\"다른 계정으로 로그인된 기기입니다. 데스크톱 승인 방식으로 QR 로그인을 진행해 주세요.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "QR_001: 유효하지 않은 QR입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_001\",\"message\":\"유효하지 않은 QR입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "410",
+                description = "QR_002: 만료된 QR입니다. 새로 생성해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_002\",\"message\":\"만료된 QR입니다. 새로 생성해 주세요.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "QR_003: 이미 사용되었거나 처리할 수 없는 QR 상태입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_003",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_003\",\"message\":\"이미 사용되었거나 처리할 수 없는 QR 상태입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "429",
+                description = "COMMON_429: 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "COMMON_429",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"COMMON_429\",\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
+    })
+    @PostMapping("/link")
+    public ResponseEntity<ApiResponse<LoginResponse>> link(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestBody QrTokenRequest request,
+            @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.USER_AGENT, required = false)
+                    String userAgent) {
+        LoginResponse response =
+                qrSessionService.link(principal.userId(), request.qrToken(), resolveDeviceInfo(userAgent));
+        return ResponseEntity.ok(ApiResponse.onSuccess("QR 연결에 성공했습니다.", response));
     }
 
     private String resolveDeviceInfo(String userAgent) {
