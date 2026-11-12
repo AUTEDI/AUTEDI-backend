@@ -35,6 +35,29 @@ public class QrSessionController {
     @Operation(
             summary = "QR 세션 생성 (인증)",
             description = "노트북에서 호출합니다. sessionId, 만료 시각, QR 이미지(base64 data URI)를 반환합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description = "QR 세션 생성 성공",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"QR 세션이 생성되었습니다.\",\"result\":{\"sessionId\":\"3f1c2b8e-7a41-4f0e-9c52-0d2b6a1e8f77\",\"expiresAt\":\"2026-11-11T14:35:00\",\"qrImage\":\"data:image/png;base64,iVBORw0KGgo...\"},\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping
     public ResponseEntity<ApiResponse<QrSessionCreateResponse>> create(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -44,6 +67,62 @@ public class QrSessionController {
     }
 
     @Operation(summary = "QR 스캔 (비인증)", description = "휴대폰이 QR을 스캔했음을 알립니다. PENDING → SCANNED. 한 번만 성공합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "스캔 처리 성공. 세션 소유자 노트북에 qr.scanned 이벤트가 전송됩니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"성공적으로 처리되었습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "QR_001: 유효하지 않은 QR입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_001\",\"message\":\"유효하지 않은 QR입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "410",
+                description = "QR_002: 만료된 QR입니다. 새로 생성해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_002\",\"message\":\"만료된 QR입니다. 새로 생성해 주세요.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "QR_003: 이미 사용되었거나 처리할 수 없는 QR 상태입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_003",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_003\",\"message\":\"이미 사용되었거나 처리할 수 없는 QR 상태입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "429",
+                description = "COMMON_429: 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "COMMON_429",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"COMMON_429\",\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping("/scan")
     public ResponseEntity<ApiResponse<Void>> scan(
             @Valid @RequestBody QrTokenRequest request,
@@ -54,6 +133,73 @@ public class QrSessionController {
     }
 
     @Operation(summary = "로그인 허용 (인증, 세션 소유자만)", description = "SCANNED → APPROVED. 세션을 만든 사용자만 호출할 수 있습니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "처리 성공",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"성공적으로 처리되었습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "AUTH_002: 세션을 만든 사용자가 아님",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_002\",\"message\":\"접근 권한이 없습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "QR_001: 유효하지 않은 QR입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_001\",\"message\":\"유효하지 않은 QR입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "410",
+                description = "QR_002: 만료된 QR입니다. 새로 생성해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_002\",\"message\":\"만료된 QR입니다. 새로 생성해 주세요.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "QR_003: 이미 사용되었거나 처리할 수 없는 QR 상태입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_003",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_003\",\"message\":\"이미 사용되었거나 처리할 수 없는 QR 상태입니다.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping("/{sessionId}/approve")
     public ResponseEntity<ApiResponse<Void>> approve(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -63,6 +209,73 @@ public class QrSessionController {
     }
 
     @Operation(summary = "로그인 거절 (인증, 세션 소유자만)", description = "PENDING/SCANNED → REJECTED. 거절된 QR은 재사용할 수 없습니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "처리 성공",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"성공적으로 처리되었습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "AUTH_002: 세션을 만든 사용자가 아님",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_002\",\"message\":\"접근 권한이 없습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "QR_001: 유효하지 않은 QR입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_001\",\"message\":\"유효하지 않은 QR입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "410",
+                description = "QR_002: 만료된 QR입니다. 새로 생성해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_002\",\"message\":\"만료된 QR입니다. 새로 생성해 주세요.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "QR_003: 이미 사용되었거나 처리할 수 없는 QR 상태입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_003",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_003\",\"message\":\"이미 사용되었거나 처리할 수 없는 QR 상태입니다.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping("/{sessionId}/reject")
     public ResponseEntity<ApiResponse<Void>> reject(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -72,6 +285,40 @@ public class QrSessionController {
     }
 
     @Operation(summary = "QR 세션 상태 조회 - 폴링 (비인증)", description = "휴대폰이 1~2초 간격으로 호출합니다. qrToken은 body로 전달합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "현재 상태 (PENDING/SCANNED/APPROVED/COMPLETED/REJECTED/EXPIRED)",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                value =
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"성공적으로 처리되었습니다.\",\"result\":{\"status\":\"SCANNED\"},\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "QR_001: 유효하지 않은 QR입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_001\",\"message\":\"유효하지 않은 QR입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "429",
+                description = "COMMON_429: 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "COMMON_429",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"COMMON_429\",\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping("/status")
     public ResponseEntity<ApiResponse<QrSessionStatusResponse>> status(@Valid @RequestBody QrTokenRequest request) {
         return ResponseEntity.ok(ApiResponse.onSuccess(qrSessionService.getStatus(request.qrToken())));
@@ -80,6 +327,66 @@ public class QrSessionController {
     @Operation(
             summary = "QR 로그인 토큰 발급 (비인증)",
             description = "APPROVED 상태에서 Access/Refresh Token을 발급하고 COMPLETED로 전환합니다. 단 한 번만 성공합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "토큰 발급 성공. 발급된 액세스 토큰에는 QR 로그인 표시가 들어가며, 해당 QR 세션의 업로드 대상 검증이 적용됩니다."),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "QR_001: 유효하지 않은 QR입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_001\",\"message\":\"유효하지 않은 QR입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "410",
+                description = "QR_002: 만료된 QR입니다. 새로 생성해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_002\",\"message\":\"만료된 QR입니다. 새로 생성해 주세요.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "QR_003: APPROVED가 아니거나 이미 발급됨",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_003",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_003\",\"message\":\"이미 사용되었거나 처리할 수 없는 QR 상태입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "AUTH_007: 비활성화된 계정입니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_007",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_007\",\"message\":\"비활성화된 계정입니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "429",
+                description = "COMMON_429: 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "COMMON_429",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"COMMON_429\",\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping("/token")
     public ResponseEntity<ApiResponse<LoginResponse>> token(@Valid @RequestBody QrTokenRequest request) {
         LoginResponse response = qrSessionService.issueToken(request.qrToken());

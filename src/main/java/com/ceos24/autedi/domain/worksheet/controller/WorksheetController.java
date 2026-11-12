@@ -49,6 +49,67 @@ public class WorksheetController {
             summary = "학습지 원본 파일(들) 업로드 (F02)",
             description =
                     "JPG/JPEG·PNG 원본과 EXIF 보정 PNG를 보존합니다. files/file/images의 다중 이미지는 순서대로 페이지가 됩니다. 실제 AI 생성은 현재 이미지 한 장만 지원하며 PDF는 지원하지 않습니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "201",
+                description =
+                        "업로드 성공. QR 로그인(휴대폰) 토큰이면 소유자 SSE로 worksheet.created {sessionId, worksheetId}가 전송됩니다. 첨삭은 자동 시작되지 않습니다."),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "FILE_001: 업로드할 파일이 비어 있습니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "FILE_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"FILE_001\",\"message\":\"업로드할 파일이 비어 있습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "QR_004: QR 로그인(휴대폰) 토큰에만 적용. 토큰 사용자와 QR 세션 소유자 불일치, 또는 QR 세션에 지정된 작업과 다른 대상",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_004",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_004\",\"message\":\"이 QR로 업로드할 수 있는 작업이 아닙니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "415",
+                description = "FILE_002: 지원하지 않는 파일 형식",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "FILE_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"FILE_002\",\"message\":\"JPG/JPEG·PNG 이미지만 지원합니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "413",
+                description = "FILE_005: 이미지 또는 보정 PNG가 크기 제한을 초과했습니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "FILE_005",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"FILE_005\",\"message\":\"이미지 또는 보정 PNG가 크기 제한을 초과했습니다.\",\"result\":null,\"error\":null}")))
+    })
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<WorksheetDetailResponse>> uploadWorksheet(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -145,6 +206,67 @@ public class WorksheetController {
     @Operation(
             summary = "학습지 원본 파일 교체 (F02)",
             description = "DRAFT 또는 FAILED 상태의 학습지에 한하여 원본 파일을 교체합니다. 교체 시 기존 OCR 캐시는 무효화되며 설정(Settings)은 보존됩니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description =
+                        "교체 성공. QR 로그인(휴대폰) 토큰이면 소유자 SSE로 worksheet.file_replaced {sessionId, worksheetId}가 전송됩니다."),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "401",
+                description = "AUTH_001: 인증이 필요합니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "AUTH_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"AUTH_001\",\"message\":\"인증이 필요합니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403",
+                description = "QR_004: QR 로그인(휴대폰) 토큰에만 적용. 토큰 사용자와 QR 세션 소유자 불일치, 또는 QR 세션에 지정된 작업과 다른 대상",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_004",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_004\",\"message\":\"이 QR로 업로드할 수 있는 작업이 아닙니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "404",
+                description = "WORKSHEET_001: 학습지를 찾을 수 없거나 접근 권한이 없습니다.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "WORKSHEET_001",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"WORKSHEET_001\",\"message\":\"학습지를 찾을 수 없거나 접근 권한이 없습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "WORKSHEET_002: DRAFT/FAILED 상태가 아니거나 다중 페이지",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "WORKSHEET_002",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"WORKSHEET_002\",\"message\":\"현재 학습지 상태에서는 요청한 작업을 수행할 수 없습니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "412",
+                description = "COMMON_412: 데이터 버전이 변경되었습니다. 최신 데이터를 조회한 후 다시 시도해 주세요.",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "COMMON_412",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"COMMON_412\",\"message\":\"데이터 버전이 변경되었습니다. 최신 데이터를 조회한 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
+    })
     @PutMapping(value = "/{worksheetId}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<WorksheetDetailResponse>> replaceWorksheetFile(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
