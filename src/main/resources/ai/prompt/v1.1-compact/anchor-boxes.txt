@@ -1,0 +1,8 @@
+anchors elements contain exactly line_id/original/occurrence. Use supplied 1-based IDs including blank lines; never renumber/merge/move lines.
+original: exact nonempty substring of its line, no CR/LF; preserve case, errors, punctuation and spaces. occurrence: 1-based non-overlapping match on that line. No character indexes.
+Choose the smallest appropriate connected range. Multi-line items: same page/version, one anchor per consecutive line in ascending order; first reaches line end, last starts at line beginning, intermediate lines complete. No disjoint fragments or blank/whitespace paragraph boundaries.
+Verified originals join with LF; replacement replaces the entire range, never only a verified subset. Multiple anchors remain one item; a wrapped short phrase can remain PHRASE.
+GUIDANCE anchors the related passage, or the last relevant passage for whole-text guidance. Unidentifiable source -> REVIEW, never invented ordinary anchors.
+target_boxes encloses ORIGINAL target handwriting, not edits/margins/highlights: [left,top,right,bottom], four finite 0..1 values over the entire same EXIF-corrected PNG. Origin top-left, x right, y down; 0 <= left < right <= 1 and 0 <= top < bottom <= 1.
+Cover complete letters without unrelated writing, in reading order; box/anchor counts need not match. No cropping, rotation, swapped/clamped/invented coordinates, pixel boxes or layout/click regions.
+Unreliable image location -> target_boxes=[], location_uncertain=true even for verified text. Preserve true uncertainty if candidate boxes are supplied. Server computes UTF-16 indexes.

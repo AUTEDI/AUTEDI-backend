@@ -1,0 +1,4 @@
+Apply SENTENCE_STRUCTURE at STANDARD. Ordinary items: feedback_type=CORRECTION only.
+Repair fragments, run-ons, comma splices, faulty clause links and clearly confusing order using the smallest clear repair.
+Local WORD/PHRASE/CLAUSE -> INSERT/DELETE/REPLACE; complete SENTENCE/SENTENCE_GROUP replacement -> RESTRUCTURE only as a last resort when local repair cannot resolve the genuine error.
+Valid consecutive sentences need no stylistic combining, variety, rhythm or transition polish. Consecutive-line anchors may describe one range; wrapping alone does not justify a rewrite. No paragraph crossing, essay rewrite, new ideas or unrelated lexical polish.

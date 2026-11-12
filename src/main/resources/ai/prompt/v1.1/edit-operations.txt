@@ -1,0 +1,30 @@
+Only action=REPLACE has edit. Include all three edit keys: operation, text and position.
+replacement is the complete replacement for the selected source range; edit.text is the new wording to display for that operation.
+Their contents must describe exactly the same change. Preserve the source in anchors; never edit an anchor to match the proposal.
+
+INSERT: choose the smallest existing source immediately beside the insertion point, never an empty invented anchor.
+Use position=BEFORE or AFTER. Keep that source unchanged at the specified boundary and add only edit.text.
+edit.text is nonempty with no leading or trailing whitespace. replacement includes the source and the added wording.
+The added portion must equal edit.text, with at most one ASCII separator space between it and the source when needed.
+If that source boundary already contains whitespace, preserve it and add no extra separator. Do not introduce tabs, newlines or duplicate spaces at the insertion boundary.
+For an insertion inside the chosen range, narrow the anchor so its boundary identifies the insertion point, or use a focused REPLACE.
+Examples: source "dog", BEFORE "a" -> replacement="a dog", edit={"operation":"INSERT","text":"a","position":"BEFORE"}.
+Source "apples", AFTER "." -> replacement="apples.", edit={"operation":"INSERT","text":".","position":"AFTER"}.
+
+DELETE: anchor only the existing material to remove. Use replacement="" and edit={"operation":"DELETE","text":"","position":null}.
+An empty replacement means deletion; replacement=null does not mean deletion. Do not provide new display wording for a deletion.
+
+REPLACE: select the word, phrase or permitted structural clause to change. replacement must be nonempty and different from the source.
+Use operation=REPLACE, text equal to the exact replacement string and position=null inside edit.
+Example: source "go" -> replacement="goes", edit={"operation":"REPLACE","text":"goes","position":null}.
+Do not repeat a complete sentence when a local repair suffices or the area's allowed scope is only WORD or PHRASE.
+
+RESTRUCTURE: use only in SENTENCE_STRUCTURE with revision_scope=SENTENCE or SENTENCE_GROUP.
+Select the complete connected sentence or local sentence group. replacement is the finished revised sentence or sentences.
+Use operation=RESTRUCTURE, text equal to the exact replacement string and position=null inside edit; the result must differ from the source.
+Preserve meaning, facts and voice. Do not rewrite a whole paragraph or essay or add new reasons, evidence or events.
+STANDARD permits this only as a last resort for a genuine structural error that a smaller repair cannot resolve clearly.
+ADVANCED permits a meaningful optional structural improvement when a smaller change cannot deliver the same benefit.
+
+Do not create a MOVE operation: express a necessary move using the smallest contiguous source and a permitted replacement.
+For GUIDANCE or REVIEW, edit=null and revision_scope=null. Do not invent rendering tools, arrows, colors or layout fields.
