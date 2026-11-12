@@ -19,6 +19,9 @@ import com.ceos24.autedi.domain.user.entity.Role;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.entity.UserStatus;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
+import com.ceos24.autedi.domain.worksheet.entity.FileType;
+import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
+import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
 import com.ceos24.autedi.global.util.TokenHashUtil;
@@ -69,6 +72,9 @@ class QrSessionApiTest {
     private AcademyRepository academyRepository;
 
     @Autowired
+    private WorksheetRepository worksheetRepository;
+
+    @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
     @Autowired
@@ -104,6 +110,7 @@ class QrSessionApiTest {
     @AfterEach
     void tearDown() {
         qrSessionRepository.deleteAll();
+        worksheetRepository.deleteAll();
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
         academyRepository.deleteAll();
@@ -118,9 +125,10 @@ class QrSessionApiTest {
     }
 
     @Test
-    @DisplayName("QR 세션 생성: body 없이도 201, sessionId·expiresAt·qrImage 반환, qrToken은 응답에 없음")
+    @DisplayName("QR 세션 생성: worksheetId와 함께 201, sessionId·expiresAt·qrImage 반환, qrToken은 응답에 없음")
     void create_ok() throws Exception {
-        ResultActions result = mockMvc.perform(post(BASE).header(HttpHeaders.AUTHORIZATION, bearer(owner)))
+        Worksheet worksheet = saveWorksheet(owner, academy);
+        ResultActions result = createRequest(owner, "{\"worksheetId\":" + worksheet.getId() + "}")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.result.sessionId").isNotEmpty())
                 .andExpect(jsonPath("$.result.expiresAt").isNotEmpty())
@@ -134,8 +142,58 @@ class QrSessionApiTest {
                 .orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(QrSessionStatus.PENDING);
         assertThat(saved.getUserId()).isEqualTo(owner.getId());
+        assertThat(saved.getWorksheetId()).isEqualTo(worksheet.getId());
         assertThat(saved.getQrToken()).isNotEqualTo(saved.getSessionId());
         assertThat(saved.getExpiresAt()).isAfter(LocalDateTime.now());
+    }
+
+    @Test
+    @DisplayName("QR 세션 생성: worksheetId가 없으면 400 (body 없음, 빈 객체, null 모두)")
+    void create_withoutWorksheetId_400() throws Exception {
+        mockMvc.perform(post(BASE).header(HttpHeaders.AUTHORIZATION, bearer(owner)))
+                .andExpect(status().isBadRequest());
+        createRequest(owner, "{}").andExpect(status().isBadRequest());
+        createRequest(owner, "{\"worksheetId\":null}").andExpect(status().isBadRequest());
+        assertThat(qrSessionRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("QR 세션 생성: 없는 작업이나 다른 학원 작업은 404(WORKSHEET_001)")
+    void create_unknownOrOtherAcademyWorksheet_404() throws Exception {
+        createRequest(owner, "{\"worksheetId\":999999}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("WORKSHEET_001"));
+
+        Academy otherAcademy = academyRepository.save(Academy.builder()
+                .name("다른 학원")
+                .subscriptionStatus(SubscriptionStatus.ACTIVE)
+                .planExpiresAt(LocalDateTime.now().plusMonths(1))
+                .build());
+        User foreigner = userRepository.save(User.builder()
+                .academy(otherAcademy)
+                .email("foreign-" + UUID.randomUUID() + "@autedi.com")
+                .passwordHash(passwordEncoder.encode("pw-1234!"))
+                .name("foreign")
+                .role(Role.TEACHER)
+                .status(UserStatus.ACTIVE)
+                .build());
+        Worksheet foreign = saveWorksheet(foreigner, otherAcademy);
+
+        createRequest(owner, "{\"worksheetId\":" + foreign.getId() + "}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("WORKSHEET_001"));
+        assertThat(qrSessionRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("QR 세션 생성: 같은 학원이지만 소유자가 아닌 작업은 403(AUTH_002)")
+    void create_notOwnerWorksheet_403() throws Exception {
+        Worksheet othersWorksheet = saveWorksheet(other, academy);
+
+        createRequest(owner, "{\"worksheetId\":" + othersWorksheet.getId() + "}")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        assertThat(qrSessionRepository.count()).isZero();
     }
 
     // ---------- 비인증 엔드포인트 접근 ----------
@@ -472,6 +530,26 @@ class QrSessionApiTest {
 
     private QrSession reload(QrSession s) {
         return qrSessionRepository.findById(s.getId()).orElseThrow();
+    }
+
+    private ResultActions createRequest(User user, String body) throws Exception {
+        return mockMvc.perform(post(BASE)
+                .header(HttpHeaders.AUTHORIZATION, bearer(user))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
+    private Worksheet saveWorksheet(User user, Academy owningAcademy) {
+        return worksheetRepository.save(Worksheet.builder()
+                .academy(owningAcademy)
+                .user(user)
+                .originalFilename("sample.png")
+                .fileUrl("http://example.com/sample.png")
+                .fileType(FileType.PNG)
+                .fileSize(1024L)
+                .fileHash("hash-" + UUID.randomUUID())
+                .pageCount(1)
+                .build());
     }
 
     private String bearer(User user) {
