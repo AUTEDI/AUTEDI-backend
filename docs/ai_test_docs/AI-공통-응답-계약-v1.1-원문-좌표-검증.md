@@ -12,7 +12,7 @@
 | [AiLocationContext](../../src/main/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiLocationContext.java) | 페이지 번호와 확정 전사문 목록. 공백·빈 줄 보존 |
 | [AiResolvedAnchor](../../src/main/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiResolvedAnchor.java) | 해당 줄 안의 0 기반 UTF-16 start/end. end 미포함 |
 | [AiLocationValidationResult](../../src/main/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiLocationValidationResult.java) | 원본 후보·후보 인덱스·확인된 원문·범위·유효 박스·진단 |
-| [AiValidationCode](../../src/main/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiValidationCode.java) | 원문·좌표 검사 진단 코드. 정책 단계에서 확장 가능 |
+| [AiValidationCode](../../src/main/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiValidationCode.java) | 원문·좌표 및 수정 동작 단계의 진단 코드 |
 | [AiValidationIssue](../../src/main/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiValidationIssue.java) | 진단 코드·원본 필드 위치·설명 |
 
 ## 2. 호출 방법
@@ -56,7 +56,7 @@ v1.1 파서는 JSON 형식을 검사하고, 이 검사는 DTO를 전사문과 �
 
 이 코드는 박스가 실제 손글씨를 정확히 감싸는지 확인하지 않는다. 숫자·원문 연결의 타당성 검사이며 이미지 픽셀·OCR 품질 검증은 실제 자료로 별도 수행한다.
 
-## 5. 아직 수행하지 않는 정책
+## 5. 위치 검사에서 수행하지 않는 정책
 
 - action별 필드 조합과 edit·replacement 일치
 - Standard의 SUGGESTION 금지, 선택 영역, revision_scope와 operation 관계
@@ -64,6 +64,8 @@ v1.1 파서는 JSON 형식을 검사하고, 이 검사는 DTO를 전사문과 �
 - 후보 사이 겹침, 최대 7개, 오류 우선순위, 화면 정렬
 - 정상 카드·확인 목록·제외 목록의 최종 분류
 - 저장·API·프론트 주석 생성·실제 AI 요청
+
+action별 필드 조합과 edit·replacement 일치 검사는 별도 [수정 동작 검사](AI-공통-응답-계약-v1.1-수정-동작-검증.md)로 추가했다. 위치 결과를 입력으로 받아 앞 단계 진단과 함께 보존하며, 나머지 정책은 후속 단계다.
 
 위치가 맞는 Standard SUGGESTION이나 8번째 후보도 이 단계는 그대로 돌려준다. 후속 검증에서 분리·제한해야 한다. 기존 v1 검증기를 변경하거나 v1.1 DTO를 v1으로 억지 변환하지 않는다.
 

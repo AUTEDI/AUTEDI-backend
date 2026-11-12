@@ -1,6 +1,6 @@
 package com.ceos24.autedi.domain.generation.contract.v1_1.validation;
 
-/** 현재는 원문·좌표 단계의 진단 코드다. 다른 검증 정책은 해당 단계 구현 시 확장한다. */
+/** 원문·좌표와 수정 동작 단계의 진단 코드. 다른 정책은 해당 단계 구현 시 확장한다. */
 public enum AiValidationCode {
     ANCHORS_REQUIRED,
     ANCHOR_NOT_FOUND,
@@ -12,5 +12,13 @@ public enum AiValidationCode {
     BOX_WITHOUT_ANCHORS,
     NO_VALID_TARGET_BOXES,
     MODEL_LOCATION_UNCERTAIN,
-    LOCATION_FLAG_INCONSISTENT
+    LOCATION_FLAG_INCONSISTENT,
+    INVALID_ACTION_FIELDS,
+    INVALID_EDIT_POSITION,
+    INVALID_EDIT_TEXT,
+    INVALID_REPLACEMENT,
+    EDIT_REPLACEMENT_MISMATCH,
+    INSERT_SOURCE_CHANGED,
+    INSERT_TEXT_MISMATCH,
+    NO_OP_REPLACEMENT
 }
