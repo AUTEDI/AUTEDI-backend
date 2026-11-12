@@ -254,7 +254,8 @@ class QrSessionApiTest {
                 .andExpect(jsonPath("$.result.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.result.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.result.user.userId").value(owner.getId()))
-                .andExpect(jsonPath("$.result.user.email").value(owner.getEmail()));
+                .andExpect(jsonPath("$.result.user.email").value(owner.getEmail()))
+                .andExpect(jsonPath("$.result.worksheetId").value(TARGET_WORKSHEET_ID));
 
         // 발급된 at는 유효, rt는 refresh 가능
         JsonNode result = json(token).at("/result");
@@ -474,7 +475,8 @@ class QrSessionApiTest {
                 .andExpect(jsonPath("$.result.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.result.user.userId").value(owner.getId()))
                 .andExpect(jsonPath("$.result.user.email").value(owner.getEmail()))
-                .andExpect(jsonPath("$.result.user.academyId").value(academy.getId()));
+                .andExpect(jsonPath("$.result.user.academyId").value(academy.getId()))
+                .andExpect(jsonPath("$.result.worksheetId").value(TARGET_WORKSHEET_ID));
 
         // /token과 같은 응답 구조(result 키 집합)
         QrSession approvedSession = qrSessionRepository.save(approved(owner.getId()));
@@ -628,7 +630,8 @@ class QrSessionApiTest {
                 .andExpect(jsonPath("$.result.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.result.user.userId").value(owner.getId()))
                 .andExpect(jsonPath("$.result.user.academyId").value(academy.getId()))
-                .andExpect(jsonPath("$.result.user.role").value("TEACHER"));
+                .andExpect(jsonPath("$.result.user.role").value("TEACHER"))
+                .andExpect(jsonPath("$.result.worksheetId").doesNotExist());
         assertThat(refreshTokenRepository.count()).isEqualTo(1);
         assertThat(userRepository.findById(owner.getId()).orElseThrow().getLastLoginAt())
                 .isNotNull();
@@ -663,11 +666,14 @@ class QrSessionApiTest {
                 .build());
     }
 
+    private static final Long TARGET_WORKSHEET_ID = 12345L;
+
     private QrSession approved(Long userId) {
         QrSession s = QrSession.builder()
                 .sessionId(UUID.randomUUID().toString())
                 .qrToken(TokenHashUtil.generateRawToken())
                 .userId(userId)
+                .worksheetId(TARGET_WORKSHEET_ID)
                 .expiresAt(LocalDateTime.now().plusMinutes(3))
                 .build();
         s.scan();
@@ -680,6 +686,7 @@ class QrSessionApiTest {
                 .sessionId(UUID.randomUUID().toString())
                 .qrToken(TokenHashUtil.generateRawToken())
                 .userId(owner.getId())
+                .worksheetId(TARGET_WORKSHEET_ID)
                 .expiresAt(expiresAt)
                 .build();
         switch (target) {

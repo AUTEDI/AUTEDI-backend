@@ -2,7 +2,7 @@ package com.ceos24.autedi.domain.auth.controller;
 
 import com.ceos24.autedi.domain.auth.dto.request.QrSessionCreateRequest;
 import com.ceos24.autedi.domain.auth.dto.request.QrTokenRequest;
-import com.ceos24.autedi.domain.auth.dto.response.LoginResponse;
+import com.ceos24.autedi.domain.auth.dto.response.QrLoginResponse;
 import com.ceos24.autedi.domain.auth.dto.response.QrSessionCreateResponse;
 import com.ceos24.autedi.domain.auth.dto.response.QrSessionStatusResponse;
 import com.ceos24.autedi.domain.auth.service.QrSessionService;
@@ -366,7 +366,8 @@ public class QrSessionController {
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "200",
-                description = "토큰 발급 성공. 발급된 액세스 토큰에는 QR 로그인 표시가 들어가며, 해당 QR 세션의 업로드 대상 검증이 적용됩니다."),
+                description =
+                        "토큰 발급 성공. 로그인 응답에 사진을 올릴 대상 작업 ID(worksheetId)가 추가되어 내려옵니다. 발급된 액세스 토큰에는 QR 로그인 표시가 들어가며, 해당 QR 세션의 업로드 대상 검증이 적용됩니다."),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
                 description = "QR_001: 유효하지 않은 QR입니다.",
@@ -424,8 +425,8 @@ public class QrSessionController {
                                                         "{\"isSuccess\":false,\"code\":\"COMMON_429\",\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
     })
     @PostMapping("/token")
-    public ResponseEntity<ApiResponse<LoginResponse>> token(@Valid @RequestBody QrTokenRequest request) {
-        LoginResponse response = qrSessionService.issueToken(request.qrToken());
+    public ResponseEntity<ApiResponse<QrLoginResponse>> token(@Valid @RequestBody QrTokenRequest request) {
+        QrLoginResponse response = qrSessionService.issueToken(request.qrToken());
         return ResponseEntity.ok(ApiResponse.onSuccess("로그인에 성공했습니다.", response));
     }
 
@@ -437,14 +438,14 @@ public class QrSessionController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "200",
                 description =
-                        "연결 성공. /token과 같은 LoginResponse를 반환하며 새 토큰에는 새 qrSessionId가 들어갑니다. 세션 소유자 노트북에 qr.linked 이벤트가 전송됩니다.",
+                        "연결 성공. /token과 같은 QrLoginResponse(로그인 응답 + 대상 작업 worksheetId)를 반환하며 새 토큰에는 새 qrSessionId가 들어갑니다. 세션 소유자 노트북에 qr.linked 이벤트가 전송됩니다.",
                 content =
                         @io.swagger.v3.oas.annotations.media.Content(
                                 mediaType = "application/json",
                                 examples =
                                         @io.swagger.v3.oas.annotations.media.ExampleObject(
                                                 value =
-                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"QR 연결에 성공했습니다.\",\"result\":{\"accessToken\":\"eyJhbGciOi...\",\"refreshToken\":\"3f1c2b8e7a414f0e9c520d2b6a1e8f77\",\"user\":{\"userId\":45,\"email\":\"teacher@autedi.com\",\"name\":\"김선생\",\"role\":\"TEACHER\",\"academyId\":1,\"academyName\":\"에이플러스 학원\",\"subscriptionStatus\":\"ACTIVE\"}},\"error\":null}"))),
+                                                        "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"QR 연결에 성공했습니다.\",\"result\":{\"accessToken\":\"eyJhbGciOi...\",\"refreshToken\":\"3f1c2b8e7a414f0e9c520d2b6a1e8f77\",\"user\":{\"userId\":45,\"email\":\"teacher@autedi.com\",\"name\":\"김선생\",\"role\":\"TEACHER\",\"academyId\":1,\"academyName\":\"에이플러스 학원\",\"subscriptionStatus\":\"ACTIVE\"},\"worksheetId\":12},\"error\":null}"))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "400",
                 description = "COMMON_001: qrToken 누락",
@@ -524,12 +525,12 @@ public class QrSessionController {
                                                         "{\"isSuccess\":false,\"code\":\"COMMON_429\",\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.\",\"result\":null,\"error\":null}")))
     })
     @PostMapping("/link")
-    public ResponseEntity<ApiResponse<LoginResponse>> link(
+    public ResponseEntity<ApiResponse<QrLoginResponse>> link(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @RequestBody QrTokenRequest request,
             @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.USER_AGENT, required = false)
                     String userAgent) {
-        LoginResponse response =
+        QrLoginResponse response =
                 qrSessionService.link(principal.userId(), request.qrToken(), resolveDeviceInfo(userAgent));
         return ResponseEntity.ok(ApiResponse.onSuccess("QR 연결에 성공했습니다.", response));
     }

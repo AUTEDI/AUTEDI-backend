@@ -1,7 +1,7 @@
 package com.ceos24.autedi.domain.auth.service;
 
 import com.ceos24.autedi.domain.auth.dto.request.QrSessionCreateRequest;
-import com.ceos24.autedi.domain.auth.dto.response.LoginResponse;
+import com.ceos24.autedi.domain.auth.dto.response.QrLoginResponse;
 import com.ceos24.autedi.domain.auth.dto.response.QrSessionCreateResponse;
 import com.ceos24.autedi.domain.auth.dto.response.QrSessionStatusResponse;
 import com.ceos24.autedi.domain.auth.entity.QrSession;
@@ -97,7 +97,7 @@ public class QrSessionService {
      * qrSessionId가 담긴 토큰을 발급한다. 모든 사용자 검증은 상태 변경 UPDATE 전에 끝낸다.
      */
     @Transactional(noRollbackFor = CustomException.class)
-    public LoginResponse link(Long userId, String qrToken, String deviceInfo) {
+    public QrLoginResponse link(Long userId, String qrToken, String deviceInfo) {
         QrSession session = qrSessionRepository
                 .findByQrToken(qrToken)
                 .orElseThrow(() -> new CustomException(ErrorCode.QR_SESSION_NOT_FOUND));
@@ -123,7 +123,8 @@ public class QrSessionService {
 
         User managed = userRepository.findById(userId).orElseThrow();
         managed.updateLastLoginAt(now);
-        LoginResponse response = authService.issueTokens(managed, session.getSessionId());
+        QrLoginResponse response =
+                QrLoginResponse.of(authService.issueTokens(managed, session.getSessionId()), session.getWorksheetId());
         eventPublisher.publishEvent(new QrSessionLinked(userId, session.getSessionId(), deviceInfo));
         return response;
     }
@@ -151,7 +152,7 @@ public class QrSessionService {
     }
 
     @Transactional(noRollbackFor = CustomException.class)
-    public LoginResponse issueToken(String qrToken) {
+    public QrLoginResponse issueToken(String qrToken) {
         QrSession session = qrSessionRepository
                 .findByQrToken(qrToken)
                 .orElseThrow(() -> new CustomException(ErrorCode.QR_SESSION_NOT_FOUND));
@@ -177,7 +178,7 @@ public class QrSessionService {
 
         User managed = userRepository.findById(user.getId()).orElseThrow();
         managed.updateLastLoginAt(now);
-        return authService.issueTokens(managed, session.getSessionId());
+        return QrLoginResponse.of(authService.issueTokens(managed, session.getSessionId()), session.getWorksheetId());
     }
 
     @Transactional
