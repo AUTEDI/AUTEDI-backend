@@ -5,6 +5,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +66,11 @@ public class JwtTokenProvider {
 
         CustomUserPrincipal principal = new CustomUserPrincipal(userId, academyId, email, role);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    /** 검증된 액세스 토큰의 만료 시각. */
+    public Instant getExpiration(String token) {
+        return parseClaims(token).getExpiration().toInstant();
     }
 
     private Claims parseClaims(String token) {
