@@ -37,12 +37,17 @@ public class RefreshToken extends BaseCreatedTimeEntity {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    /** QR 로그인으로 발급된 토큰 체인이면 해당 QR 세션의 sessionId. 일반 로그인은 null. */
+    @Column(name = "qr_session_id", length = 36)
+    private String qrSessionId;
+
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
 
     @Builder
-    public RefreshToken(User user, String tokenHash, LocalDateTime expiresAt) {
+    public RefreshToken(User user, String tokenHash, LocalDateTime expiresAt, String qrSessionId) {
         this.user = user;
+        this.qrSessionId = qrSessionId;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
     }

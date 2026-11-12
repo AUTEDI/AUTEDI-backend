@@ -56,5 +56,17 @@ jwt:
   refresh-token-expiration-days: ${JWT_REFRESH_EXPIRATION_DAYS:14}
 
 app:
+  qr:
+    base-url: http://localhost:3000
+    expiration-minutes: 3
+    rate-limit:
+      scan-per-minute: 1000
+      token-per-minute: 1000
+      status-per-minute: 1000
+      link-per-minute: 1000
+  sse:
+    # 테스트에서는 하트비트를 직접 호출하므로 스케줄 주기는 사실상 끈다. 타이밍 테스트는 클래스별로 줄여서 쓴다.
+    heartbeat-interval-ms: 3600000
+    emitter-timeout-ms: 60000
   storage:
     type: ${STORAGE_TYPE:local}

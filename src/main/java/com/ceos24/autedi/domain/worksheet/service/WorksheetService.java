@@ -1,6 +1,8 @@
 package com.ceos24.autedi.domain.worksheet.service;
 
 import com.ceos24.autedi.domain.academy.entity.Academy;
+import com.ceos24.autedi.domain.auth.entity.QrSession;
+import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
 import com.ceos24.autedi.domain.user.entity.User;
@@ -13,6 +15,8 @@ import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetSettingsResponse
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
+import com.ceos24.autedi.domain.worksheet.event.WorksheetCreated;
+import com.ceos24.autedi.domain.worksheet.event.WorksheetFileReplaced;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
@@ -27,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -46,9 +51,25 @@ public class WorksheetService {
     private final WorksheetGenerationRepository worksheetGenerationRepository;
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
+    private final QrSessionRepository qrSessionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public WorksheetDetailResponse uploadWorksheets(Long userId, Long academyId, List<MultipartFile> files) {
+        return uploadWorksheets(userId, academyId, null, files);
+    }
+
+    /**
+     * @param qrSessionId QR 로그인 토큰으로 호출한 경우 그 QR 세션. 일반 호출은 null이며 동작이 달라지지 않는다.
+     */
+    @Transactional
+    public WorksheetDetailResponse uploadWorksheets(
+            Long userId, Long academyId, String qrSessionId, List<MultipartFile> files) {
+        QrSession qr = resolveQrTarget(qrSessionId, userId);
+        if (qr != null && qr.getWorksheetId() != null) {
+            // 기존 작업 교체용으로 만든 QR로는 새 작업을 만들 수 없다.
+            throw new CustomException(ErrorCode.QR_TARGET_MISMATCH);
+        }
         if (files == null || files.isEmpty()) {
             throw new CustomException(ErrorCode.EMPTY_FILE);
         }
@@ -117,6 +138,10 @@ public class WorksheetService {
                 savedWorksheet.getOriginalFilename(),
                 pages.size());
 
+        if (qr != null) {
+            eventPublisher.publishEvent(new WorksheetCreated(userId, qr.getSessionId(), savedWorksheet.getId()));
+        }
+
         return WorksheetDetailResponse.of(savedWorksheet, pages, List.of(), null);
     }
 
@@ -146,9 +171,28 @@ public class WorksheetService {
     @Transactional
     public WorksheetDetailResponse replaceWorksheetFile(
             Long academyId, Long worksheetId, String ifMatch, MultipartFile file) {
+        return replaceWorksheetFile(academyId, null, null, worksheetId, ifMatch, file);
+    }
+
+    /**
+     * @param qrSessionId QR 로그인 토큰으로 호출한 경우 그 QR 세션. 일반 호출은 null이며 동작이 달라지지 않는다.
+     */
+    @Transactional
+    public WorksheetDetailResponse replaceWorksheetFile(
+            Long academyId, Long userId, String qrSessionId, Long worksheetId, String ifMatch, MultipartFile file) {
         Worksheet worksheet = worksheetRepository
                 .findByIdAndAcademyId(worksheetId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+
+        QrSession qr = resolveQrTarget(qrSessionId, userId);
+        if (qr != null) {
+            boolean notOwner = !worksheet.getUser().getId().equals(qr.getUserId());
+            boolean otherTarget =
+                    qr.getWorksheetId() != null && !qr.getWorksheetId().equals(worksheetId);
+            if (notOwner || otherTarget) {
+                throw new CustomException(ErrorCode.QR_TARGET_MISMATCH);
+            }
+        }
 
         // If-Match 헤더 검증 (제공된 경우)
         if (StringUtils.hasText(ifMatch) && !ifMatch.equals("*")) {
@@ -199,7 +243,29 @@ public class WorksheetService {
 
         log.info("학습지 파일 교체 완료: worksheetId={}, newFilename={}", worksheet.getId(), worksheet.getOriginalFilename());
 
+        if (qr != null) {
+            eventPublisher.publishEvent(
+                    new WorksheetFileReplaced(worksheet.getUser().getId(), qr.getSessionId(), worksheetId));
+        }
+
         return WorksheetDetailResponse.of(worksheet, pages, settings, null);
+    }
+
+    /**
+     * QR 로그인 토큰이면 연결된 QR 세션을 반환한다. 일반 토큰(null)이면 null이다. QR 표시가 있는데 세션 행이 이미 정리됐다면 일반 요청으로
+     * 취급하지 않고 QR_002로 거절해 QR을 다시 찍게 한다. 세션 소유자와 토큰 사용자가 다르면 거부한다.
+     */
+    private QrSession resolveQrTarget(String qrSessionId, Long userId) {
+        if (qrSessionId == null) {
+            return null;
+        }
+        QrSession qr = qrSessionRepository
+                .findBySessionId(qrSessionId)
+                .orElseThrow(() -> new CustomException(ErrorCode.QR_SESSION_EXPIRED));
+        if (userId != null && !qr.isOwnedBy(userId)) {
+            throw new CustomException(ErrorCode.QR_TARGET_MISMATCH);
+        }
+        return qr;
     }
 
     public WorksheetSettingsResponse getSettings(Long academyId, Long worksheetId) {
