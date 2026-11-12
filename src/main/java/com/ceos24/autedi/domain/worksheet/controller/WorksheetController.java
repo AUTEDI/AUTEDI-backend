@@ -80,8 +80,8 @@ public class WorksheetController {
                     com.ceos24.autedi.global.exception.ErrorCode.EMPTY_FILE);
         }
 
-        WorksheetDetailResponse response =
-                worksheetService.uploadWorksheets(principal.userId(), principal.academyId(), targetFiles);
+        WorksheetDetailResponse response = worksheetService.uploadWorksheets(
+                principal.userId(), principal.academyId(), principal.qrSessionId(), targetFiles);
         URI location = URI.create("/api/v1/worksheets/" + response.id());
         return ResponseEntity.created(location)
                 .header(HttpHeaders.ETAG, response.etag())
@@ -155,8 +155,8 @@ public class WorksheetController {
             @Parameter(description = "교체할 새 학습지 파일", required = true) @RequestParam("file") MultipartFile file,
             @Parameter(hidden = true) MultipartHttpServletRequest multipartRequest) {
         checkSingleImage(multipartRequest);
-        WorksheetDetailResponse response =
-                worksheetService.replaceWorksheetFile(principal.academyId(), worksheetId, ifMatch, file);
+        WorksheetDetailResponse response = worksheetService.replaceWorksheetFile(
+                principal.academyId(), principal.userId(), principal.qrSessionId(), worksheetId, ifMatch, file);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("학습지 파일이 교체되었습니다.", response));

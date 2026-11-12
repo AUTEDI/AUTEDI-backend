@@ -30,6 +30,7 @@ public enum ErrorCode implements BaseErrorCode {
     QR_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "QR_001", "유효하지 않은 QR입니다."),
     QR_SESSION_EXPIRED(HttpStatus.GONE, "QR_002", "만료된 QR입니다. 새로 생성해 주세요."),
     QR_SESSION_INVALID_STATE(HttpStatus.CONFLICT, "QR_003", "이미 사용되었거나 처리할 수 없는 QR 상태입니다."),
+    QR_TARGET_MISMATCH(HttpStatus.FORBIDDEN, "QR_004", "이 QR로 업로드할 수 있는 작업이 아닙니다."),
 
     // Academy
     ACADEMY_NOT_FOUND(HttpStatus.NOT_FOUND, "ACADEMY_001", "존재하지 않는 학원입니다."),

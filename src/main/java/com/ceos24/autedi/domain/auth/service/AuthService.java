@@ -6,6 +6,7 @@ import com.ceos24.autedi.domain.auth.dto.request.TokenRefreshRequest;
 import com.ceos24.autedi.domain.auth.dto.response.LoginResponse;
 import com.ceos24.autedi.domain.auth.dto.response.TokenRefreshResponse;
 import com.ceos24.autedi.domain.auth.entity.RefreshToken;
+import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.auth.repository.RefreshTokenRepository;
 import com.ceos24.autedi.domain.user.dto.response.UserResponse;
 import com.ceos24.autedi.domain.user.entity.User;
@@ -30,6 +31,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final QrSessionRepository qrSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -61,13 +63,20 @@ public class AuthService {
     /** Access/Refresh Token을 발급하고 Refresh Token을 저장한다. 일반 로그인과 QR 로그인이 공유한다. */
     @Transactional
     public LoginResponse issueTokens(User user) {
+        return issueTokens(user, null);
+    }
+
+    /** qrSessionId가 있으면 QR 로그인 토큰으로 표시한다(액세스 토큰 claim, 리프레시 토큰 컬럼). */
+    @Transactional
+    public LoginResponse issueTokens(User user, String qrSessionId) {
         LocalDateTime now = LocalDateTime.now();
 
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getId(),
                 user.getAcademy().getId(),
                 user.getEmail(),
-                user.getRole().name());
+                user.getRole().name(),
+                qrSessionId);
 
         String rawRefreshToken = TokenHashUtil.generateRawToken();
         String tokenHash = TokenHashUtil.hashToken(rawRefreshToken);
@@ -76,6 +85,7 @@ public class AuthService {
                 .user(user)
                 .tokenHash(tokenHash)
                 .expiresAt(now.plusDays(refreshTokenExpirationDays))
+                .qrSessionId(qrSessionId)
                 .build();
         refreshTokenRepository.save(refreshToken);
 
@@ -102,6 +112,9 @@ public class AuthService {
         // Refresh Token Rotation: 기존 토큰 폐기 및 새 토큰 발급
         token.revoke(now);
 
+        // QR 세션이 아직 유효할 때만 QR 표시를 이어간다. 만료되었거나 삭제되었으면 일반 토큰이 된다.
+        String qrSessionId = carriedQrSessionId(token, now);
+
         String newRawRefreshToken = TokenHashUtil.generateRawToken();
         String newTokenHash = TokenHashUtil.hashToken(newRawRefreshToken);
 
@@ -109,6 +122,7 @@ public class AuthService {
                 .user(user)
                 .tokenHash(newTokenHash)
                 .expiresAt(now.plusDays(refreshTokenExpirationDays))
+                .qrSessionId(qrSessionId)
                 .build();
         refreshTokenRepository.save(newRefreshToken);
 
@@ -116,9 +130,21 @@ public class AuthService {
                 user.getId(),
                 user.getAcademy().getId(),
                 user.getEmail(),
-                user.getRole().name());
+                user.getRole().name(),
+                qrSessionId);
 
         return new TokenRefreshResponse(newAccessToken, newRawRefreshToken);
+    }
+
+    private String carriedQrSessionId(RefreshToken token, LocalDateTime now) {
+        if (token.getQrSessionId() == null) {
+            return null;
+        }
+        return qrSessionRepository
+                .findBySessionId(token.getQrSessionId())
+                .filter(s -> !s.isExpired(now))
+                .map(s -> s.getSessionId())
+                .orElse(null);
     }
 
     @Transactional
