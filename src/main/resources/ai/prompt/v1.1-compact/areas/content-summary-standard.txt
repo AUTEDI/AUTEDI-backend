@@ -1,0 +1,4 @@
+Apply CONTENT_SUMMARY at STANDARD. Ordinary items: feedback_type=CORRECTION only.
+Address genuinely unclear meaning, indispensable missing explanation, clearly irrelevant detail or needless repeated ideas based on actual text and explicit requirements; invent no requirements/facts/reasons/examples.
+Existing content: only WORD/PHRASE clarification/deletion/reduction preserving meaning. Student-supplied missing information: anchored English GUIDANCE <=10 words, replacement/revision_scope/edit=null; explain why required.
+Unfinished "because" may warrant "Complete the reason after because." A coherent "Volunteering is good for students." needs no optional enrichment. No whole-essay summary/rewrite.
