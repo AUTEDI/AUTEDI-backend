@@ -12,6 +12,8 @@ IDE에 기존 실행 설정이 남아 있으면 새 패키지의 main 클래스�
 | TerraTextOcrExample | 좌표 없는 텍스트 전사 | terraTextOcr |
 | TerraCorrectionExample | 저장된 전사문 + 이미지 → 첨삭 + 4개 숫자 boxes | terraCorrection |
 | TerraFlowExample | 전사부터 첨삭까지 2회 순차 요청 | terraFlow |
+| TerraV11Comparison | v1.1 Standard/Advanced·기본본/압축본 비교 | terraCompareV11, 기본은 호출 없는 점검 |
+| TerraV11ComparisonTest | v1.1 비교 실행·기록·실패 처리 검증 | JUnit, 로컬 가짜 HTTP 서버 |
 | OcrTestImage | EXIF/eXIf 방향 보정 공통 도구 | 직접 API 호출 없음 |
 | TerraOcrExampleTest | 초기 polygon 파싱 검증 | JUnit, API 없음 |
 | TerraCorrectionExampleTest | 앵커·boxes·픽셀·겹침·EXIF 검증 | JUnit, API 없음 |
@@ -22,6 +24,8 @@ Google Vision은 ADC 인증, OpenAI 예제는 프로젝트 루트 .env 또는 �
 
 - [연속 실행 방법](A방식-연속-테스트-실행방법.md)
 - [첨삭 단독 실행·현재 응답 필드](A방식-첨삭-테스트-실행방법.md)
+- [v1.1 별도 AI 응답 비교 실험](AI-v1.1-별도-비교실험.md)
+- [test11 직접 전사·실제 요청 실행 방법](AI-v1.1-test11-실제요청-실행방법.md)
 - [AI 호출 시간·토큰·비용 실측 2026-11-06](AI-호출-시간-토큰-비용-실측-2026-11-06.md)
 - [서비스 AI 호출 사용량 로그](AI-호출-사용량-로그.md)
 - [초기 실험 종합 비교](OCR-실험-종합비교-2026-10-29.md)

@@ -124,6 +124,17 @@ tasks.register('terraFlow', JavaExec) {
     }
 }
 
+// v1.1 비교 실험: 기본은 입력 점검만 수행한다. --run을 명시한 수동 실행에서만 유료 API를 호출한다.
+tasks.register('terraCompareV11', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.ceos24.autedi.aiexperiments.TerraV11Comparison'
+    workingDir = projectDir
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 spotless {
     java {
         target 'src/*/java/**/*.java'
