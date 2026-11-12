@@ -51,7 +51,7 @@ List<AiEditValidationResult> edited = new AiEditValidator().validate(located);
 | `GUIDANCE` | feedback_type 필수, area는 CONTENT_SUMMARY, 비어 있지 않은 guidance, replacement·revision_scope·edit는 null |
 | `REVIEW` | feedback_type·area·replacement·guidance·revision_scope·edit는 null. anchors가 없으면 target_boxes도 빈 목록이고 location_uncertain은 true |
 
-anchors의 필수 여부와 원문 연결은 앞 단계가 검사한다. feedback_type이 선택 레벨에 맞는지, area가 활성 영역인지 등의 설정 정책은 후속 단계다.
+anchors의 필수 여부와 원문 연결은 앞 단계가 검사한다. feedback_type이 선택 레벨에 맞는지, area가 활성 영역인지 등의 설정 정책은 별도 [영역·레벨·개수 검사](AI-공통-응답-계약-v1.1-영역-레벨-개수-검증.md)에서 수행한다.
 
 ## 4. 수정 동작 규칙
 
@@ -85,7 +85,7 @@ anchors의 필수 여부와 원문 연결은 앞 단계가 검사한다. feedbac
 | `INSERT_TEXT_MISMATCH` | 실제 추가분과 선언된 표시 문구 불일치 |
 | `NO_OP_REPLACEMENT` | 교체·재구성의 결과가 검증된 원문과 완전히 같음 |
 
-Standard의 SUGGESTION 금지, 활성 영역·issue_kinds 매핑, revision_scope와 영역·operation의 관계, GUIDANCE 영어·10단어 제한, 중복·겹침·최대 7개·정렬·최종 분류는 이번 단계에 포함하지 않는다. 저장·API·프론트·프롬프트 연결도 후속 단계다. 개별 후보의 문제로 AI를 재호출하지 않는다.
+Standard의 SUGGESTION 금지, 활성 영역·issue_kinds 매핑, revision_scope와 영역·operation의 관계, GUIDANCE 영어·10단어 제한, 겹침·최대 7개·정렬·분류는 별도 정책 검증기에 추가했다. 이 동작 검사 자체의 책임은 유지한다. 저장·API·프론트·프롬프트 연결은 후속 단계다. 개별 후보의 문제로 AI를 재호출하지 않는다.
 
 ## 6. 테스트
 
@@ -103,4 +103,4 @@ Standard의 SUGGESTION 금지, 활성 영역·issue_kinds 매핑, revision_scope
 - 후속 레벨·범위·개수 정책을 조기에 적용하지 않는지 확인
 - 기존 v1 계약 및 v1.1 예제·DTO·Schema·파서·위치 회귀 검사
 
-최종 `cards/reviews/excluded`와 summary 전체 비교는 남은 정책 구현 후 수행한다. 테스트는 실제 AI API·Spring·DB를 실행하지 않는다.
+`cards/reviews/excluded`·화면 순서·summary 비교는 별도 정책 검증기 테스트에서 수행한다. annotation 변환·표시 검증은 후속 단계다. 테스트는 실제 AI API·Spring·DB를 실행하지 않는다.

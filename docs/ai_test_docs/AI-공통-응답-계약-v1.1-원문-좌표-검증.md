@@ -65,7 +65,7 @@ v1.1 파서는 JSON 형식을 검사하고, 이 검사는 DTO를 전사문과 �
 - 정상 카드·확인 목록·제외 목록의 최종 분류
 - 저장·API·프론트 주석 생성·실제 AI 요청
 
-action별 필드 조합과 edit·replacement 일치 검사는 별도 [수정 동작 검사](AI-공통-응답-계약-v1.1-수정-동작-검증.md)로 추가했다. 위치 결과를 입력으로 받아 앞 단계 진단과 함께 보존하며, 나머지 정책은 후속 단계다.
+action별 필드 조합과 edit·replacement 일치 검사는 별도 [수정 동작 검사](AI-공통-응답-계약-v1.1-수정-동작-검증.md)로 추가했다. 이후 [영역·레벨·개수 검사](AI-공통-응답-계약-v1.1-영역-레벨-개수-검증.md)가 앞 단계와 함께 정책·제한·분류를 연결한다. 저장·API·표시는 후속 단계다.
 
 위치가 맞는 Standard SUGGESTION이나 8번째 후보도 이 단계는 그대로 돌려준다. 후속 검증에서 분리·제한해야 한다. 기존 v1 검증기를 변경하거나 v1.1 DTO를 v1으로 억지 변환하지 않는다.
 
@@ -81,4 +81,4 @@ action별 필드 조합과 edit·replacement 일치 검사는 별도 [수정 동
 - [AiLocationContextTest](../../src/test/java/com/ceos24/autedi/domain/generation/contract/v1_1/validation/AiLocationContextTest.java): 줄바꿈만 정규화, 빈 줄·공백·원문 불변성, 잘못된 입력 문맥
 - 기존 파서·DTO·Schema·예제 무결성 및 v1 계약 회귀 테스트
 
-고정 예제의 정상 카드에 해당하는 원문·UTF-16·좌표·위치 경고 필드만 이번 위치 단계의 실제 결과와 비교한다. 최종 cards/reviews/excluded 분류와 summary는 나머지 검증 정책이 구현된 뒤 비교한다. 테스트는 외부 API·Spring·DB를 실행하지 않는다.
+고정 예제의 정상 카드에 해당하는 원문·UTF-16·좌표·위치 경고 필드만 이번 위치 단계의 실제 결과와 비교한다. cards/reviews/excluded 분류·화면 순서·summary는 별도 정책 검증기 테스트에서 비교한다. 테스트는 외부 API·Spring·DB를 실행하지 않는다.

@@ -1,6 +1,6 @@
 package com.ceos24.autedi.domain.generation.contract.v1_1.validation;
 
-/** 원문·좌표와 수정 동작 단계의 진단 코드. 다른 정책은 해당 단계 구현 시 확장한다. */
+/** v1.1 원문·좌표·수정 동작과 영역·레벨·개수 정책의 진단 코드. */
 public enum AiValidationCode {
     ANCHORS_REQUIRED,
     ANCHOR_NOT_FOUND,
@@ -20,5 +20,18 @@ public enum AiValidationCode {
     EDIT_REPLACEMENT_MISMATCH,
     INSERT_SOURCE_CHANGED,
     INSERT_TEXT_MISMATCH,
-    NO_OP_REPLACEMENT
+    NO_OP_REPLACEMENT,
+    MODEL_REVIEW,
+    INVALID_ISSUE_KINDS,
+    AREA_ISSUE_MISMATCH,
+    AREA_NOT_SELECTED,
+    ISSUE_AREA_NOT_SELECTED,
+    STANDARD_SUGGESTION,
+    AREA_SCOPE_VIOLATION,
+    SCOPE_TEXT_MISMATCH,
+    SCOPE_OPERATION_MISMATCH,
+    GUIDANCE_TOO_LONG,
+    GUIDANCE_NOT_ENGLISH,
+    OVERLAPPING_ANCHORS,
+    CARD_LIMIT_EXCEEDED
 }
