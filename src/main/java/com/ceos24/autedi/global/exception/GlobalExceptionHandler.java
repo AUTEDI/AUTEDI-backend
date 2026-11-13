@@ -1,6 +1,7 @@
 package com.ceos24.autedi.global.exception;
 
 import com.ceos24.autedi.global.response.ApiResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
@@ -70,6 +72,15 @@ public class GlobalExceptionHandler {
         log.warn("Method not allowed: {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.getStatus())
                 .body(ApiResponse.onFailure(ErrorCode.METHOD_NOT_ALLOWED));
+    }
+
+    /**
+     * 클라이언트가 먼저 연결을 끊어 비동기 응답(SSE 등)을 더 쓸 수 없는 경우다. 서버 오류가 아니고 쓸 응답도 없으므로 오류 로그와 JSON 오류 응답 없이
+     * 넘긴다. HttpServletResponse 인자가 있어야 Spring이 요청을 처리 완료로 본다.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException e, HttpServletResponse response) {
+        log.debug("클라이언트가 먼저 연결을 끊어 비동기 응답을 쓸 수 없습니다: {}", e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

@@ -60,11 +60,12 @@ public class SseEventPublisher {
         try {
             connection.emitter().send(event);
         } catch (IOException | RuntimeException e) {
-            // 클라이언트 끊김 등. 연결만 정리하고 전파하지 않는다.
+            // 클라이언트가 먼저 끊긴 정상적인 상황이다. 연결만 정리하고 전파하지 않는다.
+            // completeWithError는 같은 예외를 서버의 에러 처리 경로로 다시 보내 ERROR 로그를 남기므로 complete로 정상 종료한다.
             log.debug("SSE 전송 실패로 연결 정리: {}", e.getClass().getSimpleName());
             registry.remove(userId, connection);
             try {
-                connection.emitter().completeWithError(e);
+                connection.emitter().complete();
             } catch (RuntimeException ignored) {
                 // 이미 종료된 emitter
             }
