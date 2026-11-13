@@ -36,6 +36,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -68,14 +70,20 @@ public class CorrectionService {
         WorksheetDetailResponse worksheetDetail = WorksheetDetailResponse.of(worksheet, pages, settings, latestGenId);
         GenerationResponse generationResponse = latestGen != null ? GenerationResponse.from(latestGen) : null;
 
-        List<WorksheetGenerationResult> archived = latestGenId == null
-                ? List.of()
-                : generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(List.of(latestGenId));
-        Map<Long, String> sources = sources(archived);
-        List<CorrectionResponse> corrections =
-                correctionRepository.findAllByWorksheetIdAndStatus(worksheetId, CorrectionStatus.ACTIVE).stream()
-                        .map(correction -> response(correction, sources))
-                        .toList();
+        var activeCards = correctionRepository.findAllByWorksheetIdAndStatus(worksheetId, CorrectionStatus.ACTIVE);
+        var allResults = generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(Stream.concat(
+                        Stream.ofNullable(latestGenId),
+                        activeCards.stream().map(card -> card.getGeneration().getId()))
+                .distinct()
+                .toList());
+        List<WorksheetGenerationResult> archived = allResults.stream()
+                .filter(result ->
+                        Objects.equals(latestGenId, result.getGeneration().getId()))
+                .toList();
+        var contexts = contexts(allResults);
+        List<CorrectionResponse> corrections = activeCards.stream()
+                .map(correction -> response(correction, contexts))
+                .toList();
 
         List<CommentResponse> comments = commentRepository.findAllActiveByWorksheet(worksheetId, null).stream()
                 .map(CommentResponse::from)
@@ -92,42 +100,9 @@ public class CorrectionService {
                     saved.generationId(),
                     transcript.pageId(),
                     transcript.id(),
-                    sources.get(saved.generationId()),
+                    contexts.get(saved.generationId()).source(),
                     saved.metadata()));
-            if (saved.validationResult() == null) continue;
-            for (var issue : saved.validationResult().reviewIssues()) {
-                reviewIssues.add(new ReviewIssueResponse(
-                        saved.id(),
-                        saved.generationId(),
-                        transcript.id(),
-                        transcript.pageId(),
-                        issue.pageNumber(),
-                        issue.candidateIndex(),
-                        issue.original(),
-                        issue.resolvedAnchor(),
-                        issue.validBoxes(),
-                        issue.issues(),
-                        issue.requiresReview()));
-            }
-            for (var area : saved.validationResult().summary()) {
-                int active = (int) corrections.stream()
-                        .filter(card -> saved.generationId().equals(card.generationId())
-                                && card.area().name().equals(area.area().name())
-                                && card.anchor() != null
-                                && card.anchor().transcriptionId().equals(transcript.id()))
-                        .count();
-                summary.add(new ReviewAreaSummaryResponse(
-                        saved.generationId(),
-                        transcript.pageId(),
-                        transcript.pageNumber(),
-                        area.area(),
-                        area.level(),
-                        area.recommendedCount(),
-                        area.maximumCount(),
-                        area.displayedCount(),
-                        active,
-                        area.omittedCount()));
-            }
+            ReviewResultMapper.append(saved, corrections, reviewIssues, summary);
         }
         return new ReviewResponse(
                 worksheetDetail, generationResponse, corrections, comments, reviewIssues, summary, resultInfo);
@@ -162,12 +137,12 @@ public class CorrectionService {
 
         var entities =
                 correctionRepository.findAllByFilter(worksheetId, filterStatus, pageId, area, feedbackType, isApplied);
-        var sources = sources(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(entities.stream()
+        var contexts = contexts(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(entities.stream()
                 .map(card -> card.getGeneration().getId())
                 .distinct()
                 .toList()));
         List<CorrectionResponse> items =
-                entities.stream().map(card -> response(card, sources)).toList();
+                entities.stream().map(card -> response(card, contexts)).toList();
 
         return CorrectionListResponse.of(items);
     }
@@ -298,24 +273,30 @@ public class CorrectionService {
     private CorrectionResponse response(Correction correction) {
         return response(
                 correction,
-                sources(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(
+                contexts(generationResults.findAllByGenerationIdInOrderByPagePageNumberAsc(
                         List.of(correction.getGeneration().getId()))));
     }
 
-    private static CorrectionResponse response(Correction correction, Map<Long, String> sources) {
+    private static CorrectionResponse response(Correction correction, Map<Long, ResultContext> contexts) {
+        var context = contexts.get(correction.getGeneration().getId());
         return CorrectionResponse.of(
                 correction,
                 correction.getEtag(),
-                sources.getOrDefault(correction.getGeneration().getId(), "AI"));
+                context == null ? "AI" : context.source(),
+                context == null ? null : context.contractVersion());
     }
 
-    private static Map<Long, String> sources(List<WorksheetGenerationResult> results) {
-        Map<Long, String> sources = new HashMap<>();
+    private record ResultContext(String source, String contractVersion) {}
+
+    private static Map<Long, ResultContext> contexts(List<WorksheetGenerationResult> results) {
+        Map<Long, ResultContext> contexts = new HashMap<>();
         for (var result : results)
-            sources.put(
+            contexts.put(
                     result.getGeneration().getId(),
-                    FixedResponseGenerationService.MODEL.equals(result.getModel()) ? "FIXED" : "AI");
-        return sources;
+                    new ResultContext(
+                            FixedResponseGenerationService.MODEL.equals(result.getModel()) ? "FIXED" : "AI",
+                            result.getContractVersion()));
+        return contexts;
     }
 
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {

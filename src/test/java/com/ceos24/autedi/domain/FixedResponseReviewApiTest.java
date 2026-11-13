@@ -16,12 +16,16 @@ import com.ceos24.autedi.domain.generation.client.GenerationClientProfiles;
 import com.ceos24.autedi.domain.generation.client.TerraClientProperties;
 import com.ceos24.autedi.domain.generation.client.TerraGenerationClient;
 import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
 import com.ceos24.autedi.domain.generation.contract.GenerationContractSelector;
 import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
+import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.prompt.AiCorrectionPromptComposer;
+import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
 import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
 import com.ceos24.autedi.domain.generation.entity.*;
+import com.ceos24.autedi.domain.generation.persistence.StoredGenerationResult;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
 import com.ceos24.autedi.domain.generation.service.*;
@@ -38,8 +42,10 @@ import com.ceos24.autedi.global.storage.LocalStorageService;
 import com.ceos24.autedi.support.FakeResponsesServer;
 import com.ceos24.autedi.support.TestWorksheetImages;
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -53,6 +59,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -169,6 +176,9 @@ class FixedResponseReviewApiTest {
     @MockitoSpyBean
     GenerationContractSelector contractSelector;
 
+    @Autowired
+    GenerationContractRouter contracts;
+
     private MockMvc mvc;
     private Long academyId, worksheetId, userId;
     private String bearer, otherBearer;
@@ -251,6 +261,16 @@ class FixedResponseReviewApiTest {
             assertEquals("FIXED", card.get("source").asString());
             assertEquals("NORMALIZED_0_1", card.get("regionCoordinateUnit").asString());
             assertTrue(card.at("/anchor/transcriptionId").longValue() > 0);
+            assertEquals("AUTEDI-AI-CONTRACT-v1", card.get("contractVersion").asString());
+            assertEquals(JSON.readTree("[" + card.get("anchor") + "]"), card.get("anchors"));
+            assertTrue(card.get("revisionScope").isNull());
+            assertTrue(card.get("aiInitialEdit").isNull());
+            assertTrue(card.get("edit").isNull());
+            assertEquals(card.get("regions"), card.get("targetRegions"));
+        }
+        for (JsonNode issue : review.get("reviewIssues")) {
+            assertTrue(issue.get("originalV11").isNull());
+            assertEquals("AUTEDI-AI-CONTRACT-v1", issue.get("contractVersion").asString());
         }
         JsonNode guidance = card(review, AiAction.GUIDANCE);
         assertEquals(
@@ -1439,6 +1459,315 @@ class FixedResponseReviewApiTest {
         assertEquals(0, count("worksheet_generation_results"));
         verify(terra, never()).transcribe(anyLong(), any());
         verify(terra, never()).correct(anyLong(), any(), any(), any());
+    }
+
+    @ParameterizedTest(name = "v1.1 조회: {0}")
+    @MethodSource("acceptedV11ReadCases")
+    void storedV11FixturesMapToReviewListAndDetailWithoutLosingSourcesEditsOrWarnings(String fixtureId)
+            throws Exception {
+        var saved = persistV11Fixture(fixtureId, false);
+        var validation = saved.validationResultV11();
+        JsonNode review = review();
+        assertEquals(validation.cards().size(), review.get("corrections").size());
+        assertEquals(
+                validation.reviewIssues().size(), review.get("reviewIssues").size());
+        assertEquals(1, review.get("aiResults").size());
+        assertEquals(JSON.valueToTree(saved.metadata()), review.at("/aiResults/0/metadata"));
+        assertEquals("AI", review.at("/aiResults/0/source").asString());
+        assertTrue(review.path("rawResponse").isMissingNode());
+        JsonNode list = result(get(base() + "/corrections"));
+        assertEquals(validation.cards().size(), list.get("total").intValue());
+
+        for (var link : saved.correctionLinks()) {
+            var expected = validation.candidates().get(link.candidateIndex());
+            JsonNode card = review.get("corrections")
+                    .valueStream()
+                    .filter(value -> value.get("id").longValue() == link.correctionId())
+                    .findFirst()
+                    .orElseThrow();
+            assertEquals(card, result(get(base() + "/corrections/" + link.correctionId())));
+            assertTrue(list.get("items").valueStream().anyMatch(card::equals));
+            assertEquals(
+                    saved.metadata().contractVersion(),
+                    card.get("contractVersion").asString());
+            assertEquals(expected.original().action().name(), card.get("action").asString());
+            assertEquals(
+                    expected.original().feedbackType().name(),
+                    card.get("feedbackType").asString());
+            assertEquals(
+                    expected.location().originalText(), card.get("originalText").asString());
+            String content = expected.original().replacement() == null
+                    ? expected.original().guidance()
+                    : expected.original().replacement();
+            assertEquals(content, card.get("content").asString());
+            assertEquals(content, card.get("aiInitialContent").asString());
+            assertEquals(expected.original().reason(), card.get("explanation").asString());
+            assertEquals(JSON.valueToTree(expected.original().revisionScope()), card.get("revisionScope"));
+            assertEquals(JSON.valueToTree(expected.original().edit()), card.get("edit"));
+            assertEquals(card.get("edit"), card.get("aiInitialEdit"));
+            assertEquals(JSON.valueToTree(expected.issues()), card.get("warnings"));
+            assertEquals(expected.requiresReview(), card.get("requiresReview").asBoolean());
+            assertEquals(
+                    expected.original().anchors().size(), card.get("anchors").size());
+            for (int i = 0; i < expected.location().resolvedAnchors().size(); i++) {
+                var source = expected.location().resolvedAnchors().get(i);
+                var anchor = card.get("anchors").get(i);
+                assertEquals(
+                        saved.transcription().id(),
+                        anchor.get("transcriptionId").longValue());
+                assertEquals(source.lineId(), anchor.get("lineId").intValue());
+                assertEquals(source.start(), anchor.get("start").intValue());
+                assertEquals(source.end(), anchor.get("end").intValue());
+                assertEquals(
+                        expected.original().anchors().get(i).occurrence(),
+                        anchor.get("occurrence").intValue());
+                assertTrue(anchor.path("line_id").isMissingNode());
+            }
+            if (card.get("anchors").size() == 1) assertEquals(card.at("/anchors/0"), card.get("anchor"));
+            else assertTrue(card.get("anchor").isNull());
+            assertEquals(card.get("regions"), card.get("targetRegions"));
+            assertEquals(
+                    expected.location().validTargetBoxes().size(),
+                    card.get("regions").size());
+            for (int i = 0; i < expected.location().validTargetBoxes().size(); i++) {
+                var box = expected.location().validTargetBoxes().get(i);
+                var region = card.get("regions").get(i);
+                assertEquals(
+                        saved.transcription().pageId(), region.get("pageId").longValue());
+                assertEquals(box.get(0), region.get("x").doubleValue(), 1e-12);
+                assertEquals(box.get(1), region.get("y").doubleValue(), 1e-12);
+                assertEquals(box.get(2) - box.get(0), region.get("width").doubleValue(), 1e-12);
+                assertEquals(box.get(3) - box.get(1), region.get("height").doubleValue(), 1e-12);
+            }
+        }
+        for (int i = 0; i < validation.reviewIssues().size(); i++) {
+            var expected = validation.reviewIssues().get(i);
+            var issue = review.get("reviewIssues").get(i);
+            assertEquals(expected.candidateIndex(), issue.get("candidateIndex").intValue());
+            assertEquals(
+                    saved.transcription().id(), issue.get("transcriptionId").longValue());
+            assertEquals(JSON.valueToTree(expected.original()), issue.get("originalV11"));
+            assertEquals(JSON.valueToTree(expected.original().anchors()), issue.get("anchors"));
+            assertEquals(JSON.valueToTree(expected.location().resolvedAnchors()), issue.get("resolvedAnchors"));
+            assertEquals(JSON.valueToTree(expected.location().validTargetBoxes()), issue.get("validBoxes"));
+            assertEquals(JSON.valueToTree(expected.issues()), issue.get("warnings"));
+            assertEquals(JSON.valueToTree(expected.original().targetBoxes()), issue.at("/original/boxes"));
+            for (String field : List.of(
+                    "action",
+                    "feedback_type",
+                    "area",
+                    "issue_kinds",
+                    "replacement",
+                    "guidance",
+                    "reason",
+                    "location_uncertain"))
+                assertEquals(
+                        issue.get("originalV11").get(field),
+                        issue.get("original").get(field),
+                        field);
+            if (expected.original().anchors().size() == 1)
+                assertEquals(issue.at("/anchors/0"), issue.at("/original/anchor"));
+            else {
+                assertTrue(issue.at("/original/anchor").isNull());
+                assertTrue(issue.get("resolvedAnchor").isNull());
+            }
+        }
+        for (int i = 0; i < validation.summary().size(); i++) {
+            var expected = validation.summary().get(i);
+            var area = review.get("summary").get(i);
+            assertEquals(expected.area().name(), area.get("area").asString());
+            assertEquals(JSON.valueToTree(expected.level()), area.get("level"));
+            assertEquals(0, area.get("recommendedCount").intValue());
+            assertEquals(expected.maximumCount(), area.get("maximumCount").intValue());
+            assertEquals(expected.displayedCount(), area.get("validatedCount").intValue());
+            assertEquals(expected.displayedCount(), area.get("displayedCount").intValue());
+            assertEquals(expected.omittedCount(), area.get("omittedCount").intValue());
+        }
+        assertEquals(saved, archives.restoreResult(academyId, saved.id()), "조회는 최초 아카이브를 바꾸지 않는다.");
+        verify(terra, never()).correct(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void v11MultilineCardKeepsInitialEditAndCountsCorrectlyAcrossExistingTeacherOperations() throws Exception {
+        var saved = persistV11Fixture("advanced-structure-multiline", false);
+        JsonNode initial = review().at("/corrections/0");
+        assertEquals(3, initial.get("anchors").size());
+        assertTrue(initial.get("anchor").isNull());
+        assertFalse(initial.get("edit").isNull());
+        String url = base() + "/corrections/" + initial.get("id").longValue();
+        var same = result(patch(url)
+                .header(HttpHeaders.IF_MATCH, initial.get("etag").asString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(JSON.writeValueAsString(
+                        Map.of("content", initial.get("content").asString(), "isApplied", false))));
+        assertEquals(initial.get("edit"), same.get("edit"));
+        var moved = result(patch(url)
+                .header(HttpHeaders.IF_MATCH, same.get("etag").asString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"regions\":[{\"x\":0.1,\"y\":0.2,\"width\":0.3,\"height\":0.1}]}"));
+        assertEquals(initial.get("edit"), moved.get("edit"));
+        assertEquals(moved.get("regions"), moved.get("targetRegions"));
+        assertEquals(1, moved.get("targetRegions").size());
+        var edited = result(patch(url)
+                .header(HttpHeaders.IF_MATCH, moved.get("etag").asString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"content\":\"Teacher revised structure.\"}"));
+        assertTrue(edited.get("edit").isNull());
+        assertEquals(initial.get("aiInitialEdit"), edited.get("aiInitialEdit"));
+        assertEquals(initial.get("anchors"), edited.get("anchors"));
+        assertEquals(initial.get("originalText"), edited.get("originalText"));
+        assertEquals(1, displayed(review()));
+        var deleted = mvc.perform(delete(url)
+                        .header(HttpHeaders.AUTHORIZATION, bearer)
+                        .header(HttpHeaders.IF_MATCH, edited.get("etag").asString()))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        assertEquals(0, displayed(review()));
+        assertEquals(
+                1,
+                result(get(base() + "/corrections").param("status", "DELETED"))
+                        .get("total")
+                        .intValue());
+        var restored = result(post(url + "/restore")
+                .header(HttpHeaders.IF_MATCH, deleted.getResponse().getHeader(HttpHeaders.ETAG)));
+        assertTrue(restored.get("edit").isNull());
+        assertEquals(initial.get("aiInitialEdit"), restored.get("aiInitialEdit"));
+        assertEquals(1, displayed(review()));
+        assertEquals(saved, archives.restoreResult(academyId, saved.id()));
+        mvc.perform(get(url).header(HttpHeaders.AUTHORIZATION, otherBearer)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void mixedHistoryUsesEachCardsArchivedVersionAndOnlyLatestReviewCandidates() throws Exception {
+        generate("v1-before-v11");
+        var oldReview = review();
+        var saved = persistV11Fixture("advanced-structure-multiline", false);
+        var review = review();
+        assertEquals(5, review.get("corrections").size());
+        assertEquals(0, review.get("reviewIssues").size());
+        assertEquals(saved.id(), review.at("/aiResults/0/id").longValue());
+        assertEquals(1, displayed(review));
+        for (var oldCard : oldReview.get("corrections")) {
+            assertTrue(review.get("corrections").valueStream().anyMatch(oldCard::equals));
+            assertEquals(
+                    oldCard,
+                    result(get(base() + "/corrections/" + oldCard.get("id").longValue())));
+        }
+    }
+
+    @Test
+    void unreadableV11ArchiveProvidesMetadataWithoutParsingItAsV1OrLeakingRawResponse() throws Exception {
+        var saved = persistV11Fixture("standard-grammar-replace", true);
+        var review = review();
+        assertEquals(0, review.get("corrections").size());
+        assertEquals(0, review.get("reviewIssues").size());
+        assertEquals(0, review.get("summary").size());
+        assertEquals(JSON.valueToTree(saved.metadata()), review.at("/aiResults/0/metadata"));
+        assertFalse(review.toString().contains("unreadable-private-model-response"));
+    }
+
+    @Test
+    void missingArchiveDoesNotInventAVersionOrEditForExistingCards() throws Exception {
+        generate("no-archive-history");
+        jdbc.update("delete from worksheet_generation_results");
+        for (var card : review().get("corrections")) {
+            assertTrue(card.get("contractVersion").isNull());
+            assertTrue(card.get("edit").isNull());
+            assertEquals(card.get("anchor"), card.at("/anchors/0"));
+        }
+    }
+
+    private static int displayed(JsonNode review) {
+        return review.get("summary")
+                .valueStream()
+                .mapToInt(area -> area.get("displayedCount").intValue())
+                .sum();
+    }
+
+    private static java.util.stream.Stream<String> acceptedV11ReadCases() throws Exception {
+        return JSON.readTree(v11Resource("cases.json"))
+                .get("cases")
+                .valueStream()
+                .filter(value ->
+                        "ACCEPT".equals(value.at("/expected/parse_result").asString()))
+                .map(value -> value.get("id").asString());
+    }
+
+    private static String v11Resource(String path) throws Exception {
+        try (var input = FixedResponseReviewApiTest.class.getResourceAsStream("/ai/contract/v1.1/" + path)) {
+            return new String(java.util.Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /** 생성 Worker를 우회해 이미 검증·저장된 결과의 조회만 테스트한다. 외부 호출은 없다. */
+    private StoredGenerationResult persistV11Fixture(String fixtureId, boolean unreadable) throws Exception {
+        var fixture = JSON.readTree(v11Resource("cases.json"))
+                .get("cases")
+                .valueStream()
+                .filter(value -> value.get("id").asString().equals(fixtureId))
+                .findFirst()
+                .orElseThrow();
+        List<String> lines = fixture.at("/context/transcription_lines")
+                .valueStream()
+                .map(line -> line.get("text").asString())
+                .toList();
+        Map<AiArea, AiCorrectionLevel> selected = new EnumMap<>(AiArea.class);
+        fixture.at("/context/selected_areas")
+                .forEach(setting -> selected.put(
+                        AiArea.valueOf(setting.get("area").asString()),
+                        AiCorrectionLevel.valueOf(setting.get("level").asString())));
+        var profile = GenerationClientProfiles.profile(
+                GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT);
+        long id = new TransactionTemplate(transactionManager).execute(transaction -> {
+            var worksheet = worksheets.findById(worksheetId).orElseThrow();
+            worksheet.updateStatus(WorksheetStatus.PROCESSING);
+            var generation = WorksheetGeneration.builder()
+                    .worksheet(worksheet)
+                    .requestedBy(users.findById(userId).orElseThrow())
+                    .idempotencyKey(UUID.randomUUID().toString())
+                    .requestFileHash(worksheet.getFileHash())
+                    .clientMode(GenerationClientMode.TERRA)
+                    .requestAiProfile(profile)
+                    .requestSettingsSnapshot(selected.entrySet().stream()
+                            .map(entry -> Map.<String, Object>of(
+                                    "area",
+                                    entry.getKey().name(),
+                                    "level",
+                                    entry.getValue().name()))
+                            .toList())
+                    .build();
+            generation.start();
+            return generations.save(generation).getId();
+        });
+        long transcriptionId = archives.recordTranscription(
+                academyId,
+                id,
+                images.getPreparedImage(academyId, worksheetId, 1),
+                lines,
+                profile.metadata().model());
+        long resultId;
+        if (unreadable) {
+            resultId = archives.recordUnreadableResult(
+                    academyId,
+                    id,
+                    transcriptionId,
+                    profile.metadata(),
+                    "unreadable-private-model-response",
+                    "invalid json");
+        } else {
+            String raw = v11Resource(fixture.get("response_file").asString());
+            var validated = (GenerationContractRouter.V11Validation)
+                    contracts.parseAndValidate(profile, raw, new GenerationContractRouter.Input(1, lines, selected));
+            resultId = archives.recordValidatedResultV11(
+                    academyId, id, transcriptionId, profile.metadata(), raw, validated.result());
+        }
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            var generation = generations.findById(id).orElseThrow();
+            generation.useTranscription(transcriptionId);
+            generation.succeed();
+            worksheets.findById(worksheetId).orElseThrow().updateStatus(WorksheetStatus.READY);
+        });
+        return archives.restoreResult(academyId, resultId);
     }
 
     private long persistedPending(String key) {

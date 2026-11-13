@@ -64,7 +64,7 @@ v1.1은 TERRA의 독립 프로필과 버전별 저장·복원까지 준비했다
 - Worker가 미지원 프로필의 PENDING 작업을 발견하면 AI 호출 전 `AI_CONTRACT_NOT_READY`로 실패 처리한다. 자동 재시도하지 않는다.
 - 기존 결과 기록 API도 작업에 프로필이 있으면 결과 메타데이터와 정확히 일치하는지 검사한다.
 
-프로필 값은 내부 작업 정보다. 이번 단계에서는 `GenerationResponse`, `CorrectionResponse`, 조회·편집 요청 DTO에 필드를 추가하지 않았다.
+프로필 값은 내부 작업 정보다. 10단계에서는 외부 DTO를 바꾸지 않았다. 이후 12단계에서 CorrectionResponse의 선택적 조회 필드와 확인 목록 매핑을 추가했으며, GenerationResponse와 기존 편집 요청 형식은 유지한다.
 
 ## 3. DB 변경 적용
 
@@ -100,9 +100,9 @@ ALTER TABLE worksheet_generations ADD COLUMN request_ai_profile JSON NULL;
 | `warnings`, `requiresReview`, `locationUncertain` | 같은 의미를 유지하고 v1.1 검증 사유를 반영 |
 | `regionCoordinateUnit` | NORMALIZED_0_1 유지 |
 
-기존 anchor는 미분류 과거 자료에서도 nullable이다. 다중 줄도 기존 regions/content로 표시할 수 있게 하되, **기존 프론트가 null anchor와 여러 regions를 처리하는지는 12단계 통합 검증에서 확인한다.** 확인 전 모든 기존 화면 동작이 검증됐다고 주장하지 않는다.
+기존 anchor는 미분류 과거 자료에서도 nullable이다. 12단계 백엔드 API 테스트에서 다중 줄의 null anchor와 전체 regions/anchors를 검증했다. 기존 프론트가 이 응답을 실제로 표시하는지는 프론트 연결 검증이 남아 있으며, 모든 기존 화면 동작이 검증됐다고 주장하지 않는다.
 
-선택적으로 추가할 조회 필드는 아래로 확정한다. 추가 시점은 12단계다.
+아래 선택적 조회 필드는 12단계에서 추가했다. 상세 내용은 [조회 응답 매핑](AI-공통-응답-계약-v1.1-조회-응답-매핑.md)을 따른다.
 
 | 추가 필드 | 규칙 |
 | --- | --- |
@@ -120,7 +120,7 @@ ALTER TABLE worksheet_generations ADD COLUMN request_ai_profile JSON NULL;
 - REVIEW와 검증상 확인 항목은 기존 reviewIssues로, 제외 항목은 기존 집계 원칙으로 제공한다. REVIEW를 일반 카드나 교사 코멘트로 바꾸지 않는다.
 - `reviewIssues[].original`의 기존 v1 키는 호환 투영으로 유지한다. v1.1의 전체 원본 후보는 새 `originalV11`에 보존한다. 다중 줄에서 기존 original.anchor/resolvedAnchor는 null로 두고 새 anchors/resolvedAnchors에 전체를 제공한다. validBoxes는 기존 LTRB 배열 형식을 유지한다.
 - 호환 투영은 외부 응답 전용이다. 이를 저장용 v1 원본으로 다시 사용하거나 v1 파서에 넣지 않으며, 최초 v1.1 응답과 검증 결과는 자기 버전으로 보존한다.
-- summary의 기존 필드는 유지한다. v1은 기존 recommendedCount를 유지하고 v1.1은 **recommendedCount=0(권장 개수 없음)**, 활성 영역 maximumCount=7로 제공한다. 0은 첨삭 목표 0개라는 뜻이 아니다. 기존 화면의 권장 수 표시도 12단계에서 확인한다.
+- summary의 기존 필드는 유지한다. v1은 기존 recommendedCount를 유지하고 v1.1은 **recommendedCount=0(권장 개수 없음)**, 활성 영역 maximumCount=7로 제공한다. 0은 첨삭 목표 0개라는 뜻이 아니다. 12단계에서 백엔드 집계 값을 검증했으며 기존 화면의 권장 수 표시는 프론트 연결 시 별도 확인한다.
 - v1.1 AI/검증 계약에 권장 개수를 다시 추가하는 것은 아니다. 프론트 호환용 필드만 유지하는 결정이다.
 - aiResults.metadata에는 실제 저장된 모델·계약·프롬프트·검증 버전을 제공한다. 과거 결과 버전을 현재 서버 기본값으로 바꾸지 않는다.
 
@@ -143,4 +143,4 @@ ALTER TABLE worksheet_generations ADD COLUMN request_ai_profile JSON NULL;
 - 아직 연결하지 않은 v1.1의 503 응답과 작업/전사/외부 호출 부재
 - 기존 v1 저장·조회·교사 편집 및 API 필드 회귀 검증
 
-11 저장·복원은 [별도 문서](AI-공통-응답-계약-v1.1-저장-복원.md)의 범위로 구현했다. 남은 순서는 **12 기존 형식 조회 매핑 → 13 기존 편집 호환 → 14 서비스 HTTP/Worker 연결**이다. 14단계에서 저장된 프로필로 라우터를 사용하고 실행 지원 검사를 확장한다. 프롬프트·짧은 anchor 정확도는 연결 이후 실제 서비스 응답으로 계속 개선한다. 계약 구조 통과를 교육적 품질 합격으로 해석하지 않는다.
+11 저장·복원과 12 기존 형식 조회 매핑을 구현했다. 기존 편집 요청의 응답도 같은 매핑을 사용하며, 남은 순서는 **13 새 편집 입력 확장·호환 검증 → 14 서비스 HTTP/Worker 연결**이다. 14단계에서 저장된 프로필로 라우터를 사용하고 실행 지원 검사를 확장한다. 프롬프트·짧은 anchor 정확도는 연결 이후 실제 서비스 응답으로 계속 개선한다. 계약 구조 통과를 교육적 품질 합격으로 해석하지 않는다.
