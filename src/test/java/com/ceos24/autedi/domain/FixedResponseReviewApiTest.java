@@ -1385,12 +1385,12 @@ class FixedResponseReviewApiTest {
     }
 
     @Test
-    void unconnectedV11IsRejectedBeforePersistingJobsOrCallingClients() throws Exception {
-        ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.TERRA);
+    void v11OnUnsupportedProviderIsRejectedBeforePersistingJobsOrCallingClients() throws Exception {
+        ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.FIXED);
         doReturn(GenerationClientProfiles.profile(
                         GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT))
                 .when(contractSelector)
-                .configuredProfile(GenerationClientMode.TERRA);
+                .configuredProfile(GenerationClientMode.FIXED);
         mvc.perform(post(base() + "/generations")
                         .header(HttpHeaders.AUTHORIZATION, bearer)
                         .header("Idempotency-Key", "unconnected-v11"))
@@ -1444,12 +1444,18 @@ class FixedResponseReviewApiTest {
     }
 
     @Test
-    void workerRejectsAnUnconnectedStoredProfileBeforeAnyOcrOrAiRequest() throws Exception {
-        long id = persistedPending(
-                "unconnected-pending",
-                GenerationClientMode.TERRA,
-                GenerationClientProfiles.profile(
-                        GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT));
+    void workerRejectsAnUnknownStoredProfileBeforeAnyOcrOrAiRequest() throws Exception {
+        var known = GenerationClientProfiles.profile(
+                GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT);
+        var unknown = new GenerationAiProfile(
+                known.version(),
+                known.promptVariant(),
+                new com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata(
+                        known.metadata().model(),
+                        known.metadata().contractVersion(),
+                        "unavailable-prompt",
+                        known.metadata().validationVersion()));
+        long id = persistedPending("unconnected-pending", GenerationClientMode.TERRA, unknown);
         worker.process(id);
         JsonNode failed = awaitTerminal(id);
         assertEquals("FAILED", failed.get("status").asString());
@@ -1461,11 +1467,11 @@ class FixedResponseReviewApiTest {
         verify(terra, never()).correct(anyLong(), any(), any(), any());
     }
 
-    @ParameterizedTest(name = "v1.1 조회: {0}")
+    @ParameterizedTest(name = "v1.1 서비스 생성·조회: {0}")
     @MethodSource("acceptedV11ReadCases")
     void storedV11FixturesMapToReviewListAndDetailWithoutLosingSourcesEditsOrWarnings(String fixtureId)
             throws Exception {
-        var saved = persistV11Fixture(fixtureId, false);
+        var saved = generateV11Fixture(fixtureId, AiCorrectionPromptVariant.DEFAULT);
         var validation = saved.validationResultV11();
         JsonNode review = review();
         assertEquals(validation.cards().size(), review.get("corrections").size());
@@ -1584,7 +1590,199 @@ class FixedResponseReviewApiTest {
             assertEquals(expected.omittedCount(), area.get("omittedCount").intValue());
         }
         assertEquals(saved, archives.restoreResult(academyId, saved.id()), "조회는 최초 아카이브를 바꾸지 않는다.");
-        verify(terra, never()).correct(anyLong(), any(), any(), any());
+        verify(terra, times(1)).correct(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void v11CompactGenerationIsStoredAndIdempotentWithoutReselectingTheProfile() throws Exception {
+        var saved = generateV11Fixture("advanced-structure-multiline", AiCorrectionPromptVariant.COMPACT);
+        doThrow(new AssertionError("기존 작업의 프로필을 다시 선택했습니다."))
+                .when(contractSelector)
+                .configuredProfile(any());
+        assertEquals(
+                saved.generationId(),
+                generate("v11-http-advanced-structure-multiline").get("id").longValue());
+        assertEquals(1, count("worksheet_generations"));
+        assertEquals(1, count("worksheet_generation_results"));
+        assertEquals(1, count("corrections"));
+        assertEquals(
+                AiCorrectionPromptVariant.COMPACT,
+                generations
+                        .findById(saved.generationId())
+                        .orElseThrow()
+                        .getRequestAiProfile()
+                        .promptVariant());
+        assertEquals(3, review().at("/corrections/0/anchors").size());
+        assertTrue(review().at("/corrections/0/anchor").isNull());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void v11FailureAndRetryKeepPinnedCompactProfileAndReuseTranscription(boolean wrongContract) throws Exception {
+        try (var upstream = new FakeResponsesServer()) {
+            useTerra(upstream);
+            var fixture = selectV11Fixture("standard-grammar-replace", AiCorrectionPromptVariant.COMPACT);
+            String text = fixture.at("/context/transcription_lines")
+                    .valueStream()
+                    .map(line -> line.get("text").asString())
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            upstream.enqueue(200, FakeResponsesServer.transcription(text));
+            if (wrongContract) upstream.enqueue(200, FakeResponsesServer.completed(fixedRaw()));
+            else upstream.enqueue(503, "{\"error\":{\"code\":\"server_error\"}}");
+            var failed = generate("v11-failed");
+            assertEquals("FAILED", failed.get("status").asString());
+            assertEquals(
+                    wrongContract ? "INVALID_AI_RESPONSE" : "TERRA_HTTP_ERROR",
+                    failed.at("/error/code").asString());
+            assertTrue(failed.at("/error/retryable").asBoolean());
+            assertEquals(2, upstream.requests().size());
+            assertEquals(0, count("corrections"));
+            assertEquals(wrongContract ? 1 : 0, count("worksheet_generation_results"));
+            if (wrongContract) {
+                long id = jdbc.queryForObject("select id from worksheet_generation_results", Long.class);
+                var unreadable = archives.restoreResult(academyId, id);
+                assertEquals("UNREADABLE", unreadable.status().name());
+                assertEquals(fixedRaw(), unreadable.rawResponse());
+                assertNull(unreadable.versionedValidationResult());
+                assertTrue(unreadable.parseError().contains("v1.1"));
+            }
+            long transcriptionId = jdbc.queryForObject("select id from worksheet_transcriptions", Long.class);
+            var frozen = archives.restoreTranscription(academyId, transcriptionId);
+            var originalProfile = generations
+                    .findById(failed.get("id").longValue())
+                    .orElseThrow()
+                    .getRequestAiProfile();
+            // 접수 이후 서버 선택을 바꿔도 재시도는 저장된 공급자·프로필만 사용해야 한다.
+            ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.FIXED);
+            doThrow(new AssertionError("재시도에서 현재 서버 프로필을 참조했습니다."))
+                    .when(contractSelector)
+                    .configuredProfile(any());
+            String raw = v11Resource(fixture.get("response_file").asString());
+            upstream.enqueue(200, FakeResponsesServer.completed(raw));
+            var accepted = body(
+                    attempt(base() + "/generations/" + failed.get("id").longValue() + "/retry", "v11-retry", bearer));
+            var completed = awaitTerminal(accepted.get("id").longValue());
+            assertEquals("SUCCEEDED", completed.get("status").asString());
+            assertEquals(3, upstream.requests().size());
+            assertEquals(1, count("worksheet_transcriptions"));
+            assertEquals(frozen, archives.restoreTranscription(academyId, transcriptionId));
+            assertEquals(
+                    originalProfile,
+                    generations
+                            .findById(completed.get("id").longValue())
+                            .orElseThrow()
+                            .getRequestAiProfile());
+            var review = review();
+            assertEquals(
+                    originalProfile.metadata(),
+                    archives.restoreResult(
+                                    academyId, review.at("/aiResults/0/id").longValue())
+                            .metadata());
+            assertEquals(
+                    transcriptionId,
+                    review.at("/corrections/0/anchors/0/transcriptionId").longValue());
+            assertEquals(
+                    "autedi_correction_v1_1",
+                    upstream.requests().get(2).body().at("/text/format/name").asString());
+            assertEquals(
+                    upstream.requests().get(1).body().get("instructions"),
+                    upstream.requests().get(2).body().get("instructions"));
+            assertEquals(1, review.get("corrections").size());
+        }
+    }
+
+    private JsonNode selectV11Fixture(String fixtureId, AiCorrectionPromptVariant variant) throws Exception {
+        var fixture = JSON.readTree(v11Resource("cases.json"))
+                .get("cases")
+                .valueStream()
+                .filter(value -> value.get("id").asString().equals(fixtureId))
+                .findFirst()
+                .orElseThrow();
+        result(put(base() + "/settings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(JSON.writeValueAsString(Map.of("areas", fixture.at("/context/selected_areas")))));
+        var profile =
+                GenerationClientProfiles.profile(GenerationClientMode.TERRA, GenerationContractVersion.V1_1, variant);
+        doReturn(profile).when(contractSelector).configuredProfile(GenerationClientMode.TERRA);
+        return fixture;
+    }
+
+    /** 실제 서비스 접수·Dispatcher·HTTP·검증·저장·조회 경로를 loopback 대역으로 실행한다. */
+    private StoredGenerationResult generateV11Fixture(String fixtureId, AiCorrectionPromptVariant variant)
+            throws Exception {
+        try (var upstream = new FakeResponsesServer()) {
+            useTerra(upstream);
+            var fixture = selectV11Fixture(fixtureId, variant);
+            List<String> lines = fixture.at("/context/transcription_lines")
+                    .valueStream()
+                    .map(line -> line.get("text").asString())
+                    .toList();
+            String raw = v11Resource(fixture.get("response_file").asString());
+            upstream.enqueue(200, FakeResponsesServer.transcription(String.join("\n", lines)));
+            upstream.enqueue(200, FakeResponsesServer.completed(raw));
+            var completed = generate("v11-http-" + fixtureId);
+            assertEquals("SUCCEEDED", completed.get("status").asString());
+            assertEquals("COMPLETED", completed.get("stage").asString());
+            var review = review();
+            assertEquals("READY", review.at("/worksheet/status").asString());
+            assertEquals(
+                    fixture.at("/expected/cards").size(),
+                    review.get("corrections").size());
+            assertEquals(
+                    fixture.at("/expected/reviews").size(),
+                    review.get("reviewIssues").size());
+            var saved = archives.restoreResult(
+                    academyId, review.at("/aiResults/0/id").longValue());
+            var profile = GenerationClientProfiles.profile(
+                    GenerationClientMode.TERRA, GenerationContractVersion.V1_1, variant);
+            assertEquals(profile.metadata(), saved.metadata());
+            assertEquals(
+                    profile,
+                    generations
+                            .findById(completed.get("id").longValue())
+                            .orElseThrow()
+                            .getRequestAiProfile());
+            assertEquals(raw, saved.rawResponse());
+            assertEquals(lines, saved.transcription().lines());
+            assertEquals(
+                    fixture.at("/expected/excluded").size(),
+                    saved.validationResultV11().excludedItems().size());
+            assertEquals(2, upstream.requests().size());
+            assertEquals(
+                    "autedi_transcription_v1",
+                    upstream.requests()
+                            .getFirst()
+                            .body()
+                            .at("/text/format/name")
+                            .asString());
+            var correction = upstream.requests().get(1).body();
+            assertEquals(
+                    "autedi_correction_v1_1", correction.at("/text/format/name").asString());
+            assertEquals(
+                    upstream.requests().getFirst().body().at("/input/0/content/1/image_url"),
+                    correction.at("/input/0/content/1/image_url"));
+            assertTrue(correction
+                    .at("/text/format/schema/$defs/item/properties/anchors")
+                    .isObject());
+            assertTrue(correction
+                    .at("/text/format/schema/$defs/item/properties/anchor")
+                    .isMissingNode());
+            Map<AiArea, AiCorrectionLevel> selected = new EnumMap<>(AiArea.class);
+            fixture.at("/context/selected_areas")
+                    .forEach(setting -> selected.put(
+                            AiArea.valueOf(setting.get("area").asString()),
+                            AiCorrectionLevel.valueOf(setting.get("level").asString())));
+            var expectedPrompt = contracts.compose(profile, new GenerationContractRouter.Input(1, lines, selected));
+            assertEquals(
+                    expectedPrompt.instructions(),
+                    correction.get("instructions").asString());
+            assertEquals(
+                    "Normalized PNG dimensions: 2 x 3 pixels.\n" + expectedPrompt.inputText(),
+                    correction.at("/input/0/content/0/text").asString());
+            verify(fixed, never()).transcribe(any(), any());
+            verify(fixed, never()).correct(any(), any());
+            return saved;
+        }
     }
 
     @Test

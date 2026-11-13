@@ -5,6 +5,7 @@ import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.client.CorrectionDraft;
 import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
 import com.ceos24.autedi.domain.generation.contract.GenerationContractSelector;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
@@ -105,15 +106,30 @@ public class GenerationWorkStore {
 
     @Transactional
     public void completeFixed(Work work, StoredTranscription transcription, String raw, AiValidationResult validation) {
+        complete(work, transcription, raw, new GenerationContractRouter.V1Validation(validation));
+    }
+
+    @Transactional
+    public void complete(
+            Work work, StoredTranscription transcription, String raw, GenerationContractRouter.Validation validation) {
         WorksheetGeneration job = running(work.id(), GenerationStage.AI_CORRECTION);
         if (job == null) return;
-        archives.recordValidatedResult(
-                work.academyId(),
-                work.id(),
-                transcription.id(),
-                work.aiProfile().metadata(),
-                raw,
-                validation);
+        switch (validation) {
+            case GenerationContractRouter.V1Validation v1 -> archives.recordValidatedResult(
+                    work.academyId(),
+                    work.id(),
+                    transcription.id(),
+                    work.aiProfile().metadata(),
+                    raw,
+                    v1.result());
+            case GenerationContractRouter.V11Validation v11 -> archives.recordValidatedResultV11(
+                    work.academyId(),
+                    work.id(),
+                    transcription.id(),
+                    work.aiProfile().metadata(),
+                    raw,
+                    v11.result());
+        }
         finish(job);
     }
 
@@ -121,14 +137,15 @@ public class GenerationWorkStore {
     public void unreadable(Work work, StoredTranscription transcription, String raw) {
         WorksheetGeneration job = running(work.id(), GenerationStage.AI_CORRECTION);
         if (job == null) return;
+        String error = "계약 " + work.aiProfile().version().setting() + " JSON 구조를 읽을 수 없습니다.";
         archives.recordUnreadableResult(
                 work.academyId(),
                 work.id(),
                 transcription.id(),
                 work.aiProfile().metadata(),
                 raw,
-                "계약 v1 JSON 구조를 읽을 수 없습니다.");
-        failJob(job, "INVALID_AI_RESPONSE", "계약 v1 JSON 구조를 읽을 수 없습니다.", true);
+                error);
+        failJob(job, "INVALID_AI_RESPONSE", error, true);
     }
 
     public LegacyInput legacyInput(Work work) {

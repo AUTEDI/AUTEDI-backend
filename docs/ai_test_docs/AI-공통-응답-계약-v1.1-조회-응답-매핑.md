@@ -63,7 +63,7 @@
 
 기존 content/regions/isApplied 요청은 계속 사용한다. 실제 content 변경 시 현재 edit는 null이 되고 aiInitialEdit는 보존된다. 같은 내용 재전송·좌표 이동·채택 변경만으로 edit를 무효화하지 않는다. regions와 targetRegions는 하나의 현재 좌표를 공유한다. 삭제·복원 뒤에도 최초 동작과 원문 연결은 유지한다.
 
-새 edit/anchors를 편집 입력으로 받는 확장은 13단계다. 14단계의 서비스 AI 클라이언트·Worker 연결도 남아 있으며, 기본 v1 경로와 v1.1 서비스 생성 차단을 유지한다. 이 조회 구현만으로 실제 v1.1 생성 요청이 실행되지는 않는다.
+새 edit/좌표 별칭 등을 편집 입력으로 받는 13단계 확장은 선택적 후속 기능이다. 이후 [14단계 서비스 AI 클라이언트·Worker 연결](AI-공통-응답-계약-v1.1-서비스-생성-연결.md)을 구현하여 TERRA v1.1 실행을 지원한다. 기본 계약은 v1이며 실제 서버 설정은 바꾸지 않았다.
 
 이번 단계는 DTO·조회 매핑 변경이며 DB 컬럼·SQL 변경은 없다. 앞선 10~11단계의 스키마 선행 조건은 [저장·복원 문서](AI-공통-응답-계약-v1.1-저장-복원.md)를 따른다. 운영 DB 조회·변경과 실제 AI 호출은 수행하지 않았다.
 
@@ -74,7 +74,7 @@
 - [CorrectionWarningResponse](../../src/main/java/com/ceos24/autedi/domain/correction/dto/response/CorrectionWarningResponse.java): 버전별 경고를 같은 JSON 형태로 제공
 - [ReviewIssueResponse](../../src/main/java/com/ceos24/autedi/domain/worksheet/dto/response/ReviewIssueResponse.java): 기존 후보 투영과 전체 v1.1 원본·연결 배열
 - [ReviewResultMapper](../../src/main/java/com/ceos24/autedi/domain/correction/service/ReviewResultMapper.java): 버전별 검증 결과 분기, 확인 목록·집계 계산
-- [FixedResponseReviewApiTest](../../src/test/java/com/ceos24/autedi/domain/FixedResponseReviewApiTest.java): 허용되는 v1.1 고정 예제 26개를 H2에 저장한 뒤 MVC 검토·목록·상세 응답 확인. 다중 줄 편집·좌표 이동·삭제·복원, v1/v1.1 공존, 아카이브 없는 과거 자료와 UNREADABLE도 검증
+- [FixedResponseReviewApiTest](../../src/test/java/com/ceos24/autedi/domain/FixedResponseReviewApiTest.java): 허용되는 v1.1 고정 예제 26개를 서비스 생성 경로의 loopback HTTP·Worker·H2 저장까지 실행한 뒤 MVC 검토·목록·상세 응답 확인. 다중 줄 편집·좌표 이동·삭제·복원, v1/v1.1 공존, 아카이브 없는 과거 자료와 UNREADABLE도 검증
 
 테스트는 메모리 H2와 로컬 가짜 응답을 사용한다. 프론트에서 null anchor·여러 regions·recommendedCount=0을 실제로 표시하는지는 프론트 연결 시 별도로 확인해야 한다.
 
@@ -84,4 +84,4 @@
 .\gradlew.bat --offline spotlessJavaApply test --tests '*FixedResponseReviewApiTest' --tests '*GenerationResultStorageTest' --tests '*GenerationContractRoutingTest' spotlessJavaCheck
 ```
 
-결과: API 67개·저장 복원 43개·버전 라우팅 19개, 총 129개 통과(실패·오류·건너뜀 0). 포맷 검사도 통과했다.
+12단계 당시 결과: API 67개·저장 복원 43개·버전 라우팅 19개, 총 129개 통과(실패·오류·건너뜀 0). 이후 서비스 생성 연결을 포함한 최신 검증 결과는 [14단계 문서](AI-공통-응답-계약-v1.1-서비스-생성-연결.md)를 따른다.

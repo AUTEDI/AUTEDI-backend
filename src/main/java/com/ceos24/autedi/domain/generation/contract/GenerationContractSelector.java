@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class GenerationContractSelector {
     private final GenerationContractProperties properties;
 
-    /** 선택 결과를 만든다. 독립 라우터/준비 상태 확인에 사용하며 서비스 실행 가능 여부와 구분한다. */
+    /** 새 작업의 프로필을 선택한다. 재시도와 실행은 저장된 프로필을 사용한다. */
     public GenerationAiProfile configuredProfile(GenerationClientMode mode) {
         return GenerationClientProfiles.profile(mode, properties.version(), properties.variant());
     }
@@ -44,9 +44,5 @@ public class GenerationContractSelector {
 
     public static void requireServiceReady(GenerationClientMode mode, GenerationAiProfile profile) {
         GenerationClientProfiles.requireKnown(mode, profile);
-        // 11~14단계에서 v1.1 저장·조회·편집·Worker 연결이 끝난 뒤 실행 지원 범위를 확장한다.
-        if (profile.version() != GenerationContractVersion.V1) {
-            throw new IllegalArgumentException("v1.1 서비스 저장·생성 경로는 아직 연결 전입니다.");
-        }
     }
 }

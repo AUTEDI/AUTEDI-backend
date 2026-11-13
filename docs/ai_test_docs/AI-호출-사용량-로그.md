@@ -25,7 +25,7 @@ docker logs --since 1h mvp-spring-dev
 |---|---|
 | `generation_id` | 이번 생성 작업 ID. 수동 재시도는 새 작업 ID를 사용한다. |
 | `worksheet_id`, `page_id` | 대상 학습지·페이지 ID |
-| `operation` | 인식: `autedi_transcription_v1`, 첨삭: `autedi_correction_v1` |
+| `operation` | 인식: `autedi_transcription_v1`, 첨삭: v1은 `autedi_correction_v1`, v1.1은 `autedi_correction_v1_1` |
 | `elapsed_ms` | 요청 전송 직전부터 응답 본문 수신 완료 또는 대기 실패까지 걸린 밀리초. 대기열·이미지 준비·DB 저장 시간은 제외한다. |
 | `http_status` | HTTP 응답 코드. 응답을 끝까지 받지 못했으면 `null` |
 | `error_code` | 클라이언트의 HTTP·통신·응답 추출 실패 코드. 이후 전사·첨삭 내용 검증 및 DB 저장의 성공 여부와는 별개다. |

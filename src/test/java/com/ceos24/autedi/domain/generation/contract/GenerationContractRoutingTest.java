@@ -11,7 +11,6 @@ import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
 import com.ceos24.autedi.global.config.GenerationContractConfiguration;
 import com.ceos24.autedi.global.exception.CustomException;
-import com.ceos24.autedi.global.exception.ErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -148,14 +147,22 @@ class GenerationContractRoutingTest {
                         WorksheetGeneration.builder().build()));
     }
 
-    @Test
-    void unconnectedV11CanBeSelectedForRoutingButCannotStartAPaidServiceJob() {
-        var selector = new GenerationContractSelector(new GenerationContractProperties("v1.1", "DEFAULT"));
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void knownV11ProfilesCanStartTerraServiceJobs(AiCorrectionPromptVariant variant) {
+        var selector = new GenerationContractSelector(new GenerationContractProperties("v1.1", variant.name()));
         var selected = selector.configuredProfile(GenerationClientMode.TERRA);
         assertEquals(GenerationContractVersion.V1_1, selected.version());
-        var failure =
-                assertThrows(CustomException.class, () -> selector.forGeneration(GenerationClientMode.TERRA, null));
-        assertEquals(ErrorCode.AI_CONTRACT_NOT_READY, failure.getErrorCode());
+        assertEquals(selected, selector.forGeneration(GenerationClientMode.TERRA, null));
+        var changed = new GenerationContractSelector(new GenerationContractProperties("v1", "DEFAULT"));
+        assertEquals(
+                selected,
+                changed.forGeneration(
+                        GenerationClientMode.TERRA,
+                        WorksheetGeneration.builder()
+                                .clientMode(GenerationClientMode.TERRA)
+                                .requestAiProfile(selected)
+                                .build()));
     }
 
     @Test
