@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.generation.service;
 
+import com.ceos24.autedi.domain.generation.contract.GenerationContractSelector;
 import com.ceos24.autedi.domain.generation.dto.response.GenerationResponse;
 import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
 import com.ceos24.autedi.domain.generation.entity.GenerationStatus;
@@ -35,6 +36,7 @@ public class WorksheetGenerationService {
     private final UserRepository users;
     private final ApplicationEventPublisher events;
     private final GenerationTranscriptionReuse transcriptionReuse;
+    private final GenerationContractSelector contracts;
 
     @Value("${app.ai.fixed-response.enabled:false}")
     private boolean fixedResponseEnabled;
@@ -101,6 +103,7 @@ public class WorksheetGenerationService {
         if (worksheet.getPageCount() != 1 && mode != GenerationClientMode.LEGACY_MOCK)
             throw new CustomException(
                     ErrorCode.INVALID_INPUT_VALUE, "실제 AI 연동과 고정 응답 검증은 이미지 한 장만 지원합니다. 페이지별로 학습지를 업로드해 주세요.");
+        var profile = contracts.forGeneration(mode, previous);
         Long transcriptionId = previous == null ? null : transcriptionReuse.findForRetry(previous, mode);
         WorksheetGeneration generation = generations.save(WorksheetGeneration.builder()
                 .worksheet(worksheet)
@@ -109,6 +112,7 @@ public class WorksheetGenerationService {
                 .requestFileHash(worksheet.getFileHash())
                 .requestSettingsSnapshot(snapshot)
                 .clientMode(mode)
+                .requestAiProfile(profile)
                 .inputTranscriptionId(transcriptionId)
                 .retryCount(previous == null ? 0 : previous.getRetryCount() + 1)
                 .retryOfGenerationId(previous == null ? null : previous.getId())

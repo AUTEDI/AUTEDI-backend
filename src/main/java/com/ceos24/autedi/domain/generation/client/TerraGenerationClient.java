@@ -1,9 +1,14 @@
 package com.ceos24.autedi.domain.generation.client;
 
+import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.prompt.AiCorrectionPromptComposer;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationContext;
+import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
+import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
 import com.ceos24.autedi.domain.generation.service.GenerationClientFailure;
 import com.ceos24.autedi.domain.worksheet.service.PreparedWorksheetImage;
@@ -57,16 +62,24 @@ public class TerraGenerationClient {
             List.of("text"));
     private final HttpClient http;
     private final TerraClientProperties properties;
+    private final GenerationContractRouter contracts;
 
     public TerraGenerationClient(HttpClient http, TerraClientProperties properties) {
+        this(http, properties, new GenerationContractRouter());
+    }
+
+    public TerraGenerationClient(
+            HttpClient http, TerraClientProperties properties, GenerationContractRouter contracts) {
         this.http = http;
         this.properties = properties;
+        this.contracts = contracts;
     }
 
     public List<String> transcribe(Long generationId, PreparedWorksheetImage image) {
         String output = request(
                 generationId,
                 image,
+                AiCorrectionPromptComposer.MODEL,
                 TRANSCRIPTION_INSTRUCTIONS,
                 dimensions(image),
                 "autedi_transcription_v1",
@@ -90,14 +103,31 @@ public class TerraGenerationClient {
             PreparedWorksheetImage image,
             StoredTranscription transcription,
             Map<AiArea, AiCorrectionLevel> settings) {
+        return correct(
+                generationId,
+                image,
+                transcription,
+                settings,
+                GenerationClientProfiles.profile(
+                        GenerationClientMode.TERRA, GenerationContractVersion.V1, AiCorrectionPromptVariant.DEFAULT));
+    }
+
+    /** 서버의 현재 기본값 대신 생성 작업에 고정된 프로필을 사용한다. */
+    public String correct(
+            Long generationId,
+            PreparedWorksheetImage image,
+            StoredTranscription transcription,
+            Map<AiArea, AiCorrectionLevel> settings,
+            GenerationAiProfile profile) {
+        GenerationClientProfiles.requireKnown(GenerationClientMode.TERRA, profile);
         if (!image.worksheetId().equals(transcription.worksheetId())
                 || !image.pageId().equals(transcription.pageId())
                 || !image.sha256().equals(transcription.sourceImageHash())
                 || image.width() != transcription.imageWidth()
                 || image.height() != transcription.imageHeight())
             throw new GenerationClientFailure("TERRA_INPUT_MISMATCH", "보정 PNG와 확정 전사가 일치하지 않습니다.", false);
-        var prompt = new AiCorrectionPromptComposer()
-                .compose(new AiValidationContext(image.pageNumber(), transcription.lines(), settings));
+        var prompt = contracts.compose(
+                profile, new GenerationContractRouter.Input(image.pageNumber(), transcription.lines(), settings));
         ObjectNode schema = (ObjectNode) JSON.readTree(prompt.responseSchema());
         schema.remove("$schema");
         schema.remove("$id");
@@ -106,15 +136,17 @@ public class TerraGenerationClient {
         return request(
                 generationId,
                 image,
+                profile.metadata().model(),
                 prompt.instructions(),
                 dimensions(image) + "\n" + prompt.inputText(),
-                "autedi_correction_v1",
+                profile.version() == GenerationContractVersion.V1 ? "autedi_correction_v1" : "autedi_correction_v1_1",
                 schema);
     }
 
     private String request(
             Long generationId,
             PreparedWorksheetImage image,
+            String model,
             String instructions,
             String text,
             String schemaName,
@@ -124,7 +156,7 @@ public class TerraGenerationClient {
         checkConfiguration();
         var body = Map.of(
                 "model",
-                AiCorrectionPromptComposer.MODEL,
+                model,
                 "store",
                 false,
                 "stream",
@@ -195,6 +227,7 @@ public class TerraGenerationClient {
             logCall(
                     generationId,
                     image,
+                    model,
                     schemaName,
                     elapsedMs != null ? elapsedMs : TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt),
                     response,
@@ -215,6 +248,7 @@ public class TerraGenerationClient {
     private static void logCall(
             Long generationId,
             PreparedWorksheetImage image,
+            String requestedModel,
             String schemaName,
             long elapsedMs,
             HttpResponse<String> response,
@@ -235,7 +269,7 @@ public class TerraGenerationClient {
                                 response.headers().firstValue("x-request-id").orElse(null))
                         : null);
         fields.put("response_id", logText(envelope, "/id"));
-        fields.put("requested_model", AiCorrectionPromptComposer.MODEL);
+        fields.put("requested_model", requestedModel);
         fields.put("model", logText(envelope, "/model"));
         fields.put("service_tier", logText(envelope, "/service_tier"));
         fields.put("response_status", logText(envelope, "/status"));
