@@ -4,8 +4,9 @@
 - 계약 식별자: `AUTEDI-AI-CONTRACT-v1.1`
 - 상태: 기획 기준과 논의한 역할 분담을 반영한 **서비스 연동 설계안**
 - 범위: AI 첨삭 응답, 서버 검증·저장, 프론트 조회·편집, 이미지 주석 표시
-- 적용 상태: v1.1 고정 응답 예제, DTO·enum·JSON Schema, 독립 파서, 원문·좌표·수정 동작·영역·레벨·범위·안내문 검사와 개수 제한·겹침 경고·분류·집계, 기본본·압축본 프롬프트와 독립 조립기를 추가했다. `src/test`의 [별도 비교 실행기](AI-v1.1-별도-비교실험.md)도 연결했으며 로컬 가짜 HTTP·비호출 점검까지만 검증했다. 실제 모델 품질 평가와 서비스 생성·저장·조회·표시 연결은 후속 단계다. 현재 서비스 AI 호출·DB·API·프론트 동작은 v1을 유지한다.
+- 적용 상태: v1.1 고정 응답 예제, DTO·enum·JSON Schema, 독립 파서, 전체 검증기, 기본본·압축본 프롬프트와 조립기를 추가했다. [별도 비교 실행기](AI-v1.1-별도-비교실험.md)로 test11의 실제 응답 두 건을 확인했으며 첨삭·위치 품질은 계속 개선한다. 이후 버전 라우터와 작업별 AI 프로필을 추가했다. v1.1 결과 저장·조회·편집·Worker 연결은 후속 단계이며 현재 서비스 AI 호출·프론트 응답은 v1을 유지한다.
 - 호환성: v1.1은 필드 이름과 구조가 바뀌므로 v1 파서와 호환되지 않는다. 기존 결과와 v1 문서는 보존한다.
+- 2026-11-13 이행 결정: [버전 선택 경로·프론트 호환 규칙](AI-v1.1-버전선택-프론트호환규칙.md)을 확정했다. AI 계약과 외부 API 계약을 분리하고 기존 프론트 필드를 유지하며 새 필드를 선택적으로 추가한다. 버전 라우터와 작업 프로필은 구현했으며, v1.1 서비스 저장·조회·편집·Worker 연결은 후속 단계다.
 
 ## 1. 기준 문서와 핵심 결정
 
@@ -374,7 +375,7 @@ AI는 실제 첨삭 글씨를 이미지에 그린 결과를 반환하지 않는�
 
 ### 9.1 검토 화면 조회
 
-현재 `ApiResponse.result`와 검토 응답 묶음은 유지한다.
+현재 `ApiResponse.result`와 검토 응답 묶음은 유지한다. 실제 서비스 이행은 [호환 규칙](AI-v1.1-버전선택-프론트호환규칙.md)을 우선한다. 기존 regions·nullable anchor를 유지하고 anchors·targetRegions·edit 등은 추가 필드로 제공한다.
 
 | 목록 | v1.1 내용 |
 | --- | --- |
@@ -386,22 +387,22 @@ AI는 실제 첨삭 글씨를 이미지에 그린 결과를 반환하지 않는�
 | `summary` | 영역별 `level`, `maximumCount`, `validatedCount`, `displayedCount`, `omittedCount` |
 | `aiResults` | 결과 출처·계약·프롬프트·전사 버전 연결 |
 
-- 활성 영역의 `maximumCount`는 7, 비활성 영역은 0이다. v1.1에는 `recommendedCount`를 두지 않는다.
+- 활성 영역의 `maximumCount`는 7, 비활성 영역은 0이다. v1.1 AI/검증 계약에는 `recommendedCount`를 두지 않는다. 기존 프론트 summary 필드는 호환용으로 유지하며 v1.1은 0(권장 개수 없음), 과거 v1은 기존 값을 제공한다.
 - `validatedCount`는 최초 검증·제한 후 일반 카드 수, `displayedCount`는 현재 삭제되지 않은 카드 수다.
 - `omittedCount`는 반환된 일반 후보 중 제외·분리된 수다. REVIEW 자체는 제외하며 모델이 발견하지 못한 오류 수를 의미하지 않는다.
 - 최초 모델 응답 전문을 일반 조회 API에 그대로 내보내지 않는다. 확인 필요 목록에는 해당 원본 후보와 검증 사유를 제공한다.
 
 ### 9.2 편집 요청
 
-기존 `content`, `isApplied`의 역할을 유지하고 `edit`, `targetRegions`, `annotationLayout`을 구분하여 추가한다.
+기존 `content`, `regions`, `isApplied`의 역할과 요청 형식을 유지한다. edit·targetRegions를 사용하는 확장 요청은 선택적으로 추가하며 annotationLayout은 후속 렌더링 단계다.
 
 - `content`가 원문 교체안인지 안내문인지는 `action`으로 판단한다.
-- `REPLACE`의 의미 변경 요청은 현재 `content`와 `edit`를 함께 보내고 서버가 일관성을 검사한다. 삭제는 `content=""`, `operation=DELETE`, `edit.text=""`다.
+- 확장 클라이언트가 `REPLACE`의 content와 edit를 함께 보내면 서버가 일관성을 검사한다. 기존 클라이언트의 content 단독 변경도 허용하며 실제 내용 변경 시 현재 edit는 무효화하고 최초 aiInitialEdit는 보존한다. 삭제 동작을 명시하는 확장 요청은 `content=""`, `operation=DELETE`, `edit.text=""`다.
 - `GUIDANCE`는 `content`만 수정하며 빈 안내와 `edit`·이미지 주석의 추가를 허용하지 않는다.
 - 표시 문구만 수정해 실제 교체안과 다른 결과를 만들 수 없게 한다. 내용이 바뀌면 레이아웃을 재계산한다.
 - `targetRegions` 변경은 연결 위치 보정이며 원문 문자 범위 자체의 재지정을 뜻하지 않는다.
 - 좌표·채택 여부만 바꿀 때는 `content/edit`를 생략할 수 있다. 레이아웃을 명시적으로 비우는 요청과 필드 생략을 구분한다.
-- API의 PATCH에서 명시적 `null`은 `annotationLayout` 제거에만 사용한다. 다른 편집 필드는 생략이면 유지하고 `null`은 거부한다. `isApplied=false`, `targetRegions=[]`, 삭제용 `content=""`는 유효한 명시 값이다.
+- 기존 content·regions·isApplied의 null/생략 처리는 기존 API 동작을 유지한다. 후속 annotationLayout 확장 필드의 명시적 null은 레이아웃 제거를 뜻하며 생략과 구분한다. `isApplied=false`, `targetRegions=[]`, 삭제용 `content=""`는 유효한 명시 값이다.
 - 원문 연결, 최초 `aiInitialContent`, 최초 AI edit·좌표·설명·응답은 편집으로 덮어쓰지 않는다.
 - 교사 편집 후 `editedByTeacher`와 기존 설명의 진부화 여부를 기존 원칙에 따라 제공한다.
 
@@ -599,10 +600,10 @@ AI는 실제 첨삭 글씨를 이미지에 그린 결과를 반환하지 않는�
 | 표시 문구 | 교체문·안내문만 제공 | `edit.text`로 실제 표시 문구 구분 |
 | 수정 범위 | 문구 중심 제한 | `revision_scope`와 영역·동작 조합 검증 |
 | 색상·주석 ID | AI·조회 응답에 색상 없음 | 서버가 유형·저장 ID로 생성 |
-| 프론트 원문 연결·좌표 | `anchor`, `regions` | `anchors[]`, `targetRegions[]` |
+| 프론트 원문 연결·좌표 | `anchor`, `regions` | 기존 필드 유지 + `anchors[]`, `targetRegions[]` 추가. 다중 줄의 단일 anchor는 null |
 | 프론트 표시 정보 | 원문 좌표 중심 | `annotation`, `annotationLayout` 추가 |
 | 클릭·노란색 강조 | 계약에 없음 | 렌더러가 계산, 실제 새 표시·수정 문구만 일시 강조 |
-| 요약 응답 | `recommendedCount` 있음 | 제거, 활성 영역 `maximumCount=7` |
+| 요약 응답 | `recommendedCount` 있음 | 기존 필드 유지, v1.1은 0(권장 없음). 활성 영역 `maximumCount=7` |
 
 현재 구현 확인 지점:
 

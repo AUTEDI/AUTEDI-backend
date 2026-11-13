@@ -26,6 +26,10 @@ spring:
           writetimeout: 5000
 
 app:
+  ai:
+    correction:
+      contract-version: ${AI_CORRECTION_CONTRACT_VERSION:v1}
+      prompt-variant: ${AI_CORRECTION_PROMPT_VARIANT:DEFAULT}
   mail:
     type: ${MAIL_TYPE:smtp}
     from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}

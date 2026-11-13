@@ -4,7 +4,8 @@ import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.client.CorrectionDraft;
-import com.ceos24.autedi.domain.generation.client.GenerationClientProfiles;
+import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractSelector;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationResult;
@@ -47,6 +48,7 @@ public class GenerationWorkStore {
             Long academyId,
             Long worksheetId,
             GenerationClientMode mode,
+            GenerationAiProfile aiProfile,
             Map<AiArea, AiCorrectionLevel> settings) {}
 
     public record LegacyInput(Worksheet worksheet, List<WorksheetPage> pages, List<WorksheetSetting> settings) {}
@@ -61,12 +63,20 @@ public class GenerationWorkStore {
             job.fail("STALE_JOB", "현재 학습지의 실행 대상이 아닌 작업입니다.", false);
             return null;
         }
+        GenerationAiProfile profile = GenerationContractSelector.snapshot(job);
+        try {
+            GenerationContractSelector.requireServiceReady(job.getClientMode(), profile);
+        } catch (IllegalArgumentException e) {
+            failJob(job, "AI_CONTRACT_NOT_READY", "저장된 AI 실행 프로필의 서비스 연결을 확인해 주세요.", false);
+            return null;
+        }
         job.start();
         return new Work(
                 id,
                 job.getWorksheet().getAcademy().getId(),
                 job.getWorksheet().getId(),
                 job.getClientMode(),
+                profile,
                 GenerationResultStorageService.settings(job));
     }
 
@@ -75,7 +85,11 @@ public class GenerationWorkStore {
         WorksheetGeneration job = running(work.id(), GenerationStage.OCR);
         if (job == null) return null;
         Long id = archives.recordTranscription(
-                work.academyId(), work.id(), image, lines, GenerationClientProfiles.model(work.mode()));
+                work.academyId(),
+                work.id(),
+                image,
+                lines,
+                work.aiProfile().metadata().model());
         job.useTranscription(id);
         return archives.restoreTranscription(work.academyId(), id);
     }
@@ -97,7 +111,7 @@ public class GenerationWorkStore {
                 work.academyId(),
                 work.id(),
                 transcription.id(),
-                GenerationClientProfiles.metadata(work.mode()),
+                work.aiProfile().metadata(),
                 raw,
                 validation);
         finish(job);
@@ -111,7 +125,7 @@ public class GenerationWorkStore {
                 work.academyId(),
                 work.id(),
                 transcription.id(),
-                GenerationClientProfiles.metadata(work.mode()),
+                work.aiProfile().metadata(),
                 raw,
                 "계약 v1 JSON 구조를 읽을 수 없습니다.");
         failJob(job, "INVALID_AI_RESPONSE", "계약 v1 JSON 구조를 읽을 수 없습니다.", true);

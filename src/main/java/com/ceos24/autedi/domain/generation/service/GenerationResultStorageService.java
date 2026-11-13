@@ -194,6 +194,8 @@ public class GenerationResultStorageService {
                         .equals(transcription.getPage().getWorksheet().getId())
                 || !generation.getRequestFileHash().equals(transcription.getSourceFileHash())
                 || !metadata.model().equals(transcription.getModel())
+                || generation.getRequestAiProfile() != null
+                        && !generation.getRequestAiProfile().metadata().equals(metadata)
                 || !metadata.contractVersion().equals(AiCorrectionResponseParser.CONTRACT_ID)
                 || !metadata.validationVersion().equals(GenerationResultMetadata.VALIDATION_VERSION)) {
             throw new IllegalArgumentException("생성 작업·전사·파일·모델·계약 버전 연결이 올바르지 않습니다.");

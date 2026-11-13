@@ -12,10 +12,15 @@ import com.ceos24.autedi.domain.academy.entity.Academy;
 import com.ceos24.autedi.domain.academy.entity.SubscriptionStatus;
 import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
 import com.ceos24.autedi.domain.generation.client.CorrectionAiClient;
+import com.ceos24.autedi.domain.generation.client.GenerationClientProfiles;
 import com.ceos24.autedi.domain.generation.client.TerraClientProperties;
 import com.ceos24.autedi.domain.generation.client.TerraGenerationClient;
+import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractSelector;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
 import com.ceos24.autedi.domain.generation.contract.v1.prompt.AiCorrectionPromptComposer;
+import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
 import com.ceos24.autedi.domain.generation.entity.*;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
@@ -161,6 +166,9 @@ class FixedResponseReviewApiTest {
     @MockitoSpyBean
     TerraGenerationClient terra;
 
+    @MockitoSpyBean
+    GenerationContractSelector contractSelector;
+
     private MockMvc mvc;
     private Long academyId, worksheetId, userId;
     private String bearer, otherBearer;
@@ -217,6 +225,16 @@ class FixedResponseReviewApiTest {
     void fixedGenerationValidatesStoresAndQueriesCardsReviewIssuesAndWarnings() throws Exception {
         JsonNode generation = generate("fixed-first");
         assertEquals("SUCCEEDED", generation.get("status").asString());
+        var pinned = generations
+                .findById(generation.get("id").longValue())
+                .orElseThrow()
+                .getRequestAiProfile();
+        assertEquals(
+                GenerationClientProfiles.profile(
+                        GenerationClientMode.FIXED, GenerationContractVersion.V1, AiCorrectionPromptVariant.DEFAULT),
+                pinned);
+        assertTrue(generation.get("settingsSnapshot").isArray());
+        assertTrue(generation.path("requestAiProfile").isMissingNode());
         JsonNode review = review();
         assertEquals(4, review.get("corrections").size());
         assertEquals(3, review.get("reviewIssues").size());
@@ -1346,7 +1364,88 @@ class FixedResponseReviewApiTest {
         }
     }
 
+    @Test
+    void unconnectedV11IsRejectedBeforePersistingJobsOrCallingClients() throws Exception {
+        ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.TERRA);
+        doReturn(GenerationClientProfiles.profile(
+                        GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT))
+                .when(contractSelector)
+                .configuredProfile(GenerationClientMode.TERRA);
+        mvc.perform(post(base() + "/generations")
+                        .header(HttpHeaders.AUTHORIZATION, bearer)
+                        .header("Idempotency-Key", "unconnected-v11"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("GENERATION_008"));
+        assertEquals(0, count("worksheet_generations"));
+        assertEquals(0, count("worksheet_transcriptions"));
+        assertNotEquals("PROCESSING", result(get(base())).get("status").asString());
+        verify(terra, never()).transcribe(anyLong(), any());
+        verify(terra, never()).correct(anyLong(), any(), any(), any());
+        verify(fixed, never()).transcribe(any(), any());
+    }
+
+    @Test
+    void idempotentResubmissionDoesNotReselectTheProfile() throws Exception {
+        JsonNode original = generate("profile-idempotent");
+        doThrow(new AssertionError("이미 접수한 작업의 프로필을 다시 선택했습니다."))
+                .when(contractSelector)
+                .configuredProfile(any());
+        JsonNode duplicate = body(attempt(base() + "/generations", "profile-idempotent", bearer));
+        assertEquals(original.get("id"), duplicate.get("id"));
+        assertEquals(1, count("worksheet_generations"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void retryKeepsStoredOrLegacyV1ProfileWhenServerSelectionChanges(boolean legacy) throws Exception {
+        ReflectionTestUtils.setField(fixed, "failAt", "AI_CORRECTION");
+        JsonNode failed = generate("profile-retry-initial");
+        assertEquals("FAILED", failed.get("status").asString());
+        long first = failed.get("id").longValue();
+        if (legacy) jdbc.update("update worksheet_generations set request_ai_profile=null where id=?", first);
+        var expected = GenerationClientProfiles.profile(
+                GenerationClientMode.FIXED, GenerationContractVersion.V1, AiCorrectionPromptVariant.DEFAULT);
+        ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.TERRA);
+        doThrow(new AssertionError("재시도는 현재 서버 선택을 참조하지 않아야 합니다."))
+                .when(contractSelector)
+                .configuredProfile(any());
+        ReflectionTestUtils.setField(fixed, "failAt", "NONE");
+        JsonNode retried = body(attempt(base() + "/generations/" + first + "/retry", "profile-retry-next", bearer));
+        long retriedId = retried.get("id").longValue();
+        assertEquals("SUCCEEDED", awaitTerminal(retriedId).get("status").asString());
+        var saved = generations.findById(retriedId).orElseThrow();
+        assertEquals(expected, saved.getRequestAiProfile());
+        assertEquals(GenerationClientMode.FIXED, saved.getClientMode());
+        assertEquals(
+                expected.metadata(),
+                archives.restoreResult(academyId, review().at("/aiResults/0/id").longValue())
+                        .metadata());
+        verify(terra, never()).transcribe(anyLong(), any());
+    }
+
+    @Test
+    void workerRejectsAnUnconnectedStoredProfileBeforeAnyOcrOrAiRequest() throws Exception {
+        long id = persistedPending(
+                "unconnected-pending",
+                GenerationClientMode.TERRA,
+                GenerationClientProfiles.profile(
+                        GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT));
+        worker.process(id);
+        JsonNode failed = awaitTerminal(id);
+        assertEquals("FAILED", failed.get("status").asString());
+        assertEquals("AI_CONTRACT_NOT_READY", failed.at("/error/code").asString());
+        assertFalse(failed.at("/error/retryable").asBoolean());
+        assertEquals(0, count("worksheet_transcriptions"));
+        assertEquals(0, count("worksheet_generation_results"));
+        verify(terra, never()).transcribe(anyLong(), any());
+        verify(terra, never()).correct(anyLong(), any(), any(), any());
+    }
+
     private long persistedPending(String key) {
+        return persistedPending(key, GenerationClientMode.FIXED, null);
+    }
+
+    private long persistedPending(String key, GenerationClientMode mode, GenerationAiProfile profile) {
         return new TransactionTemplate(transactionManager).execute(transaction -> {
             var worksheet = worksheets.findById(worksheetId).orElseThrow();
             worksheet.updateStatus(WorksheetStatus.PROCESSING);
@@ -1356,7 +1455,8 @@ class FixedResponseReviewApiTest {
                             .requestedBy(users.findById(userId).orElseThrow())
                             .idempotencyKey(key)
                             .requestFileHash(worksheet.getFileHash())
-                            .clientMode(GenerationClientMode.FIXED)
+                            .clientMode(mode)
+                            .requestAiProfile(profile)
                             .requestSettingsSnapshot(List.of(
                                     Map.of("area", "GRAMMAR_SPELLING", "level", "STANDARD"),
                                     Map.of("area", "CONTENT_SUMMARY", "level", "ADVANCED")))
