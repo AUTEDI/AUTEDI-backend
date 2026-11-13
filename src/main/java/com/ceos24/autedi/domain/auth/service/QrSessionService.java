@@ -58,19 +58,23 @@ public class QrSessionService {
 
     @Transactional
     public QrSessionCreateResponse create(Long userId, Long academyId, QrSessionCreateRequest request) {
-        // 없거나 다른 학원의 작업은 WORKSHEET_001, 같은 학원이지만 소유자가 아니면 AUTH_002.
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(request.worksheetId(), academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
-        if (!worksheet.getUser().getId().equals(userId)) {
-            throw new CustomException(ErrorCode.ACCESS_DENIED);
+        // worksheetId가 없으면 첫 사진용 QR이다(휴대폰이 올린 사진으로 새 작업을 만든다).
+        // 있으면 그 작업의 사진 교체용이다: 없거나 다른 학원의 작업은 WORKSHEET_001, 같은 학원이지만 소유자가 아니면 AUTH_002.
+        Long worksheetId = request == null ? null : request.worksheetId();
+        if (worksheetId != null) {
+            Worksheet worksheet = worksheetRepository
+                    .findByIdAndAcademyId(worksheetId, academyId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+            if (!worksheet.getUser().getId().equals(userId)) {
+                throw new CustomException(ErrorCode.ACCESS_DENIED);
+            }
         }
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(expirationMinutes);
         QrSession session = QrSession.builder()
                 .sessionId(UUID.randomUUID().toString())
                 .qrToken(TokenHashUtil.generateRawToken())
                 .userId(userId)
-                .worksheetId(worksheet.getId())
+                .worksheetId(worksheetId)
                 .expiresAt(expiresAt)
                 .build();
         qrSessionRepository.save(session);

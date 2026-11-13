@@ -28,6 +28,7 @@ import com.ceos24.autedi.global.storage.StoredFile;
 import com.ceos24.autedi.global.storage.WorksheetImagePreparer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +74,11 @@ public class WorksheetService {
         if (files == null || files.isEmpty()) {
             throw new CustomException(ErrorCode.EMPTY_FILE);
         }
+        if (qr != null && files.size() != 1) {
+            // QR 하나로는 사진 한 장, 작업 하나만 만든다.
+            throw new CustomException(ErrorCode.QR_SINGLE_FILE_ONLY);
+        }
+        claimQrUpload(qr);
 
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -187,12 +193,14 @@ public class WorksheetService {
         QrSession qr = resolveQrTarget(qrSessionId, userId);
         if (qr != null) {
             boolean notOwner = !worksheet.getUser().getId().equals(qr.getUserId());
+            // 첫 사진용 QR(worksheetId 없음)은 새 작업을 만드는 용도라 기존 작업의 사진을 교체할 수 없다.
             boolean otherTarget =
-                    qr.getWorksheetId() != null && !qr.getWorksheetId().equals(worksheetId);
+                    qr.getWorksheetId() == null || !qr.getWorksheetId().equals(worksheetId);
             if (notOwner || otherTarget) {
                 throw new CustomException(ErrorCode.QR_TARGET_MISMATCH);
             }
         }
+        claimQrUpload(qr);
 
         // If-Match 헤더 검증 (제공된 경우)
         if (StringUtils.hasText(ifMatch) && !ifMatch.equals("*")) {
@@ -249,6 +257,16 @@ public class WorksheetService {
         }
 
         return WorksheetDetailResponse.of(worksheet, pages, settings, null);
+    }
+
+    /** QR 하나당 사진 한 번만 올릴 수 있다. 같은 트랜잭션 안에서 조건부 UPDATE로 한 번만 성공시키며, 업로드가 실패하면 함께 롤백된다. */
+    private void claimQrUpload(QrSession qr) {
+        if (qr == null) {
+            return;
+        }
+        if (qrSessionRepository.claimUpload(qr.getSessionId(), LocalDateTime.now()) == 0) {
+            throw new CustomException(ErrorCode.QR_ALREADY_UPLOADED);
+        }
     }
 
     /**

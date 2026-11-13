@@ -311,6 +311,140 @@ class WorksheetQrUploadEventTest {
         upload("/api/v1/worksheets", plainToken(owner), "files", 201);
     }
 
+    @Test
+    @DisplayName("QR 하나로 새 작업을 두 번 만들 수 없다: 두 번째는 409(QR_006)이고 작업은 하나만 생긴다")
+    void newModeAllowsOnlyOneWorksheetPerQr() throws Exception {
+        QrSession session = saveSession(owner.getId(), null);
+        String token = qrToken(owner, session);
+
+        upload("/api/v1/worksheets", token, "files", 201);
+        String second = upload("/api/v1/worksheets", token, "files", 409);
+
+        assertThat(second).contains("QR_006");
+        assertThat(worksheetRepository.count()).isEqualTo(1);
+        assertThat(qrSessionRepository
+                        .findBySessionId(session.getSessionId())
+                        .orElseThrow()
+                        .getUploadedAt())
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("QR로는 사진 한 장만 올릴 수 있다: 두 장이면 400(QR_007)이고 QR은 소모되지 않는다")
+    void newModeRejectsMultipleFilesWithoutConsumingQr() throws Exception {
+        QrSession session = saveSession(owner.getId(), null);
+        String token = qrToken(owner, session);
+
+        MockMultipartFile first =
+                new MockMultipartFile("files", "a.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
+        MockMultipartFile second =
+                new MockMultipartFile("files", "b.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
+        String body = mockMvc.perform(
+                        multipart("/api/v1/worksheets").file(first).file(second).header("Authorization", token))
+                .andExpect(status().isBadRequest())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(body).contains("QR_007");
+        assertThat(worksheetRepository.count()).isZero();
+        assertThat(qrSessionRepository
+                        .findBySessionId(session.getSessionId())
+                        .orElseThrow()
+                        .getUploadedAt())
+                .isNull();
+
+        upload("/api/v1/worksheets", token, "files", 201);
+    }
+
+    @Test
+    @DisplayName("QR 하나로 사진 교체도 한 번만 된다: 두 번째는 409(QR_006)")
+    void replaceModeAllowsOnlyOneUploadPerQr() throws Exception {
+        long target = idOf(upload("/api/v1/worksheets", plainToken(owner), "files", 201));
+        QrSession session = saveSession(owner.getId(), target);
+        String token = qrToken(owner, session);
+
+        upload("/api/v1/worksheets/" + target + "/file", token, "file", 200, true);
+        String second = upload("/api/v1/worksheets/" + target + "/file", token, "file", 409, true);
+
+        assertThat(second).contains("QR_006");
+    }
+
+    @Test
+    @DisplayName("업로드가 실패하면 QR은 소모되지 않아 같은 QR로 다시 올릴 수 있다")
+    void failedUploadDoesNotConsumeQr() throws Exception {
+        QrSession session = saveSession(owner.getId(), null);
+        String token = qrToken(owner, session);
+
+        MockMultipartFile broken =
+                new MockMultipartFile("files", "broken.png", MediaType.IMAGE_PNG_VALUE, new byte[] {1, 2, 3});
+        mockMvc.perform(multipart("/api/v1/worksheets").file(broken).header("Authorization", token))
+                .andExpect(status().is4xxClientError());
+
+        assertThat(worksheetRepository.count()).isZero();
+        assertThat(qrSessionRepository
+                        .findBySessionId(session.getSessionId())
+                        .orElseThrow()
+                        .getUploadedAt())
+                .isNull();
+        upload("/api/v1/worksheets", token, "files", 201);
+    }
+
+    @Test
+    @DisplayName("같은 QR로 동시에 올려도 성공은 정확히 1건이고 작업도 1개만 생긴다")
+    void concurrentUploadsWithSameQrSucceedOnce() throws Exception {
+        QrSession session = saveSession(owner.getId(), null);
+        String token = qrToken(owner, session);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> results = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            results.add(pool.submit(() -> {
+                start.await();
+                MockMultipartFile file = new MockMultipartFile(
+                        "files", "photo.png", MediaType.IMAGE_PNG_VALUE, TestWorksheetImages.png(2, 3));
+                return mockMvc.perform(
+                                multipart("/api/v1/worksheets").file(file).header("Authorization", token))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus();
+            }));
+        }
+        start.countDown();
+        int created = 0;
+        int conflicts = 0;
+        for (java.util.concurrent.Future<Integer> result : results) {
+            int status = result.get();
+            if (status == 201) {
+                created++;
+            } else if (status == 409) {
+                conflicts++;
+            }
+        }
+        pool.shutdown();
+
+        assertThat(created).isEqualTo(1);
+        assertThat(conflicts).isEqualTo(3);
+        assertThat(worksheetRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("첫 사진용 QR(worksheet_id 없음)로는 기존 작업의 사진을 교체할 수 없다")
+    void newModeSessionCannotReplaceExistingWorksheet() throws Exception {
+        long existing = idOf(upload("/api/v1/worksheets", plainToken(owner), "files", 201));
+        QrSession session = saveSession(owner.getId(), null);
+        String token = qrToken(owner, session);
+
+        String body = upload("/api/v1/worksheets/" + existing + "/file", token, "file", 403, true);
+
+        assertThat(body).contains("QR_004");
+        assertThat(qrSessionRepository
+                        .findBySessionId(session.getSessionId())
+                        .orElseThrow()
+                        .getUploadedAt())
+                .isNull();
+    }
+
     // ---------- helpers ----------
 
     private CustomUserPrincipal principalOf(String accessToken) {

@@ -55,6 +55,14 @@ public interface QrSessionRepository extends JpaRepository<QrSession, Long> {
     int expireIfOverdue(
             @Param("id") Long id, @Param("active") Collection<QrSessionStatus> active, @Param("now") LocalDateTime now);
 
+    /**
+     * QR 하나당 업로드 한 번. 아직 올리지 않은 세션일 때만 업로드 시각을 기록하고 영향 행 1을 돌려준다. 업로드 트랜잭션 안에서 호출하므로 업로드가
+     * 롤백되면 함께 되돌아간다. 이미 불러온 엔티티가 분리되지 않도록 clearAutomatically는 쓰지 않는다.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE QrSession q SET q.uploadedAt = :now WHERE q.sessionId = :sessionId AND q.uploadedAt IS NULL")
+    int claimUpload(@Param("sessionId") String sessionId, @Param("now") LocalDateTime now);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM QrSession q WHERE q.expiresAt < :threshold")
     int deleteByExpiresAtBefore(@Param("threshold") LocalDateTime threshold);

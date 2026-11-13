@@ -1,10 +1,11 @@
 package com.ceos24.autedi.domain.auth.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
 
-@Schema(description = "QR 세션 생성 요청")
+@Schema(description = "QR 세션 생성 요청 (body 생략 가능)")
 public record QrSessionCreateRequest(
-        @Schema(description = "사진을 올릴 대상 작업 ID. 요청자가 소유한 같은 학원의 작업이어야 합니다.", example = "12")
-                @NotNull(message = "worksheetId는 필수입니다.")
+        @Schema(
+                        description = "기존 작업의 사진을 교체할 때만 지정합니다(요청자가 소유한 같은 학원의 작업). "
+                                + "첫 사진이라 아직 작업이 없으면 비우거나 null로 보내며, 이 경우 휴대폰이 올린 사진으로 새 작업이 만들어집니다.",
+                        example = "12")
                 Long worksheetId) {}
