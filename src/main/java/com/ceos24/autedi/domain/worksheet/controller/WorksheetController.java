@@ -53,10 +53,10 @@ public class WorksheetController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
                 description =
-                        "업로드 성공. QR 로그인(휴대폰) 토큰이면 소유자 SSE로 worksheet.created {sessionId, worksheetId}가 전송됩니다. 첨삭은 자동 시작되지 않습니다."),
+                        "업로드 성공. QR 로그인(휴대폰) 토큰이면 소유자 SSE로 worksheet.created {sessionId, worksheetId}가 전송되며, 첫 사진용 QR(worksheetId 없음)로만 새 작업을 만들 수 있고 QR 하나당 한 번만 가능합니다. 첨삭은 자동 시작되지 않습니다."),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "400",
-                description = "FILE_001: 업로드할 파일이 비어 있습니다.",
+                description = "FILE_001: 업로드할 파일이 비어 있습니다. / QR_007: QR 로그인(휴대폰) 토큰은 사진을 한 장만 올릴 수 있습니다.",
                 content =
                         @io.swagger.v3.oas.annotations.media.Content(
                                 mediaType = "application/json",
@@ -87,6 +87,17 @@ public class WorksheetController {
                                                 name = "QR_004",
                                                 value =
                                                         "{\"isSuccess\":false,\"code\":\"QR_004\",\"message\":\"이 QR로 업로드할 수 있는 작업이 아닙니다.\",\"result\":null,\"error\":null}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "QR_006: QR 로그인(휴대폰) 토큰에만 적용. 이 QR로는 이미 사진을 올렸습니다(QR 하나당 한 번).",
+                content =
+                        @io.swagger.v3.oas.annotations.media.Content(
+                                mediaType = "application/json",
+                                examples =
+                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                name = "QR_006",
+                                                value =
+                                                        "{\"isSuccess\":false,\"code\":\"QR_006\",\"message\":\"이 QR로는 이미 사진을 올렸습니다. 새 QR을 생성해 주세요.\",\"result\":null,\"error\":null}"))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "415",
                 description = "FILE_002: 지원하지 않는 파일 형식",
@@ -246,7 +257,8 @@ public class WorksheetController {
                                                         "{\"isSuccess\":false,\"code\":\"WORKSHEET_001\",\"message\":\"학습지를 찾을 수 없거나 접근 권한이 없습니다.\",\"result\":null,\"error\":null}"))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "409",
-                description = "WORKSHEET_002: DRAFT/FAILED 상태가 아니거나 다중 페이지",
+                description =
+                        "WORKSHEET_002: DRAFT/FAILED 상태가 아니거나 다중 페이지 / QR_006: QR 로그인(휴대폰) 토큰에만 적용. 이 QR로는 이미 사진을 올렸습니다(QR 하나당 한 번).",
                 content =
                         @io.swagger.v3.oas.annotations.media.Content(
                                 mediaType = "application/json",

@@ -46,6 +46,10 @@ public class QrSession extends BaseCreatedTimeEntity {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    /** QR로 사진을 올린 시각. 값이 있으면 이 QR로는 더 올릴 수 없다(QR 하나당 사진 한 번). */
+    @Column(name = "uploaded_at")
+    private LocalDateTime uploadedAt;
+
     @Builder
     public QrSession(String sessionId, String qrToken, Long userId, Long worksheetId, LocalDateTime expiresAt) {
         this.sessionId = sessionId;

@@ -32,6 +32,8 @@ public enum ErrorCode implements BaseErrorCode {
     QR_SESSION_INVALID_STATE(HttpStatus.CONFLICT, "QR_003", "이미 사용되었거나 처리할 수 없는 QR 상태입니다."),
     QR_TARGET_MISMATCH(HttpStatus.FORBIDDEN, "QR_004", "이 QR로 업로드할 수 있는 작업이 아닙니다."),
     QR_USER_MISMATCH(HttpStatus.FORBIDDEN, "QR_005", "다른 계정으로 로그인된 기기입니다. 데스크톱 승인 방식으로 QR 로그인을 진행해 주세요."),
+    QR_ALREADY_UPLOADED(HttpStatus.CONFLICT, "QR_006", "이 QR로는 이미 사진을 올렸습니다. 새 QR을 생성해 주세요."),
+    QR_SINGLE_FILE_ONLY(HttpStatus.BAD_REQUEST, "QR_007", "QR로는 사진을 한 장만 올릴 수 있습니다."),
 
     // Academy
     ACADEMY_NOT_FOUND(HttpStatus.NOT_FOUND, "ACADEMY_001", "존재하지 않는 학원입니다."),

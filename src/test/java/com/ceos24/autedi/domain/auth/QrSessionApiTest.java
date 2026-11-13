@@ -149,13 +149,16 @@ class QrSessionApiTest {
     }
 
     @Test
-    @DisplayName("QR 세션 생성: worksheetId가 없으면 400 (body 없음, 빈 객체, null 모두)")
-    void create_withoutWorksheetId_400() throws Exception {
+    @DisplayName("QR 세션 생성: worksheetId가 없어도 201이고 첫 사진용 세션(worksheet_id 없음)이 만들어진다 (body 없음, 빈 객체, null 모두)")
+    void create_withoutWorksheetId_201() throws Exception {
         mockMvc.perform(post(BASE).header(HttpHeaders.AUTHORIZATION, bearer(owner)))
-                .andExpect(status().isBadRequest());
-        createRequest(owner, "{}").andExpect(status().isBadRequest());
-        createRequest(owner, "{\"worksheetId\":null}").andExpect(status().isBadRequest());
-        assertThat(qrSessionRepository.count()).isZero();
+                .andExpect(status().isCreated());
+        createRequest(owner, "{}").andExpect(status().isCreated());
+        createRequest(owner, "{\"worksheetId\":null}").andExpect(status().isCreated());
+
+        assertThat(qrSessionRepository.count()).isEqualTo(3);
+        assertThat(qrSessionRepository.findAll())
+                .allSatisfy(session -> assertThat(session.getWorksheetId()).isNull());
     }
 
     @Test

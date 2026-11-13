@@ -37,7 +37,7 @@ public class QrSessionController {
     @Operation(
             summary = "QR 세션 생성 (인증)",
             description =
-                    "노트북의 작업 화면에서 호출합니다. worksheetId는 필수이며, 요청자가 소유한 같은 학원의 작업이어야 합니다. sessionId, 만료 시각, QR 이미지(base64 data URI)를 반환합니다.")
+                    "노트북에서 호출합니다. worksheetId를 지정하면 그 작업의 사진 교체용 QR이고(요청자가 소유한 같은 학원의 작업), 비우면 첫 사진용 QR이라 휴대폰이 올린 사진으로 새 작업이 만들어집니다. QR 하나로는 사진 한 장, 작업 하나만 올릴 수 있습니다. sessionId, 만료 시각, QR 이미지(base64 data URI)를 반환합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
@@ -50,19 +50,8 @@ public class QrSessionController {
                                                 value =
                                                         "{\"isSuccess\":true,\"code\":\"COMMON_200\",\"message\":\"QR 세션이 생성되었습니다.\",\"result\":{\"sessionId\":\"3f1c2b8e-7a41-4f0e-9c52-0d2b6a1e8f77\",\"expiresAt\":\"2026-11-11T14:35:00\",\"qrImage\":\"data:image/png;base64,iVBORw0KGgo...\"},\"error\":null}"))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400",
-                description = "COMMON_001: worksheetId 누락",
-                content =
-                        @io.swagger.v3.oas.annotations.media.Content(
-                                mediaType = "application/json",
-                                examples =
-                                        @io.swagger.v3.oas.annotations.media.ExampleObject(
-                                                name = "COMMON_001",
-                                                value =
-                                                        "{\"isSuccess\":false,\"code\":\"COMMON_001\",\"message\":\"요청 값이 올바르지 않습니다.\",\"result\":null,\"error\":null}"))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "403",
-                description = "AUTH_002: 작업 소유자가 아님",
+                description = "AUTH_002: worksheetId를 지정했는데 작업 소유자가 아님",
                 content =
                         @io.swagger.v3.oas.annotations.media.Content(
                                 mediaType = "application/json",
@@ -73,7 +62,7 @@ public class QrSessionController {
                                                         "{\"isSuccess\":false,\"code\":\"AUTH_002\",\"message\":\"접근 권한이 없습니다.\",\"result\":null,\"error\":null}"))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
-                description = "WORKSHEET_001: 작업이 없거나 다른 학원의 작업",
+                description = "WORKSHEET_001: worksheetId를 지정했는데 작업이 없거나 다른 학원의 작업",
                 content =
                         @io.swagger.v3.oas.annotations.media.Content(
                                 mediaType = "application/json",
@@ -97,7 +86,7 @@ public class QrSessionController {
     @PostMapping
     public ResponseEntity<ApiResponse<QrSessionCreateResponse>> create(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
-            @Valid @RequestBody QrSessionCreateRequest request) {
+            @RequestBody(required = false) QrSessionCreateRequest request) {
         QrSessionCreateResponse response = qrSessionService.create(principal.userId(), principal.academyId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.onSuccess("QR 세션이 생성되었습니다.", response));
     }
