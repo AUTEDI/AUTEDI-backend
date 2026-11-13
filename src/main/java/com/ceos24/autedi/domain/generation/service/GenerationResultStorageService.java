@@ -2,13 +2,13 @@ package com.ceos24.autedi.domain.generation.service;
 
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionAnchor;
+import com.ceos24.autedi.domain.correction.entity.CorrectionV11Details;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
-import com.ceos24.autedi.domain.generation.contract.v1.AiCorrectionResponse;
-import com.ceos24.autedi.domain.generation.contract.v1.AiCorrectionResponseParser;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
-import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionResponseValidator;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidatedItem;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationContext;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationResult;
@@ -16,6 +16,7 @@ import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGenerationResult;
 import com.ceos24.autedi.domain.generation.entity.WorksheetTranscription;
 import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
+import com.ceos24.autedi.domain.generation.persistence.GenerationValidationStorageCodec;
 import com.ceos24.autedi.domain.generation.persistence.StoredCorrectionLink;
 import com.ceos24.autedi.domain.generation.persistence.StoredGenerationResult;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
@@ -48,8 +49,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Transactional(readOnly = true)
 public class GenerationResultStorageService {
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final AiCorrectionResponseParser PARSER = new AiCorrectionResponseParser();
-    private static final AiCorrectionResponseValidator VALIDATOR = new AiCorrectionResponseValidator();
+    private final GenerationContractRouter contracts;
     private final WorksheetGenerationRepository generations;
     private final WorksheetPageRepository pages;
     private final WorksheetTranscriptionRepository transcriptions;
@@ -101,13 +101,48 @@ public class GenerationResultStorageService {
             GenerationResultMetadata metadata,
             String rawResponse,
             AiValidationResult validation) {
+        return recordValidated(
+                academyId,
+                generationId,
+                transcriptionId,
+                metadata,
+                rawResponse,
+                new GenerationContractRouter.V1Validation(Objects.requireNonNull(validation)));
+    }
+
+    @Transactional
+    public Long recordValidatedResultV11(
+            Long academyId,
+            Long generationId,
+            Long transcriptionId,
+            GenerationResultMetadata metadata,
+            String rawResponse,
+            com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationResult validation) {
+        return recordValidated(
+                academyId,
+                generationId,
+                transcriptionId,
+                metadata,
+                rawResponse,
+                new GenerationContractRouter.V11Validation(Objects.requireNonNull(validation)));
+    }
+
+    private Long recordValidated(
+            Long academyId,
+            Long generationId,
+            Long transcriptionId,
+            GenerationResultMetadata metadata,
+            String rawResponse,
+            GenerationContractRouter.Validation validation) {
         WorksheetGeneration generation = ownedGeneration(academyId, generationId);
         WorksheetTranscription transcription = ownedTranscription(academyId, transcriptionId);
         checkBinding(generation, transcription, metadata);
-        AiCorrectionResponse parsed = PARSER.parse(rawResponse);
-        AiValidationContext context =
-                new AiValidationContext(transcription.getPageNumber(), transcription.getLines(), settings(generation));
-        if (!VALIDATOR.validate(parsed, context).equals(validation)) {
+        var checked = contracts.parseAndValidate(
+                GenerationValidationStorageCodec.version(metadata),
+                rawResponse,
+                new GenerationContractRouter.Input(
+                        transcription.getPageNumber(), transcription.getLines(), settings(generation)));
+        if (!checked.equals(validation)) {
             throw new IllegalArgumentException("원본 응답·확정 전사·요청 설정과 검증 결과가 일치하지 않습니다.");
         }
         var existing = results.findByGenerationIdAndPageId(
@@ -122,14 +157,29 @@ public class GenerationResultStorageService {
             throw new IllegalArgumentException("기준 PNG가 변경되어 과거 전사로 현재 첨삭 카드를 만들 수 없습니다.");
         }
         List<StoredCorrectionLink> links = new ArrayList<>();
-        for (AiValidatedItem item : validation.corrections()) {
-            Correction saved = corrections.save(toCorrection(generation, transcription, item));
-            links.add(new StoredCorrectionLink(item.candidateIndex(), saved.getId()));
+        switch (validation) {
+            case GenerationContractRouter.V1Validation v1 -> {
+                for (var item : v1.result().corrections()) {
+                    Correction saved = corrections.save(toCorrection(generation, transcription, item));
+                    links.add(new StoredCorrectionLink(item.candidateIndex(), saved.getId()));
+                }
+            }
+            case GenerationContractRouter.V11Validation v11 -> {
+                for (var item : v11.result().cards()) {
+                    Correction saved = corrections.save(toCorrectionV11(generation, transcription, item));
+                    links.add(new StoredCorrectionLink(item.candidateIndex(), saved.getId()));
+                }
+            }
         }
         links.sort(Comparator.comparingInt(StoredCorrectionLink::candidateIndex));
-        return results.save(new WorksheetGenerationResult(
-                        generation, transcription, metadata, rawResponse, validation, links, null))
-                .getId();
+        WorksheetGenerationResult archived =
+                switch (validation) {
+                    case GenerationContractRouter.V1Validation v1 -> new WorksheetGenerationResult(
+                            generation, transcription, metadata, rawResponse, v1.result(), links, null);
+                    case GenerationContractRouter.V11Validation v11 -> WorksheetGenerationResult.validatedV11(
+                            generation, transcription, metadata, rawResponse, v11.result(), links);
+                };
+        return results.save(archived).getId();
     }
 
     @Transactional
@@ -147,7 +197,7 @@ public class GenerationResultStorageService {
         if (parseError == null || parseError.isBlank()) throw new IllegalArgumentException("해석 실패 사유가 필요합니다.");
         boolean unreadable = false;
         try {
-            PARSER.parse(rawResponse);
+            contracts.assertReadable(GenerationValidationStorageCodec.version(metadata), rawResponse);
         } catch (IllegalArgumentException e) {
             unreadable = true;
         }
@@ -188,6 +238,7 @@ public class GenerationResultStorageService {
 
     private static void checkBinding(
             WorksheetGeneration generation, WorksheetTranscription transcription, GenerationResultMetadata metadata) {
+        var version = GenerationValidationStorageCodec.version(metadata);
         if (!generation
                         .getWorksheet()
                         .getId()
@@ -196,8 +247,7 @@ public class GenerationResultStorageService {
                 || !metadata.model().equals(transcription.getModel())
                 || generation.getRequestAiProfile() != null
                         && !generation.getRequestAiProfile().metadata().equals(metadata)
-                || !metadata.contractVersion().equals(AiCorrectionResponseParser.CONTRACT_ID)
-                || !metadata.validationVersion().equals(GenerationResultMetadata.VALIDATION_VERSION)) {
+                || version == GenerationContractVersion.V1_1 && generation.getRequestAiProfile() == null) {
             throw new IllegalArgumentException("생성 작업·전사·파일·모델·계약 버전 연결이 올바르지 않습니다.");
         }
     }
@@ -265,18 +315,98 @@ public class GenerationResultStorageService {
                 .build();
     }
 
+    private static Correction toCorrectionV11(
+            WorksheetGeneration generation,
+            WorksheetTranscription transcription,
+            com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidatedItem item) {
+        var original = item.original();
+        List<CorrectionAnchor> anchors = java.util.stream.IntStream.range(
+                        0, original.anchors().size())
+                .mapToObj(index -> {
+                    var resolved = item.location().resolvedAnchors().get(index);
+                    return new CorrectionAnchor(
+                            transcription.getId(),
+                            resolved.lineId(),
+                            original.anchors().get(index).occurrence(),
+                            resolved.start(),
+                            resolved.end());
+                })
+                .toList();
+        String initial = original.action() == com.ceos24.autedi.domain.generation.contract.v1_1.AiAction.REPLACE
+                ? original.replacement()
+                : original.guidance();
+        List<RegionPayload> regions = item.location().validTargetBoxes().stream()
+                .map(box -> new RegionPayload(
+                        transcription.getPage().getId(),
+                        box.get(0),
+                        box.get(1),
+                        box.get(2) - box.get(0),
+                        box.get(3) - box.get(1),
+                        null))
+                .toList();
+        return Correction.builder()
+                .worksheet(generation.getWorksheet())
+                .page(transcription.getPage())
+                .generation(generation)
+                .area(CorrectionArea.valueOf(original.area().name()))
+                .originalText(item.location().originalText())
+                .aiInitialContent(initial)
+                .content(initial)
+                .explanation(original.reason())
+                .regions(regions)
+                .action(com.ceos24.autedi.domain.generation.contract.v1.AiAction.valueOf(
+                        original.action().name()))
+                .feedbackType(com.ceos24.autedi.domain.correction.entity.FeedbackType.valueOf(
+                        original.feedbackType().name()))
+                .issueKinds(original.issueKinds().stream()
+                        .map(kind -> com.ceos24.autedi.domain.generation.contract.v1.AiIssueKind.valueOf(kind.name()))
+                        .toList())
+                .anchor(anchors.size() == 1 ? anchors.getFirst() : null)
+                .locationUncertain(original.locationUncertain())
+                .warnings(item.issues().stream()
+                        .map(GenerationResultStorageService::compatibleWarning)
+                        .toList())
+                .requiresReview(item.requiresReview())
+                .v11Details(new CorrectionV11Details(
+                        anchors, original.revisionScope(), original.edit(), original.edit(), item.issues()))
+                .build();
+    }
+
+    /** 기존 v1 DTO용 진단 투영. 원래 v1.1 코드는 v11_details와 불변 아카이브에 모두 보존한다. */
+    private static com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationIssue compatibleWarning(
+            com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationIssue issue) {
+        String code =
+                switch (issue.code()) {
+                    case INVALID_TARGET_BOX -> "INVALID_BOX";
+                    case NO_VALID_TARGET_BOXES -> "NO_VALID_BOXES";
+                    case BOX_WITHOUT_ANCHORS -> "BOX_WITHOUT_ANCHOR";
+                    case OVERLAPPING_ANCHORS -> "OVERLAPPING_ANCHOR";
+                    default -> issue.code().name();
+                };
+        com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationCode compatible;
+        try {
+            compatible = com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationCode.valueOf(code);
+        } catch (IllegalArgumentException e) {
+            compatible =
+                    com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationCode
+                            .INVALID_FIELD_COMBINATION;
+        }
+        return new com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationIssue(
+                compatible, issue.field(), "[" + issue.code().name() + "] " + issue.message());
+    }
+
     private static Long sameResult(
             WorksheetGenerationResult existing,
             Long transcriptionId,
             GenerationResultMetadata metadata,
             String raw,
-            AiValidationResult validation,
+            GenerationContractRouter.Validation validation,
             String parseError) {
         StoredGenerationResult saved = existing.snapshot();
         if (saved.transcription().id().equals(transcriptionId)
                 && saved.metadata().equals(metadata)
                 && saved.rawResponse().equals(raw)
-                && Objects.equals(saved.validationResult(), validation)
+                && Objects.equals(saved.versionedValidationResult(), validation)
                 && Objects.equals(saved.parseError(), parseError)) return saved.id();
         throw new IllegalStateException("최초 생성 결과를 덮어쓸 수 없습니다. 새 생성 작업으로 결과를 추가하세요.");
     }

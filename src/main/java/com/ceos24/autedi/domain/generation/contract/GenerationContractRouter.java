@@ -72,7 +72,12 @@ public final class GenerationContractRouter {
                         ? GenerationClientMode.FIXED
                         : GenerationClientMode.TERRA,
                 profile);
-        return switch (profile.version()) {
+        return parseAndValidate(profile.version(), raw, input);
+    }
+
+    /** 저장 경계는 작업에 고정된 메타데이터를 먼저 검사한 뒤 계약 버전으로 검증한다. */
+    public Validation parseAndValidate(GenerationContractVersion version, String raw, Input input) {
+        return switch (version) {
             case V1 -> new V1Validation(
                     new com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionResponseValidator()
                             .validate(
@@ -86,5 +91,12 @@ public final class GenerationContractRouter {
                                             .parse(raw),
                                     input.v11()));
         };
+    }
+
+    public void assertReadable(GenerationContractVersion version, String raw) {
+        switch (version) {
+            case V1 -> new com.ceos24.autedi.domain.generation.contract.v1.AiCorrectionResponseParser().parse(raw);
+            case V1_1 -> new com.ceos24.autedi.domain.generation.contract.v1_1.AiCorrectionResponseParser().parse(raw);
+        }
     }
 }
