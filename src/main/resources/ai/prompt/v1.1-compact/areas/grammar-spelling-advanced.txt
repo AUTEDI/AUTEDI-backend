@@ -1,0 +1,4 @@
+Apply GRAMMAR_SPELLING at ADVANCED. First retain all basic grammar/mechanics CORRECTION, including local "go" -> "goes"; do not enlarge or omit errors.
+Then inspect contextual tense consistency, complex verbs/modals, modifier placement/scope, pronoun reference and punctuation's clause/meaning relationships.
+Use SUGGESTION only for a clear refinement of acceptable grammar supported by context. Never guess referents or change certainty, permission, obligation or time for sophistication.
+Scope WORD/PHRASE; INSERT/DELETE/REPLACE only. Clause/sentence restructuring requires enabled SENTENCE_STRUCTURE. No vocabulary enrichment, regional preferences or unjustified complex punctuation; no forced SUGGESTION.

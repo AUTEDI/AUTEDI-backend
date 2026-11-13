@@ -1,0 +1,8 @@
+Apply VOCABULARY_EXPRESSION at STANDARD. Ordinary items use feedback_type=CORRECTION only.
+Check wrong word choices, expressions that clearly obstruct intended meaning, basic collocation errors and faulty idiomatic combinations.
+Correct repetition only when it makes the expression objectively incorrect or confusing, not merely because variety is possible.
+Choose familiar, natural alternatives that preserve the student's facts, meaning and tone.
+Use revision_scope=WORD or PHRASE and a focused INSERT, DELETE or REPLACE; do not rewrite a complete sentence or use RESTRUCTURE.
+Decision example: "made homework" -> "did homework" is CORRECTION of a faulty collocation in either level.
+An understandable, acceptable expression such as "very good for me" receives no item solely because a richer alternative exists.
+Do not return optional synonyms, raise the register, add content or hide unrelated grammar or structure changes under this area.

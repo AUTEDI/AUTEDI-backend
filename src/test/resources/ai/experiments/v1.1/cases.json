@@ -1,0 +1,43 @@
+{
+  "format_version": 1,
+  "description": "합성 인쇄체 PNG와 확정 전사문을 사용한 연결 점검 자료입니다. 실제 학생 손글씨 품질 평가는 별도의 이미지·전사 세트로 수행해야 합니다.",
+  "cases": [
+    {
+      "id": "grammar-error",
+      "category": "GRAMMAR_ERROR",
+      "image": "typed-demo/grammar-error.png",
+      "transcription": "typed-demo/grammar-error.txt",
+      "page_number": 1,
+      "areas": ["GRAMMAR_SPELLING"],
+      "rubric": [
+        "Standard와 Advanced 모두 go를 goes로 고치는 기본 오류를 찾아야 한다.",
+        "올바른 나머지 표현을 불필요하게 다시 쓰지 않아야 한다."
+      ]
+    },
+    {
+      "id": "improvable-structure",
+      "category": "IMPROVABLE",
+      "image": "typed-demo/improvable-structure.png",
+      "transcription": "typed-demo/improvable-structure.txt",
+      "page_number": 1,
+      "areas": ["SENTENCE_STRUCTURE"],
+      "rubric": [
+        "Standard는 올바른 세 문장에 스타일 개선을 제안하지 않아야 한다.",
+        "Advanced는 의미와 순서를 보존한 유용한 흐름 개선만 SUGGESTION으로 제안할 수 있다.",
+        "새 사실·관계를 만들거나 개선을 객관적인 오류로 표시하지 않아야 한다."
+      ]
+    },
+    {
+      "id": "clean-text",
+      "category": "CLEAN",
+      "image": "typed-demo/clean-text.png",
+      "transcription": "typed-demo/clean-text.txt",
+      "page_number": 1,
+      "areas": ["GRAMMAR_SPELLING", "SENTENCE_STRUCTURE"],
+      "rubric": [
+        "두 레벨 모두 이미 자연스럽고 올바른 문장에 불필요한 오류·구조 제안을 만들지 않아야 한다.",
+        "Advanced에서 제안이 나오면 명확한 개선 근거와 의미 보존을 사람이 확인한다."
+      ]
+    }
+  ]
+}

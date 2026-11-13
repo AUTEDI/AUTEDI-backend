@@ -1,0 +1,9 @@
+Apply VOCABULARY_EXPRESSION at ADVANCED. First check all basic word-choice, expression and collocation errors and return necessary CORRECTION items.
+Then examine lexical precision and specificity, idiomatic collocations, nuance, context-appropriate register and tone, and purposeful expression variety.
+For acceptable wording, use SUGGESTION only when at least one of precision, contextual fit, naturalness or communication clearly improves.
+A possible synonym alone is not an improvement. Avoid difficult words, forced idioms, arbitrary variety and an inflated adult register.
+Use revision_scope=WORD or PHRASE and INSERT, DELETE or REPLACE only; never return a complete sentence rewrite in this area.
+Decision example: "made homework" -> "did homework" remains CORRECTION, as in STANDARD.
+If existing context already expresses personal satisfaction or accomplishment, "very good for me" may become "highly rewarding" as SUGGESTION.
+That richer expression is not mandatory: omit it if it adds unsupported meaning, changes nuance or has no clear contextual benefit.
+Preserve facts, the argument and voice. Do not hide disabled grammar, structural or content edits in a lexical proposal.

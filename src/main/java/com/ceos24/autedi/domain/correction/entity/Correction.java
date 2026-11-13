@@ -38,11 +38,12 @@ import org.hibernate.type.SqlTypes;
         name = "corrections",
         check =
                 @CheckConstraint(
-                        name = "CHK_corrections_contract_v1",
+                        name = "CHK_corrections_contract_v1_v11",
                         constraint = "(action IS NULL AND issue_kinds IS NULL AND anchor IS NULL "
-                                + "AND location_uncertain IS NULL AND warnings IS NULL AND requires_review IS NULL) OR "
+                                + "AND location_uncertain IS NULL AND warnings IS NULL AND requires_review IS NULL AND v11_details IS NULL) OR "
                                 + "(action IS NOT NULL AND action IN ('REPLACE','GUIDANCE') AND feedback_type IS NOT NULL "
-                                + "AND feedback_type IN ('CORRECTION','SUGGESTION') AND issue_kinds IS NOT NULL AND anchor IS NOT NULL "
+                                + "AND feedback_type IN ('CORRECTION','SUGGESTION') AND issue_kinds IS NOT NULL "
+                                + "AND (anchor IS NOT NULL OR v11_details IS NOT NULL) "
                                 + "AND location_uncertain IS NOT NULL AND warnings IS NOT NULL AND requires_review IS NOT NULL "
                                 + "AND (action <> 'GUIDANCE' OR area = 'CONTENT_SUMMARY'))"))
 @Getter
@@ -102,6 +103,10 @@ public class Correction extends BaseTimeEntity {
     @Column(name = "anchor", columnDefinition = "json", updatable = false)
     private CorrectionAnchor anchor;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "v11_details", columnDefinition = "json")
+    private CorrectionV11Details v11Details;
+
     @Column(name = "location_uncertain", updatable = false)
     private Boolean locationUncertain;
 
@@ -148,6 +153,7 @@ public class Correction extends BaseTimeEntity {
             Boolean locationUncertain,
             List<AiValidationIssue> warnings,
             Boolean requiresReview,
+            CorrectionV11Details v11Details,
             Boolean isApplied) {
         this.worksheet = worksheet;
         this.page = page;
@@ -165,6 +171,7 @@ public class Correction extends BaseTimeEntity {
         this.locationUncertain = locationUncertain;
         this.warnings = warnings == null ? null : List.copyOf(warnings);
         this.requiresReview = requiresReview;
+        this.v11Details = v11Details;
         validateV1Fields();
         this.isEdited = false;
         this.isApplied = isApplied != null ? isApplied : true;
@@ -175,6 +182,9 @@ public class Correction extends BaseTimeEntity {
     public void editContent(String newContent) {
         if (newContent == null || action != AiAction.REPLACE && newContent.isBlank()) {
             throw new IllegalArgumentException("내용 안내는 비어 있을 수 없으며 수정 내용은 null일 수 없습니다.");
+        }
+        if (v11Details != null && !java.util.Objects.equals(content, newContent)) {
+            this.v11Details = v11Details.invalidateEdit();
         }
         this.content = newContent;
         this.isEdited = true;
@@ -214,13 +224,14 @@ public class Correction extends BaseTimeEntity {
                 && anchor == null
                 && locationUncertain == null
                 && warnings == null
-                && requiresReview == null;
+                && requiresReview == null
+                && v11Details == null;
         if (legacy) return;
         if (action == null
                 || action == AiAction.REVIEW
                 || feedbackType == null
                 || issueKinds == null
-                || anchor == null
+                || anchor == null && v11Details == null
                 || locationUncertain == null
                 || warnings == null
                 || requiresReview == null) {
@@ -238,9 +249,13 @@ public class Correction extends BaseTimeEntity {
                 || !allowed.containsAll(issueKinds)) {
             throw new IllegalArgumentException("Correction에는 중복 없는 일반 첨삭 문제 종류가 필요합니다.");
         }
-        if (originalText == null || originalText.isEmpty() || anchor.end() - anchor.start() != originalText.length()) {
+        if (originalText == null || originalText.isEmpty()) {
+            throw new IllegalArgumentException("첨삭의 전체 원문이 필요합니다.");
+        }
+        if (v11Details == null && anchor.end() - anchor.start() != originalText.length()) {
             throw new IllegalArgumentException("원문과 UTF-16 anchor 길이가 일치해야 합니다.");
         }
+        if (v11Details != null) validateV11Details();
         if (action == AiAction.GUIDANCE
                 && (area != CorrectionArea.CONTENT_SUMMARY
                         || aiInitialContent == null
@@ -251,6 +266,23 @@ public class Correction extends BaseTimeEntity {
         }
         if (requiresReview != (locationUncertain || !warnings.isEmpty())) {
             throw new IllegalArgumentException("requiresReview는 모델 위치 불확실성과 서버 경고를 반영해야 합니다.");
+        }
+    }
+
+    private void validateV11Details() {
+        var anchors = v11Details.anchors();
+        long length = anchors.stream().mapToLong(a -> a.end() - a.start()).sum() + anchors.size() - 1L;
+        if (length != originalText.length()
+                || anchors.size() == 1 && !anchors.getFirst().equals(anchor)
+                || anchors.size() > 1 && anchor != null) {
+            throw new IllegalArgumentException("전체 원문과 v1.1 연결 범위·단일 anchor 투영이 일치해야 합니다.");
+        }
+        if (action == AiAction.REPLACE && (v11Details.revisionScope() == null || v11Details.aiInitialEdit() == null)
+                || action == AiAction.GUIDANCE
+                        && (v11Details.revisionScope() != null
+                                || v11Details.aiInitialEdit() != null
+                                || v11Details.edit() != null)) {
+            throw new IllegalArgumentException("v1.1 action과 최초 수정 동작·범위가 일치해야 합니다.");
         }
     }
 }

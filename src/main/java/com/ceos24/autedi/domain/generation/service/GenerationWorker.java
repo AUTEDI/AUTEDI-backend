@@ -2,10 +2,7 @@ package com.ceos24.autedi.domain.generation.service;
 
 import com.ceos24.autedi.domain.generation.client.CorrectionAiClient;
 import com.ceos24.autedi.domain.generation.client.TerraGenerationClient;
-import com.ceos24.autedi.domain.generation.contract.v1.AiCorrectionResponse;
-import com.ceos24.autedi.domain.generation.contract.v1.AiCorrectionResponseParser;
-import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionResponseValidator;
-import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationContext;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
 import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
 import com.ceos24.autedi.domain.worksheet.service.WorksheetService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +20,7 @@ public class GenerationWorker {
     private final FixedResponseGenerationService fixed;
     private final CorrectionAiClient legacy;
     private final TerraGenerationClient terra;
+    private final GenerationContractRouter contracts;
 
     /** 이 메서드와 클라이언트 대기에는 트랜잭션이 없다. DB 작업만 별도 빈에서 커밋한다. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -49,18 +47,17 @@ public class GenerationWorker {
                 return;
             }
             String raw = work.mode() == GenerationClientMode.TERRA
-                    ? terra.correct(work.id(), image, transcription, work.settings())
+                    ? terra.correct(work.id(), image, transcription, work.settings(), work.aiProfile())
                     : fixed.correct(image, transcription);
-            AiCorrectionResponse parsed;
             try {
-                parsed = new AiCorrectionResponseParser().parse(raw);
+                contracts.assertReadable(work.aiProfile().version(), raw);
             } catch (IllegalArgumentException e) {
                 store.unreadable(work, transcription, raw);
                 return;
             }
-            var context = new AiValidationContext(image.pageNumber(), transcription.lines(), work.settings());
-            var validated = new AiCorrectionResponseValidator().validate(parsed, context);
-            store.completeFixed(work, transcription, raw, validated);
+            var input = new GenerationContractRouter.Input(image.pageNumber(), transcription.lines(), work.settings());
+            var validated = contracts.parseAndValidate(work.aiProfile(), raw, input);
+            store.complete(work, transcription, raw, validated);
         } catch (Exception e) {
             // 임의 예외 메시지에 응답 원문·인증정보가 있을 수 있어 저장·로그에 쓰지 않는다.
             boolean interrupted = Thread.interrupted();
