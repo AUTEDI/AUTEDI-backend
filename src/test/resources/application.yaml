@@ -56,6 +56,8 @@ jwt:
   refresh-token-expiration-days: ${JWT_REFRESH_EXPIRATION_DAYS:14}
 
 app:
+  cors:
+    allowed-origins: http://localhost:3000,https://autedi.co.kr
   qr:
     base-url: http://localhost:3000
     expiration-minutes: 3
