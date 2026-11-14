@@ -49,7 +49,8 @@ services:
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      FRONTEND_URL: ${PROD_FRONTEND_URL:-https://autedi.com}
+      FRONTEND_URL: ${PROD_FRONTEND_URL:-https://autedi.co.kr}
+      CORS_ALLOWED_ORIGINS: ${PROD_CORS_ALLOWED_ORIGINS:-https://autedi.co.kr}
       QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql
@@ -85,6 +86,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-prototype.vercel.app}
+      CORS_ALLOWED_ORIGINS: ${DEV_CORS_ALLOWED_ORIGINS:-https://autedi-frontend.vercel.app,http://localhost:3000}
       QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql

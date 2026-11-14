@@ -35,6 +35,7 @@ public class OpenApiConfig {
                 .servers(List.of(
                         new Server().url("/").description("현재 호스트 서버 (기본값)"),
                         new Server().url("http://localhost:8080").description("로컬 개발 서버"),
-                        new Server().url("https://api.autedi.com").description("운영 서버")));
+                        new Server().url("https://dev-api.autedi.co.kr").description("개발 서버"),
+                        new Server().url("https://api.autedi.co.kr").description("운영 서버")));
     }
 }

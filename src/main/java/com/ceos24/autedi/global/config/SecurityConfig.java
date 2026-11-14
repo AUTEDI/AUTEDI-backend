@@ -58,6 +58,10 @@ public class SecurityConfig {
     @Value("${app.qr.rate-limit.client-ip-header:}")
     private String clientIpHeader;
 
+    /** 환경별 프런트 origin 목록(쉼표 구분, 정확히 일치하는 값만 허용). 와일드카드는 사용하지 않는다. */
+    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    private List<String> allowedOrigins;
+
     @Value("${swagger.user:autedi}")
     private String swaggerUser;
 
@@ -67,17 +71,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "https://*.vercel.app",
-                "https://*.duckdns.org",
-                "http://*.duckdns.org",
-                "https://autedi-mvp.duckdns.org",
-                "https://*.autedi.com",
-                "https://autedi.com",
-                "https://*.railway.app",
-                "https://*.up.railway.app"));
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.AUTHORIZATION, HttpHeaders.LOCATION));
