@@ -146,6 +146,8 @@ class CommentControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(header().exists(HttpHeaders.LOCATION))
                 .andExpect(header().exists(HttpHeaders.ETAG))
+                .andExpect(jsonPath("$.result.id").isNumber())
+                .andExpect(jsonPath("$.result.etag").isString())
                 .andExpect(jsonPath("$.result.content").value("이 부분을 더 자세히 설명해 보세요."))
                 .andExpect(jsonPath("$.result.highlightType").value("HIGHLIGHT"));
     }

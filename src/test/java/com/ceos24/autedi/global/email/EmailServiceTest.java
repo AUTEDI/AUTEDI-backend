@@ -31,7 +31,7 @@ class EmailServiceTest {
     @Test
     @DisplayName("초대 이메일 발송 시 EmailSender.send 호출 및 링크 끝 슬래시 자동 정돈 검증")
     void sendInvitationEmail_callsEmailSenderWithSanitizedLink() {
-        ReflectionTestUtils.setField(emailService, "frontendUrl", "https://autedi-prototype.vercel.app/");
+        ReflectionTestUtils.setField(emailService, "frontendUrl", "https://autedi-frontend.vercel.app/");
 
         assertDoesNotThrow(() -> emailService.sendInvitationEmail("teacher@test.com", "에이플러스 학원", "raw-token-123"));
 
@@ -41,6 +41,6 @@ class EmailServiceTest {
                         eq("noreply@autedi.com"),
                         eq("AUTEDI"),
                         eq("[에이플러스 학원] 선생님 초대장"),
-                        contains("https://autedi-prototype.vercel.app/signup?token=raw-token-123"));
+                        contains("https://autedi-frontend.vercel.app/signup?token=raw-token-123"));
     }
 }

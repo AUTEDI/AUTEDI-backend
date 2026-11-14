@@ -84,7 +84,7 @@ services:
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-prototype.vercel.app}
+      FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-frontend.vercel.app}
       QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql
