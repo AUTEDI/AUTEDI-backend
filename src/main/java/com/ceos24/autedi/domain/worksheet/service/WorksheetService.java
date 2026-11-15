@@ -321,11 +321,29 @@ public class WorksheetService {
             throw new CustomException(ErrorCode.IMAGE_NOT_PREPARED);
         try (var input = fileStorageService.load(page.getPreviewImageUrl()).getInputStream()) {
             byte[] png = input.readNBytes(WorksheetImagePreparer.MAX_BYTES + 1);
-            if (png.length > WorksheetImagePreparer.MAX_BYTES || png.length < 24 || !WorksheetImagePreparer.isPng(png))
+            if (png.length > WorksheetImagePreparer.MAX_BYTES
+                    || png.length < 24
+                    || !WorksheetImagePreparer.isPng(png)) {
+                log.warn(
+                        "보정 이미지 검증 실패: worksheetId={}, pageNumber={}, bytes={}, isPng={}",
+                        worksheetId,
+                        pageNumber,
+                        png.length,
+                        WorksheetImagePreparer.isPng(png));
                 throw new CustomException(ErrorCode.INVALID_IMAGE);
+            }
             ByteBuffer header = ByteBuffer.wrap(png);
-            if (header.getInt(16) != page.getWidth() || header.getInt(20) != page.getHeight())
+            if (header.getInt(16) != page.getWidth() || header.getInt(20) != page.getHeight()) {
+                log.warn(
+                        "보정 이미지 크기 불일치: worksheetId={}, pageNumber={}, png={}x{}, page={}x{}",
+                        worksheetId,
+                        pageNumber,
+                        header.getInt(16),
+                        header.getInt(20),
+                        page.getWidth(),
+                        page.getHeight());
                 throw new CustomException(ErrorCode.INVALID_IMAGE, "저장된 PNG 크기와 페이지 정보가 일치하지 않습니다.");
+            }
             return new PreparedWorksheetImage(
                     worksheetId,
                     page.getId(),

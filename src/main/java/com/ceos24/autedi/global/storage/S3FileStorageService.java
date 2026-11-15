@@ -71,7 +71,13 @@ public class S3FileStorageService implements FileStorageService {
             prepared = preparer.prepare(original, type);
         } catch (WorksheetImagePreparer.ImageLimitException e) {
             throw new CustomException(ErrorCode.FILE_TOO_LARGE, e.getMessage());
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
+            // 거부 사유(확장자 불일치, 다중 이미지, 손상된 EXIF 등)를 로그와 응답에 남긴다.
+            log.warn("이미지 검사 실패: file={}, size={}, type={}, reason={}", name, file.getSize(), type, e.toString(), e);
+            throw new CustomException(
+                    ErrorCode.INVALID_IMAGE, StringUtils.hasText(e.getMessage()) ? e.getMessage() : null);
+        } catch (IOException e) {
+            log.warn("이미지 읽기 실패: file={}, size={}, type={}, reason={}", name, file.getSize(), type, e.toString(), e);
             throw new CustomException(ErrorCode.INVALID_IMAGE);
         }
         String directory = subDir == null ? "" : subDir.replaceAll("^/+|/+$", "");

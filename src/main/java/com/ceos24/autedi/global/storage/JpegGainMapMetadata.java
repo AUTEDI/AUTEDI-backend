@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import javax.imageio.IIOException;
 import javax.imageio.ImageReader;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.metadata.IIOMetadataNode;
@@ -27,20 +28,94 @@ final class JpegGainMapMetadata {
 
     private JpegGainMapMetadata() {}
 
-    static boolean isSupported(ImageReader reader, int imageCount) throws IOException {
+    static boolean isSupported(ImageReader reader, int imageCount, byte[] bytes) throws IOException {
         if (imageCount != 2) return false;
         IIOMetadata primary = reader.getImageMetadata(0);
         if (segments(primary, 0xe2).stream().noneMatch(data -> startsWith(data, MPF_HEADER))) return false;
-        List<Document> auxiliary = xmp(reader.getImageMetadata(1));
+        List<Document> auxiliary;
+        try {
+            auxiliary = xmp(segments(reader.getImageMetadata(1), 0xe1));
+        } catch (IIOException e) {
+            // 일부 기기(갤럭시 등)의 gain map 이미지는 APP1이 먼저 시작해 ImageIO가 메타데이터를 읽지 못한다.
+            // MPF가 가리키는 위치의 보조 이미지 헤더를 직접 읽어 같은 기준으로 검증한다.
+            auxiliary = xmp(auxiliaryApp1Segments(bytes));
+        }
         for (Document metadata : auxiliary) {
             if (APPLE_GAIN_MAP.equals(property(metadata, APPLE_PIXELS, "AuxiliaryImageType"))) return true;
             if ("1.0".equals(property(metadata, ADOBE_GAIN_MAP, "Version")) && isSdrBase(metadata)) {
-                for (Document base : xmp(primary)) {
+                for (Document base : xmp(segments(primary, 0xe1))) {
                     if ("1.0".equals(property(base, ADOBE_GAIN_MAP, "Version")) && isSdrBase(base)) return true;
                 }
             }
         }
         return false;
+    }
+
+    /** MPF의 두 번째 이미지 위치를 찾아 그 이미지의 APP1 세그먼트(헤더만)를 바이트에서 직접 읽는다. */
+    private static List<byte[]> auxiliaryApp1Segments(byte[] bytes) {
+        int pos = 2;
+        while (pos + 4 <= bytes.length && (bytes[pos] & 255) == 0xff) {
+            int marker = bytes[pos + 1] & 255;
+            if (marker == 0xda || marker == 0xd9) break;
+            int length = ((bytes[pos + 2] & 255) << 8) | (bytes[pos + 3] & 255);
+            if (length < 2 || pos + 2L + length > bytes.length) break;
+            if (marker == 0xe2 && length >= 8 && startsWith(bytes, MPF_HEADER, pos + 4)) {
+                return app1Segments(bytes, mpfSecondImageOffset(bytes, pos + 8, pos + 2 + length));
+            }
+            pos += 2 + length;
+        }
+        throw new IllegalArgumentException("HDR 보조 이미지의 위치를 찾을 수 없습니다.");
+    }
+
+    private static int mpfSecondImageOffset(byte[] b, int tiff, int end) {
+        if (tiff + 8 > end) throw new IllegalArgumentException("손상된 MPF 헤더입니다.");
+        boolean little = b[tiff] == 'I' && b[tiff + 1] == 'I';
+        if (!little && !(b[tiff] == 'M' && b[tiff + 1] == 'M'))
+            throw new IllegalArgumentException("지원하지 않는 MPF 바이트 순서입니다.");
+        long ifd = u32(b, tiff + 4, little);
+        if (ifd < 8 || tiff + ifd + 2 > end) throw new IllegalArgumentException("손상된 MPF 위치입니다.");
+        int count = u16(b, (int) (tiff + ifd), little);
+        for (int i = 0; i < count; i++) {
+            int entry = (int) (tiff + ifd + 2 + 12L * i);
+            if (entry + 12 > end) break;
+            if (u16(b, entry, little) != 0xb002) continue;
+            long table = u32(b, entry + 8, little);
+            long second = tiff + table + 16; // MP Entry 한 개가 16바이트이며 두 번째가 보조 이미지다.
+            if (u32(b, entry + 4, little) < 32 || second + 12 > end)
+                throw new IllegalArgumentException("HDR 보조 이미지 정보가 올바르지 않습니다.");
+            long offset = u32(b, (int) (second + 8), little);
+            long start = tiff + offset;
+            if (offset == 0 || start + 4 > b.length) throw new IllegalArgumentException("HDR 보조 이미지 위치가 올바르지 않습니다.");
+            return (int) start;
+        }
+        throw new IllegalArgumentException("HDR 보조 이미지 정보를 찾을 수 없습니다.");
+    }
+
+    private static List<byte[]> app1Segments(byte[] bytes, int start) {
+        if ((bytes[start] & 255) != 0xff || (bytes[start + 1] & 255) != 0xd8)
+            throw new IllegalArgumentException("HDR 보조 이미지가 JPEG가 아닙니다.");
+        List<byte[]> result = new ArrayList<>();
+        int pos = start + 2;
+        while (pos + 4 <= bytes.length && (bytes[pos] & 255) == 0xff) {
+            int marker = bytes[pos + 1] & 255;
+            if (marker == 0xda || marker == 0xd9) break;
+            int length = ((bytes[pos + 2] & 255) << 8) | (bytes[pos + 3] & 255);
+            if (length < 2 || pos + 2L + length > bytes.length) break;
+            if (marker == 0xe1) result.add(java.util.Arrays.copyOfRange(bytes, pos + 4, pos + 2 + length));
+            pos += 2 + length;
+        }
+        return result;
+    }
+
+    private static int u16(byte[] b, int at, boolean little) {
+        int x = b[at] & 255, y = b[at + 1] & 255;
+        return little ? (y << 8) | x : (x << 8) | y;
+    }
+
+    private static long u32(byte[] b, int at, boolean little) {
+        long r = 0;
+        for (int i = 0; i < 4; i++) r |= (long) (b[at + (little ? i : 3 - i)] & 255) << (8 * i);
+        return r;
     }
 
     private static boolean isSdrBase(Document metadata) {
@@ -60,9 +135,9 @@ final class JpegGainMapMetadata {
         return result;
     }
 
-    private static List<Document> xmp(IIOMetadata metadata) throws IOException {
+    private static List<Document> xmp(List<byte[]> app1Segments) throws IOException {
         List<Document> result = new ArrayList<>();
-        for (byte[] data : segments(metadata, 0xe1)) {
+        for (byte[] data : app1Segments) {
             if (!startsWith(data, XMP_HEADER)) continue;
             int end = data.length;
             while (end > XMP_HEADER.length && data[end - 1] == 0) end--;
@@ -109,8 +184,12 @@ final class JpegGainMapMetadata {
     }
 
     private static boolean startsWith(byte[] value, byte[] prefix) {
-        if (value.length < prefix.length) return false;
-        for (int i = 0; i < prefix.length; i++) if (value[i] != prefix[i]) return false;
+        return startsWith(value, prefix, 0);
+    }
+
+    private static boolean startsWith(byte[] value, byte[] prefix, int offset) {
+        if (offset < 0 || value.length < offset + prefix.length) return false;
+        for (int i = 0; i < prefix.length; i++) if (value[offset + i] != prefix[i]) return false;
         return true;
     }
 }
