@@ -32,6 +32,25 @@ class WorksheetHdrImageTest {
     }
 
     @Test
+    void acceptsGalaxyStyleHdrWhoseAuxiliaryImageHasJfifAfterXmp() throws Exception {
+        byte[] source = TestWorksheetImages.hdrJpegWithJfifAfterXmpInAuxiliary();
+        // 이 구조는 ImageIO가 보조 이미지 메타데이터를 읽지 못하므로, 바이트 직접 판독으로 HDR 여부를 판단해야 한다.
+        try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(source))) {
+            var reader = ImageIO.getImageReaders(input).next();
+            try {
+                reader.setInput(input, false, false);
+                assertEquals(2, reader.getNumImages(true));
+                assertThrows(javax.imageio.IIOException.class, () -> reader.getImageMetadata(1));
+            } finally {
+                reader.dispose();
+            }
+        }
+        PreparedImage result = preparer.prepare(source, FileType.JPEG);
+        assertEquals(3, result.width());
+        assertEquals(2, result.height());
+    }
+
+    @Test
     void rejectsUnidentifiedPhotosAndExtraImagesInsteadOfGuessing() throws Exception {
         String depth = TestWorksheetImages.xmp(
                 "xmlns:p='http://ns.apple.com/pixeldatainfo/1.0/'",
