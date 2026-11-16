@@ -1,6 +1,7 @@
 package com.ceos24.autedi.domain.comment.dto.response;
 
 import com.ceos24.autedi.domain.comment.entity.Comment;
+import com.ceos24.autedi.domain.comment.entity.CommentColor;
 import com.ceos24.autedi.domain.comment.entity.HighlightType;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,8 +14,12 @@ public record CommentResponse(
         @Schema(description = "동시성 제어용 ETag", example = "\"com_301-v1\"") String etag,
         @Schema(description = "작성 주체 (항상 TEACHER)", example = "TEACHER") String source,
         @Schema(description = "대상 페이지 ID", example = "10") Long pageId,
-        @Schema(description = "강조 유형 (HIGHLIGHT: 형광펜, UNDERLINE: 밑줄)", example = "HIGHLIGHT")
+        @Schema(
+                        description =
+                                "강조 유형 (HIGHLIGHT: 형광펜, UNDERLINE: 밑줄, STRIKETHROUGH: 취소선, ARROW: 화살표, TEXTBOX: 텍스트 상자, CARET: 삽입 기호)",
+                        example = "HIGHLIGHT")
                 HighlightType highlightType,
+        @Schema(description = "표시 색상 (RED, BLUE, YELLOW, GREEN)", example = "BLUE") CommentColor color,
         @Schema(description = "강조된 캔버스 영역 좌표 목록") List<RegionPayload> regions,
         @Schema(description = "코멘트 텍스트 내용", example = "단수 주어(He) 다음에는 3인칭 단수 동사 goes를 사용해야 합니다.") String content,
         @Schema(description = "작성 일시", example = "2026-10-30T10:10:00") LocalDateTime createdAt,
@@ -30,6 +35,7 @@ public record CommentResponse(
                 "TEACHER",
                 comment.getPage() != null ? comment.getPage().getId() : null,
                 comment.getHighlightType(),
+                comment.getColor() != null ? comment.getColor() : CommentColor.BLUE,
                 comment.getRegions(),
                 comment.getContent(),
                 comment.getCreatedAt(),

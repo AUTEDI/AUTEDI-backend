@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "SUGGESTION",
+      "area": "SENTENCE_STRUCTURE",
+      "issue_kinds": [
+        "sentence_structure"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "I finished my homework.",
+          "occurrence": 1
+        },
+        {
+          "line_id": 3,
+          "original": "I went to bed.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "After finishing my homework and taking a shower, I went to bed.",
+      "guidance": null,
+      "reason": "각 문장은 올바릅니다. 시간 순서를 연결하면 반복을 줄이고 흐름을 자연스럽게 만들 수 있는 선택적 개선입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.7,
+          0.24
+        ],
+        [
+          0.1,
+          0.4,
+          0.5,
+          0.44
+        ]
+      ],
+      "revision_scope": "SENTENCE_GROUP",
+      "edit": {
+        "operation": "RESTRUCTURE",
+        "text": "After finishing my homework and taking a shower, I went to bed.",
+        "position": null
+      }
+    }
+  ]
+}

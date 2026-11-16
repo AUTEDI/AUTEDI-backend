@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "VOCABULARY_EXPRESSION",
+      "issue_kinds": [
+        "vocabulary"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "made",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "did",
+      "guidance": null,
+      "reason": "숙제를 한다는 뜻에는 do homework를 사용합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.3,
+          0.2,
+          0.45,
+          0.24
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "REPLACE",
+        "text": "did",
+        "position": null
+      }
+    }
+  ]
+}

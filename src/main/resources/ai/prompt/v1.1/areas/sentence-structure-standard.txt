@@ -1,0 +1,9 @@
+Apply SENTENCE_STRUCTURE at STANDARD. Ordinary items use feedback_type=CORRECTION only.
+Check fragments, run-on sentences, comma splices, faulty clause connections and clearly confusing word order.
+Repair a genuine structural problem using the smallest connected source and change that clearly resolves it.
+Use WORD, PHRASE or CLAUSE for local repairs and an appropriate INSERT, DELETE or REPLACE.
+Use SENTENCE or SENTENCE_GROUP with RESTRUCTURE only as a last resort when a smaller repair cannot clearly resolve the objective structural error.
+Already acceptable sentences receive no item for variety, smoother transitions, rhythm or stylistic combination.
+Decision example: "I finished my homework. I took a shower. I went to bed." has acceptable structure and needs no STANDARD restructuring.
+Several consecutive transcription lines can form one connected item under the anchor rules; line wrapping is not a reason to rewrite more text.
+Do not combine across paragraph boundaries, rewrite a whole paragraph or essay, add ideas or disguise unrelated vocabulary improvements as necessary structure repairs.

@@ -13,6 +13,7 @@ public enum ErrorCode implements BaseErrorCode {
     INVALID_INPUT_VALUE(HttpStatus.BAD_REQUEST, "COMMON_001", "요청 값이 올바르지 않습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "COMMON_002", "허용되지 않은 HTTP 메서드입니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_003", "서버 내부 오류가 발생했습니다."),
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "COMMON_429", "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
 
     // Auth & Security
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "AUTH_001", "인증이 필요합니다."),
@@ -24,6 +25,15 @@ public enum ErrorCode implements BaseErrorCode {
     USER_INACTIVE(HttpStatus.FORBIDDEN, "AUTH_007", "비활성화된 계정입니다."),
     USER_LOCKED(HttpStatus.FORBIDDEN, "AUTH_008", "잠금 처리된 계정입니다."),
     ALREADY_REGISTERED_EMAIL(HttpStatus.CONFLICT, "AUTH_009", "이미 가입된 이메일입니다."),
+
+    // QR Login
+    QR_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "QR_001", "유효하지 않은 QR입니다."),
+    QR_SESSION_EXPIRED(HttpStatus.GONE, "QR_002", "만료된 QR입니다. 새로 생성해 주세요."),
+    QR_SESSION_INVALID_STATE(HttpStatus.CONFLICT, "QR_003", "이미 사용되었거나 처리할 수 없는 QR 상태입니다."),
+    QR_TARGET_MISMATCH(HttpStatus.FORBIDDEN, "QR_004", "이 QR로 업로드할 수 있는 작업이 아닙니다."),
+    QR_USER_MISMATCH(HttpStatus.FORBIDDEN, "QR_005", "다른 계정으로 로그인된 기기입니다. 데스크톱 승인 방식으로 QR 로그인을 진행해 주세요."),
+    QR_ALREADY_UPLOADED(HttpStatus.CONFLICT, "QR_006", "이 QR로는 이미 사진을 올렸습니다. 새 QR을 생성해 주세요."),
+    QR_SINGLE_FILE_ONLY(HttpStatus.BAD_REQUEST, "QR_007", "QR로는 사진을 한 장만 올릴 수 있습니다."),
 
     // Academy
     ACADEMY_NOT_FOUND(HttpStatus.NOT_FOUND, "ACADEMY_001", "존재하지 않는 학원입니다."),
@@ -40,15 +50,24 @@ public enum ErrorCode implements BaseErrorCode {
     WORKSHEET_NOT_FOUND(HttpStatus.NOT_FOUND, "WORKSHEET_001", "학습지를 찾을 수 없거나 접근 권한이 없습니다."),
     INVALID_WORKSHEET_STATE(HttpStatus.CONFLICT, "WORKSHEET_002", "현재 학습지 상태에서는 요청한 작업을 수행할 수 없습니다."),
     EMPTY_FILE(HttpStatus.BAD_REQUEST, "FILE_001", "업로드할 파일이 비어 있습니다."),
-    UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "FILE_002", "지원하지 않는 파일 형식입니다. JPG, PNG, PDF 파일만 허용됩니다."),
+    UNSUPPORTED_FILE_TYPE(
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE, "FILE_002", "이번 연동은 JPG/JPEG·PNG 이미지 한 장만 지원합니다. PDF는 지원하지 않습니다."),
     FILE_STORAGE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FILE_003", "파일 저장 중 오류가 발생했습니다."),
+    INVALID_IMAGE(HttpStatus.BAD_REQUEST, "FILE_004", "이미지 형식 또는 EXIF 정보를 읽을 수 없습니다."),
+    FILE_TOO_LARGE(HttpStatus.valueOf(413), "FILE_005", "이미지 또는 보정 PNG가 크기 제한을 초과했습니다."),
+    FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "FILE_006", "파일을 찾을 수 없습니다."),
+    IMAGE_NOT_PREPARED(HttpStatus.CONFLICT, "FILE_007", "보정 PNG가 없는 기존 이미지입니다. 파일을 다시 업로드하거나 교체해 주세요."),
 
     // Generation
     GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "GENERATION_001", "이미 생성 작업이 진행 중입니다."),
     ALREADY_GENERATED(HttpStatus.CONFLICT, "GENERATION_002", "이미 생성이 완료된 학습지입니다."),
     GENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "GENERATION_003", "생성 작업을 찾을 수 없습니다."),
     NO_SETTINGS_SELECTED(HttpStatus.BAD_REQUEST, "GENERATION_004", "첨삭 영역을 최소 한 개 선택해 주세요."),
+    TRANSCRIPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "TRANSCRIPTION_001", "전사문을 찾을 수 없습니다."),
+    GENERATION_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "GENERATION_006", "생성 결과 기록을 찾을 수 없습니다."),
     CANNOT_RETRY_GENERATION(HttpStatus.CONFLICT, "GENERATION_005", "재시도할 수 없는 작업 상태이거나 파일/설정이 변경되었습니다."),
+    GENERATION_REQUEST_CONFLICT(HttpStatus.CONFLICT, "GENERATION_007", "다른 생성·재시도 요청에 사용된 멱등키입니다."),
+    AI_CONTRACT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "GENERATION_008", "선택한 AI 계약의 서비스 생성 경로가 아직 연결되지 않았습니다."),
 
     // Correction
     CORRECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "CORRECTION_001", "첨삭 항목을 찾을 수 없습니다."),

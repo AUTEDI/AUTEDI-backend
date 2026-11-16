@@ -1,0 +1,143 @@
+# IntelliJ HTTP Client: select environment "local" and run each block individually.
+# Login credentials are in the ignored http-client.private.env.json, never this file.
+# TERRA: new generation costs transcription + correction. Do not use Run All.
+
+### 01 Login (tokens are kept in the HTTP Client session)
+# @no-log
+# @no-redirect
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{loginEmail}}",
+  "password": "{{loginPassword}}"
+}
+
+> {%
+client.test("Login succeeded", () => client.assert(response.status === 200));
+if (response.status === 200) client.global.set("accessToken", response.body.result.accessToken);
+%}
+
+### 02 Upload a NEW single JPG/JPEG/PNG
+POST {{baseUrl}}/api/v1/worksheets
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=AutediManualBoundary
+
+--AutediManualBoundary
+Content-Disposition: form-data; name="file"; filename="testdata.jpg"
+Content-Type: image/jpeg
+
+< {{imagePath}}
+--AutediManualBoundary--
+
+> {%
+client.test("Image uploaded", () => client.assert(response.status === 201));
+if (response.status === 201) {
+  client.global.set("worksheetId", String(response.body.result.id));
+  client.global.set("generationKey", "manual-ui-" + response.body.result.id + "-" + Date.now());
+}
+%}
+
+### 03 Settings (independent area levels)
+PUT {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/settings
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "areas": [
+    {"area": "GRAMMAR_SPELLING", "level": "STANDARD"},
+    {"area": "CONTENT_SUMMARY", "level": "ADVANCED"}
+  ]
+}
+
+> {% client.test("Settings saved", () => client.assert(response.status === 200)); %}
+
+### 04 Generate (TERRA is PAID; re-sending THIS key returns the same job)
+POST {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/generations
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: {{generationKey}}
+
+> {%
+client.test("Generation accepted", () => client.assert(response.status === 202));
+if (response.status === 202) client.global.set("generationId", String(response.body.result.id));
+%}
+
+### 05 Poll this block until SUCCEEDED or FAILED (no AI request)
+GET {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/generations/{{generationId}}
+Authorization: Bearer {{accessToken}}
+
+> {%
+client.test("Status loaded", () => client.assert(response.status === 200));
+if (response.status === 200) client.global.set("latestStatus", response.body.result.status);
+%}
+
+### 06 Review after SUCCEEDED (no AI request)
+GET {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/review
+Authorization: Bearer {{accessToken}}
+
+> {%
+client.test("Review loaded", () => client.assert(response.status === 200));
+if (response.status === 200 && response.body.result.corrections.length) {
+  const card = response.body.result.corrections.find(c => c.action === "REPLACE") || response.body.result.corrections[0];
+  client.global.set("correctionId", String(card.id));
+  client.global.set("correctionEtag", card.etag);
+  const fields = ["aiInitialContent", "originalText", "explanation", "action", "anchor", "regions", "warnings"];
+  const baseline = {};
+  fields.forEach(field => baseline[field] = card[field]);
+  client.global.set("aiBaseline", JSON.stringify(baseline));
+}
+%}
+
+### 07 Prepared PNG (same coordinate reference as OCR/correction)
+GET {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/pages/1/image
+Authorization: Bearer {{accessToken}}
+
+### 08 Reload correction and its current ETag
+GET {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/corrections/{{correctionId}}
+Authorization: Bearer {{accessToken}}
+
+> {%
+client.test("Correction loaded", () => client.assert(response.status === 200));
+if (response.status === 200) client.global.set("correctionEtag", response.body.result.etag);
+%}
+
+### 09 Teacher edit (no AI request)
+PATCH {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/corrections/{{correctionId}}
+Authorization: Bearer {{accessToken}}
+If-Match: {{correctionEtag}}
+Content-Type: application/json
+
+{"content": "{{teacherContent}}"}
+
+> {%
+client.test("Teacher edit saved", () => client.assert(response.status === 200));
+if (response.status === 200) {
+  client.global.set("correctionEtag", response.body.result.etag);
+  const raw = client.global.get("aiBaseline");
+  if (raw) {
+    const baseline = JSON.parse(raw);
+    client.test("Original AI fields preserved", () => Object.keys(baseline).forEach(field =>
+      client.assert(JSON.stringify(baseline[field]) === JSON.stringify(response.body.result[field]), field + " changed")));
+  }
+}
+%}
+
+### 10 Soft delete
+DELETE {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/corrections/{{correctionId}}
+Authorization: Bearer {{accessToken}}
+If-Match: {{correctionEtag}}
+
+> {%
+client.test("Deleted", () => client.assert(response.status === 204));
+if (response.status === 204) client.global.set("correctionEtag", response.headers.valueOf("ETag"));
+%}
+
+### 11 Restore edited content
+POST {{baseUrl}}/api/v1/worksheets/{{worksheetId}}/corrections/{{correctionId}}/restore
+Authorization: Bearer {{accessToken}}
+If-Match: {{correctionEtag}}
+
+> {%
+client.test("Restored", () => client.assert(response.status === 200));
+if (response.status === 200) client.global.set("correctionEtag", response.body.result.etag);
+%}

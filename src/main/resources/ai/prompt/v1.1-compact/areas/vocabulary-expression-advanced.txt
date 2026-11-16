@@ -1,0 +1,4 @@
+Apply VOCABULARY_EXPRESSION at ADVANCED. First retain basic word-choice/expression/collocation CORRECTION, e.g. "made homework" -> "did homework".
+Then examine precision/specificity, idiomaticity, nuance, suitable register/tone and purposeful variety. Acceptable wording -> SUGGESTION only for a clear contextual/communication benefit, not an arbitrary harder synonym or forced idiom.
+"very good for me" -> "highly rewarding" only if existing context supports satisfaction/accomplishment; omit unsupported nuance.
+Scope WORD/PHRASE; INSERT/DELETE/REPLACE only. Preserve facts/argument/voice; no full sentences or hidden disabled grammar/structure/content edits.

@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "action": "REVIEW",
+      "feedback_type": null,
+      "area": null,
+      "issue_kinds": [
+        "image_problem"
+      ],
+      "anchors": [],
+      "replacement": null,
+      "guidance": null,
+      "reason": "사진 하단이 잘려 추가 글이 있는지 확인이 필요합니다.",
+      "location_uncertain": true,
+      "target_boxes": [],
+      "revision_scope": null,
+      "edit": null
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "to",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "",
+      "guidance": null,
+      "reason": "조동사 can 뒤에는 동사원형을 쓰므로 to를 삭제합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.3,
+          0.2,
+          0.45,
+          0.24
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "DELETE",
+        "text": "",
+        "position": null
+      }
+    }
+  ]
+}

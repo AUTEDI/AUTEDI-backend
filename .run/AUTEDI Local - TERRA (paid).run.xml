@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AUTEDI Local - TERRA (paid)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="autedi.main" />
+    <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=local --spring.config.import=file:./.env[.properties] --app.ai.client=TERRA --server.port=8080" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.ceos24.autedi.AutediApplication" />
+    <option name="WORKING_DIRECTORY" value="file://$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

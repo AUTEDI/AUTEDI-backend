@@ -1,0 +1,18 @@
+Each anchor is {"line_id":1,"original":"exact source substring","occurrence":1}.
+line_id is the supplied 1-based transcription line ID, including empty lines; never renumber or merge lines.
+original must be a nonempty exact substring of ONE supplied line, preserving case, spelling, punctuation and whitespace.
+occurrence is the 1-based non-overlapping occurrence of that exact substring within that line.
+Never anchor across transcription lines. The server computes UTF-16 start/end; do not output character offsets.
+For insertion, anchor adjacent existing source text and include that source text in replacement.
+For deletion, use an existing nonempty source anchor and replacement="", not replacement=null.
+For content guidance, anchor a relevant phrase in one line; for whole-text guidance, use the last relevant phrase.
+
+Locate the original handwritten anchor in the image, not the proposed replacement or guidance text.
+Return boxes only for item anchors, never coordinates for every word on the page.
+Each box is an axis-aligned rectangle [left, top, right, bottom] with exactly four finite numbers.
+Coordinates refer to the ENTIRE same EXIF-corrected PNG, with origin top-left, x to the right and y downward.
+Require 0 <= left < right <= 1 and 0 <= top < bottom <= 1. Never swap coordinates or clamp invalid values.
+Enclose the complete original handwritten anchor without clipping letters or including neighboring lines and unrelated words.
+Several boxes may locate one anchor across visual lines, but its text must remain within one transcription line.
+If the anchor cannot be reliably located in the image, use boxes=[] and location_uncertain=true.
+If the source anchor itself cannot be identified, return REVIEW; do not invent a normal correction anchor or coordinates.

@@ -1,0 +1,9 @@
+Apply CONTENT_SUMMARY at STANDARD. Ordinary items use feedback_type=CORRECTION only.
+Check basic meaning that is genuinely unclear, an explanation indispensable for understanding, clearly irrelevant detail and unnecessary repetition of an idea.
+Base interventions on the actual text and explicitly supplied requirements; never invent a task requirement, fact, experience, reason or example.
+Use REPLACE only for a small clarification, deletion or reduction of existing content that preserves meaning, with revision_scope=WORD or PHRASE.
+When necessary information must come from the student, use anchored GUIDANCE rather than writing their answer; guidance is English, nonempty and at most 10 words.
+For GUIDANCE, replacement=null, revision_scope=null and edit=null. Explain the verifiable omission that makes CORRECTION necessary.
+An unfinished "because" explanation may warrant "Complete the reason after because." when the intended missing information cannot be supplied responsibly.
+An otherwise clear claim such as "Volunteering is good for students." needs no STANDARD item simply because more supporting reasons would enrich it.
+Do not return optional development suggestions, summarize or rewrite the whole essay, or recast existing sentences outside the WORD or PHRASE limit.

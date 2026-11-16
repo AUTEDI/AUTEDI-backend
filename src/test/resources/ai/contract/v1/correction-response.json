@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": ["grammar"],
+      "anchor": { "line_id": 1, "original": "go", "occurrence": 1 },
+      "replacement": "went",
+      "guidance": null,
+      "reason": "과거 시점인 yesterday에 맞춰 과거형 went를 사용합니다.",
+      "location_uncertain": false,
+      "boxes": [[0.30, 0.37, 0.34, 0.42]]
+    },
+    {
+      "action": "GUIDANCE",
+      "feedback_type": "SUGGESTION",
+      "area": "CONTENT_SUMMARY",
+      "issue_kinds": ["content"],
+      "anchor": { "line_id": 2, "original": "I like this book.", "occurrence": 1 },
+      "replacement": null,
+      "guidance": "Add one reason you like this book.",
+      "reason": "틀린 문장은 아니지만, 책을 좋아하는 이유를 덧붙이면 생각이 더 분명하게 전달됩니다.",
+      "location_uncertain": false,
+      "boxes": [[0.10, 0.50, 0.65, 0.56]]
+    },
+    {
+      "action": "REVIEW",
+      "feedback_type": null,
+      "area": null,
+      "issue_kinds": ["image_problem"],
+      "anchor": null,
+      "replacement": null,
+      "guidance": null,
+      "reason": "사진 하단이 잘려 해당 영역에 추가 글이 있는지 확인이 필요합니다.",
+      "location_uncertain": true,
+      "boxes": []
+    }
+  ]
+}

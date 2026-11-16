@@ -5,10 +5,65 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 25MB
+      max-file-size: 30MB
+      max-request-size: 100MB
   jpa:
     open-in-view: false
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+app:
+  ai:
+    correction:
+      contract-version: ${AI_CORRECTION_CONTRACT_VERSION:v1}
+      prompt-variant: ${AI_CORRECTION_PROMPT_VARIANT:DEFAULT}
+  mail:
+    type: ${MAIL_TYPE:smtp}
+    from-address: ${MAIL_FROM_ADDRESS:${MAIL_USERNAME:}}
+    from-name: ${MAIL_FROM_NAME:AUTEDI}
+    http:
+      api-key: ${RESEND_API_KEY:}
+      endpoint: ${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}
+      from: ${MAIL_HTTP_FROM:onboarding@resend.dev}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  cors:
+    # 허용할 프런트 origin (쉼표 구분, 정확한 값만). 환경별로 CORS_ALLOWED_ORIGINS로 지정한다.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  qr:
+    base-url: ${QR_BASE_URL:${FRONTEND_URL:http://localhost:3000}}
+    expiration-minutes: ${QR_EXPIRATION_MINUTES:3}
+    rate-limit:
+      enabled: ${QR_RATE_LIMIT_ENABLED:true}
+      scan-per-minute: ${QR_RATE_LIMIT_SCAN:10}
+      token-per-minute: ${QR_RATE_LIMIT_TOKEN:10}
+      status-per-minute: ${QR_RATE_LIMIT_STATUS:90}
+      link-per-minute: ${QR_RATE_LIMIT_LINK:10}
+      # 프록시 뒤에서 실제 클라이언트 IP를 읽을 헤더(예: X-Forwarded-For). 비우면 remoteAddr 사용.
+      # 값이 여러 개면 신뢰하는 프록시가 덧붙인 가장 오른쪽 값을 사용한다.
+      client-ip-header: ${QR_RATE_LIMIT_CLIENT_IP_HEADER:}
+  sse:
+    emitter-timeout-ms: ${SSE_EMITTER_TIMEOUT_MS:1800000}
+    heartbeat-interval-ms: ${SSE_HEARTBEAT_INTERVAL_MS:25000}
+    max-connections-per-user: ${SSE_MAX_CONNECTIONS_PER_USER:5}
+    executor:
+      core-size: ${SSE_EXECUTOR_CORE_SIZE:2}
+      max-size: ${SSE_EXECUTOR_MAX_SIZE:4}
+      queue-capacity: ${SSE_EXECUTOR_QUEUE_CAPACITY:200}
+  storage:
+    type: ${STORAGE_TYPE:s3}
 
 springdoc:
   api-docs:

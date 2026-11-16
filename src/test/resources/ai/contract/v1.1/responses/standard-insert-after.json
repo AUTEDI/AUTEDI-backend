@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "punctuation"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "apples",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "apples.",
+      "guidance": null,
+      "reason": "평서문 끝에 마침표가 필요합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.3,
+          0.2,
+          0.45,
+          0.24
+        ]
+      ],
+      "revision_scope": "WORD",
+      "edit": {
+        "operation": "INSERT",
+        "text": ".",
+        "position": "AFTER"
+      }
+    }
+  ]
+}

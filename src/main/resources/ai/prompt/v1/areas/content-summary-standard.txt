@@ -1,0 +1,4 @@
+Focus on basic clarity, an obviously missing explanation, clearly irrelevant detail and unnecessary repetition of ideas.
+Keep content interventions small and tied to what the student actually wrote; do not invent task requirements or supporting facts.
+For information the student needs to supply, use a short anchored GUIDANCE instruction rather than writing their answer.
+Use REPLACE only for an existing local content clarification or concise reduction that preserves the student's meaning.

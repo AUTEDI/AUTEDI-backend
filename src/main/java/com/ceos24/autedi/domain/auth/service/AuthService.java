@@ -53,14 +53,28 @@ public class AuthService {
             throw new CustomException(ErrorCode.USER_LOCKED);
         }
 
+        user.updateLastLoginAt(LocalDateTime.now());
+
+        return issueTokens(user);
+    }
+
+    /** Access/Refresh Token을 발급하고 Refresh Token을 저장한다. 일반 로그인과 QR 로그인이 공유한다. */
+    @Transactional
+    public LoginResponse issueTokens(User user) {
+        return issueTokens(user, null);
+    }
+
+    /** qrSessionId가 있으면 QR 로그인 토큰으로 표시한다(액세스 토큰 claim, 리프레시 토큰 컬럼). */
+    @Transactional
+    public LoginResponse issueTokens(User user, String qrSessionId) {
         LocalDateTime now = LocalDateTime.now();
-        user.updateLastLoginAt(now);
 
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getId(),
                 user.getAcademy().getId(),
                 user.getEmail(),
-                user.getRole().name());
+                user.getRole().name(),
+                qrSessionId);
 
         String rawRefreshToken = TokenHashUtil.generateRawToken();
         String tokenHash = TokenHashUtil.hashToken(rawRefreshToken);
@@ -69,6 +83,7 @@ public class AuthService {
                 .user(user)
                 .tokenHash(tokenHash)
                 .expiresAt(now.plusDays(refreshTokenExpirationDays))
+                .qrSessionId(qrSessionId)
                 .build();
         refreshTokenRepository.save(refreshToken);
 
@@ -95,6 +110,10 @@ public class AuthService {
         // Refresh Token Rotation: 기존 토큰 폐기 및 새 토큰 발급
         token.revoke(now);
 
+        // QR 표시는 QR 세션 만료와 상관없이 그대로 이어간다. 표시를 버리면 폰이 조용히 일반 토큰이 되어 업로드가 데스크톱과
+        // 연동되지 않는다. 세션 행이 이미 삭제됐다면 업로드 시점에 QR_002로 명시적으로 거절된다(WorksheetService.resolveQrTarget).
+        String qrSessionId = token.getQrSessionId();
+
         String newRawRefreshToken = TokenHashUtil.generateRawToken();
         String newTokenHash = TokenHashUtil.hashToken(newRawRefreshToken);
 
@@ -102,6 +121,7 @@ public class AuthService {
                 .user(user)
                 .tokenHash(newTokenHash)
                 .expiresAt(now.plusDays(refreshTokenExpirationDays))
+                .qrSessionId(qrSessionId)
                 .build();
         refreshTokenRepository.save(newRefreshToken);
 
@@ -109,7 +129,8 @@ public class AuthService {
                 user.getId(),
                 user.getAcademy().getId(),
                 user.getEmail(),
-                user.getRole().name());
+                user.getRole().name(),
+                qrSessionId);
 
         return new TokenRefreshResponse(newAccessToken, newRawRefreshToken);
     }

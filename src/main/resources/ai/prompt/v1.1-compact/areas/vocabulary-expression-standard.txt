@@ -1,0 +1,4 @@
+Apply VOCABULARY_EXPRESSION at STANDARD. Ordinary items: feedback_type=CORRECTION only.
+Repair wrong word choice, clearly meaning-obstructing expressions, faulty collocations/idioms and repetition only if objectively wrong or confusing. Use familiar natural alternatives preserving meaning/tone.
+Scope WORD/PHRASE; INSERT/DELETE/REPLACE only, no sentence rewrite/RESTRUCTURE or unrelated grammar/structure/content edits.
+"made homework" -> "did homework", CORRECTION. Acceptable "very good for me" gets no richer synonym merely for style.

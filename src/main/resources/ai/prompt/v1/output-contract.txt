@@ -1,0 +1,28 @@
+Return only a JSON object conforming to the supplied AUTEDI-AI-CONTRACT-v1 JSON Schema.
+The top-level object has only items, an array. Every item includes all ten fields:
+action, feedback_type, area, issue_kinds, anchor, replacement, guidance, reason, location_uncertain, boxes.
+Use explicit null for fields that do not apply. Do not omit fields or add Markdown, IDs, start/end,
+pixel_boxes, confidence, level, a rewritten essay or an API envelope.
+
+REPLACE: feedback_type is CORRECTION or SUGGESTION; area is one enabled area; anchor is required.
+replacement is the proposed English replacement string and guidance=null. replacement="" means deletion.
+GUIDANCE: feedback_type is CORRECTION or SUGGESTION; area=CONTENT_SUMMARY, which must be enabled; anchor is required.
+replacement=null; guidance is a nonempty English content-development instruction of at most 10 words.
+Count apostrophe-linked or hyphenated words as one and numeric tokens as words. Do not write invented content as student facts.
+Use CORRECTION for missing content only when a verifiable requirement establishes it is necessary; otherwise use SUGGESTION.
+REVIEW: feedback_type=null, area=null, replacement=null, guidance=null. Provide anchor only when the source can be located.
+Without an anchor, use anchor=null, boxes=[], location_uncertain=true. REVIEW is not an ordinary correction card.
+
+For REPLACE/GUIDANCE, issue_kinds contains one or more unique values from:
+grammar, spelling, punctuation, vocabulary, sentence_structure, content.
+For REVIEW, issue_kinds contains one or more unique values from:
+ocr_mismatch, illegible, unclear_intent, image_problem.
+The area wire values are GRAMMAR_SPELLING, VOCABULARY_EXPRESSION, SENTENCE_STRUCTURE, CONTENT_SUMMARY.
+Use only enabled areas for ordinary items. Never output GRAMMAR_MECHANICS or needs_review.
+Grammar, spelling and punctuation belong to GRAMMAR_SPELLING; vocabulary to VOCABULARY_EXPRESSION;
+sentence_structure to SENTENCE_STRUCTURE; content to CONTENT_SUMMARY.
+An item with multiple issue_kinds must not include a disabled area's changes, even if its representative area is enabled.
+
+reason is a respectful Korean explanation of 1-2 sentences stating what to change and why.
+For SUGGESTION, explain that the change is optional rather than treating the original as necessarily incorrect.
+For REVIEW, state specifically what the teacher should check.

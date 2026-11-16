@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "action": "REPLACE", "feedback_type": "CORRECTION", "area": "GRAMMAR_SPELLING",
+      "issue_kinds": ["grammar"], "anchor": {"line_id": 1, "original": "go", "occurrence": 2},
+      "replacement": "went", "guidance": null, "reason": "과거 시점에 맞춘 수정 제안입니다.",
+      "location_uncertain": false, "boxes": [[0.4, 0.1, 0.5, 0.2]]
+    },
+    {
+      "action": "GUIDANCE", "feedback_type": "SUGGESTION", "area": "CONTENT_SUMMARY",
+      "issue_kinds": ["content"], "anchor": {"line_id": 3, "original": "I like this book.", "occurrence": 1},
+      "replacement": null, "guidance": "Add one reason you like this book.", "reason": "선택적인 이유 보완 제안입니다.",
+      "location_uncertain": false, "boxes": [[0.1, 0.5, 0.8, 0.6]]
+    },
+    {
+      "action": "REVIEW", "feedback_type": null, "area": null,
+      "issue_kinds": ["image_problem"], "anchor": null,
+      "replacement": null, "guidance": null, "reason": "사진이 잘린 부분을 확인해 주세요.",
+      "location_uncertain": true, "boxes": []
+    },
+    {
+      "action": "REPLACE", "feedback_type": "CORRECTION", "area": "GRAMMAR_SPELLING",
+      "issue_kinds": ["grammar"], "anchor": {"line_id": 1, "original": "missing", "occurrence": 1},
+      "replacement": "kept proposal", "guidance": null, "reason": "원문 불일치 확인용 후보입니다.",
+      "location_uncertain": false, "boxes": [[0.2, 0.1, 0.3, 0.2]]
+    },
+    {
+      "action": "REPLACE", "feedback_type": "SUGGESTION", "area": "VOCABULARY_EXPRESSION",
+      "issue_kinds": ["vocabulary"], "anchor": {"line_id": 3, "original": "book", "occurrence": 1},
+      "replacement": "novel", "guidance": null, "reason": "선택하지 않은 어휘 영역 후보입니다.",
+      "location_uncertain": false, "boxes": [[0.6, 0.5, 0.8, 0.6]]
+    },
+    {
+      "action": "REPLACE", "feedback_type": "CORRECTION", "area": "GRAMMAR_SPELLING",
+      "issue_kinds": ["grammar"], "anchor": {"line_id": 1, "original": "then", "occurrence": 1},
+      "replacement": "afterward", "guidance": "Add one example.", "reason": "동작별 필드 조합이 잘못된 후보입니다.",
+      "location_uncertain": false, "boxes": [[0.25, 0.1, 0.35, 0.2]]
+    },
+    {
+      "action": "REPLACE", "feedback_type": "SUGGESTION", "area": "GRAMMAR_SPELLING",
+      "issue_kinds": ["punctuation"], "anchor": {"line_id": 1, "original": "then", "occurrence": 1},
+      "replacement": "", "guidance": null, "reason": "빈 문자열 삭제 제안 보존 확인용입니다.",
+      "location_uncertain": false, "boxes": []
+    },
+    {
+      "action": "REPLACE", "feedback_type": "CORRECTION", "area": "GRAMMAR_SPELLING",
+      "issue_kinds": ["grammar", "spelling"], "anchor": {"line_id": 1, "original": "go", "occurrence": 1},
+      "replacement": "went", "guidance": null, "reason": "유효 박스와 잘못된 박스가 섞인 후보입니다.",
+      "location_uncertain": false, "boxes": [[0.1, 0.1, 0.2, 0.2], [0.8, 0.1, 0.2, 0.3]]
+    }
+  ]
+}

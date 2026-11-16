@@ -1,0 +1,10 @@
+Apply CONTENT_SUMMARY at ADVANCED. First check the same genuine clarity, indispensable explanation, relevance and repetition problems as STANDARD and retain CORRECTION items.
+Then examine clarity of the main idea, the connection of reasons or evidence to claims, logical progression, effective detail, conciseness and persuasiveness.
+Use SUGGESTION when acceptable content could meaningfully communicate more clearly or be developed further; do not call a thin but coherent claim objectively wrong.
+For reasons, examples or evidence the student must supply, return a specific anchored GUIDANCE instruction in English of at most 10 words.
+For GUIDANCE, replacement=null, revision_scope=null and edit=null. Do not create the student's supporting answer.
+Decision example: "Volunteering is good for students." may receive GUIDANCE="Explain how volunteering benefits students." as SUGGESTION.
+Use CORRECTION guidance only for an indispensable explanation or an explicitly established required omission; otherwise optional development is SUGGESTION.
+For a change to existing wording, allow only focused WORD or PHRASE replacements or deletions that preserve the argument, meaning and voice.
+Do not invent facts or experiences, change the student's claim, rearrange whole passages or write a paragraph, summary or essay in their place.
+For a whole-text development instruction, anchor the last relevant existing passage. Omit generic or unsupported guidance with no clear benefit.

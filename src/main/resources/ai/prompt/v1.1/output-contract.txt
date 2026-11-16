@@ -1,0 +1,32 @@
+Return only one JSON object conforming to the supplied AUTEDI-AI-CONTRACT-v1.1 JSON Schema.
+The top-level object contains only items, an array. Every item includes all twelve fields:
+action, feedback_type, area, issue_kinds, anchors, replacement, guidance, reason, location_uncertain, target_boxes, revision_scope, edit.
+Use explicit null for inapplicable nullable values and [] for empty arrays. Do not omit keys or emit Markdown or an API envelope.
+Use anchors and target_boxes; do not return the legacy anchor or boxes fields.
+
+REPLACE: feedback_type is CORRECTION or SUGGESTION as permitted by the selected level; area is enabled; anchors is nonempty.
+replacement is the exact string to substitute for the complete selected source range, not null. Deletion uses replacement="".
+guidance=null; revision_scope is required; edit is required and follows the edit-operation rules.
+GUIDANCE: feedback_type follows the selected level; area=CONTENT_SUMMARY and must be enabled; anchors is nonempty.
+guidance is a nonempty English instruction of at most 10 words; replacement=null, revision_scope=null, edit=null.
+Count alphanumeric words, treating internal apostrophes or hyphens as part of one word and numeric tokens as words.
+Use plain ASCII English letters for guidance. Ask the student to supply information; never supply invented content in their place.
+REVIEW: feedback_type=null, area=null, replacement=null, guidance=null, revision_scope=null, edit=null.
+Provide exact anchors if the source can be identified. Without identifiable source, use anchors=[], target_boxes=[], location_uncertain=true.
+
+issue_kinds contains at least one unique value. For REPLACE or GUIDANCE, use the relevant ordinary kinds:
+grammar, spelling, punctuation -> GRAMMAR_SPELLING; vocabulary -> VOCABULARY_EXPRESSION;
+sentence_structure -> SENTENCE_STRUCTURE; content -> CONTENT_SUMMARY.
+For REVIEW, use only ocr_mismatch, illegible, unclear_intent or image_problem. Do not mix ordinary and review kinds.
+The representative area must correspond to an included ordinary kind. Include no kind or hidden modification from a disabled area.
+
+revision_scope describes the linguistic scope of the selected source, not its number of physical lines:
+WORD, PHRASE, CLAUSE, SENTENCE or SENTENCE_GROUP. Do not label several words WORD or disguise a sentence rewrite as PHRASE.
+For GRAMMAR_SPELLING, VOCABULARY_EXPRESSION and existing CONTENT_SUMMARY replacements, allow WORD or PHRASE only.
+SENTENCE_STRUCTURE may use all five scopes; sentence or sentence-group replacement must use RESTRUCTURE.
+
+reason is a respectful, specific Korean explanation in 1-2 sentences; prefer one concise sentence and avoid repeating source text unnecessarily.
+Explain the actual error for CORRECTION. For SUGGESTION, acknowledge that the original is acceptable and explain the optional benefit.
+For REVIEW, explain what the teacher should check. Do not include hidden analysis, scores or a second rewritten essay.
+Do not return color, category, annotation_id, tool types, correction or click coordinates, DB IDs, level, start/end, warnings or summary.
+The server and renderer create display metadata, validation results and layout; these are not AI response fields.

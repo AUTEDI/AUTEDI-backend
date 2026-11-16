@@ -67,6 +67,13 @@
    - 11.5 데이터 영속성 및 S3 일일 DB 백업 자동화
    - 11.6 74일 후 30분 무중단 마이그레이션 런북
    - 11.7 환경별 설정 프로파일 분리 전략 (Local / Dev / Prod)
+   - 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
+   - 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
+   - 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
+   - 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
+   - 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
+   - 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
+   - 11.14 단일 EC2 멀티 컨테이너(Prod + Dev/QA) 통합 아키텍처 및 CI/CD 분리 운영 규격 (Single EC2 Multi-Container Consolidation & CI/CD)
 
 ---
 
@@ -387,6 +394,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 | **F06 코멘트 불변 영역** | 생성 시 `pageId`, `regions` 고정, 수정 시 오직 `content`만 변경 | `CommentService.updateComment` | 프론트엔드 캔버스 자동 배치 레이아웃 일관성 유지 |
 | **F06 코멘트 일관성** | 코멘트 내부 모든 `regions.pageId`와 요청 `pageId` 일치 강제 | `CommentService.createComment` | 페이지 간 교차 좌표 참조 오염 400 차단 |
 | **F05/F06 동시성 제어** | 자원별 ETag(`cor_`, `com_`) 및 `If-Match` 헤더를 통한 낙관적 락 | `CorrectionService`, `CommentService` | 다중 교사 동시 검토 및 코멘트 덮어쓰기 방지 (412) |
+| **파일 스토리지** | DIP 기반 AWS S3 전환 (`S3FileStorageService`) 및 로컬 Fallback | `FileStorageService`, `S3FileStorageService`, `LocalStorageService` | 프론트 0-code <img> 렌더링 유지, 서버 트래픽 격리, 로컬 무자격증명 개발 지원 |
 
 ---
 *본 문서는 AUTEDI 백엔드 개발 팀의 공식 아키텍처 의사결정 기록(ADR)이며, 변경 사항 발생 시 PR을 통한 리뷰 후 갱신됩니다.*
@@ -460,7 +468,7 @@ AUTEDI는 영어 교육기관(학원, 영어 도서관)을 대상으로 학생�
 
 ### 8.4 파일 스토리지 추상화 및 SHA-256 해시/메타데이터 산출
 - **스토리지 인터페이스 추상화 (`FileStorageService`)**:
-  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하고, 현재는 로컬 스토리지 구현체(`LocalStorageService`)를 사용하되 추후 AWS S3 등으로 무중단 전환이 가능하도록 설계했다.
+  - 인프라 종속성을 분리하기 위해 `FileStorageService` 인터페이스(`upload`, `delete`)를 정의하였으며, 프로덕션 환경에서는 AWS S3 구현체(`S3FileStorageService`)를, AWS 자격증명이 없는 로컬 개발/테스트 환경에서는 로컬 스토리지 구현체(`LocalStorageService`)로 자동 Fallback 되도록 DIP(의존성 역전 원칙)를 적용했다. (상세 아키텍처 및 무중단 전환 규격은 Section 11.12 참조)
 - **SHA-256 파일 해시 (`fileHash`)**:
   - 파일 업로드 및 교체 시 원본 파일의 바이트 스트림으로부터 SHA-256 Hex 해시를 계산하여 영속화한다.
   - 이는 향후 동일 파일 재업로드 감지 및 OCR 결과 캐싱(`ocr_file_hash`)의 키 값으로 활용된다.
@@ -635,7 +643,7 @@ chmod +x scripts/pre-commit && cp scripts/pre-commit .git/hooks/pre-commit
 | 구분 | 확정 기술 / 구성 | 세부 역할 및 선정 이유 |
 | --- | --- | --- |
 | **Frontend** | **React + Vercel** | 프론트엔드 호스팅, 기본 HTTPS 제공, 추후 커스텀 도메인 연결 용이 ($0) |
-| **Backend Domain & SSL** | **DuckDNS + Nginx + Let’s Encrypt** | 무료 동적 도메인(`*.duckdns.org`) + 무료 SSL 인증서로 Vercel↔︎EC2 간 종단간 HTTPS 암호화 통신 보장 ($0) |
+| **Backend Domain & SSL** | **자체 도메인(`api.autedi.co.kr`, `dev-api.autedi.co.kr`) + Nginx + Let’s Encrypt** | 구매 도메인의 서브도메인 + 무료 SSL 인증서로 Vercel↔︎EC2 간 종단간 HTTPS 보장. 기존 DuckDNS는 이전 완료 시까지 공존 후 제거 (11.15 참조) |
 | **Backend & DB** | **Spring Boot + MySQL 8.0** | 단일 EC2 내 **Docker Compose**로 통합 구동 (컨테이너 메모리 엄격 상한선 적용) |
 | **Storage** | **AWS S3** | 첨삭 대상 영어 손글씨 이미지 원본/변환본 저장 및 일일 DB 백업 아카이브 보관 |
 | **OCR & AI** | **Google Cloud Vision + 외부 AI API** | 외부 API 호출 방식으로 EC2 내부의 CPU/메모리 연산 부하 원천 차단 |
@@ -681,7 +689,7 @@ flowchart TB
     end
 
     User --> React
-    React -- "HTTPS 요청 (CORS 통과)\n(https://autedi-api.duckdns.org)" --> Nginx
+    React -- "HTTPS 요청 (CORS 통과)\n(https://api.autedi.co.kr)" --> Nginx
     Nginx -- "Reverse Proxy (HTTP)" --> Spring
     Spring -- "1. 이미지 저장" --> S3
     Spring -- "2. OCR 추출" --> Vision
@@ -708,13 +716,15 @@ flowchart LR
 
 ### 11.3 EC2 2GB RAM OOM 방어 및 메모리 배분 설계
 
-#### 11.3.1 Swap 메모리 (2GB) 필수 활성화
+#### 11.3.1 Swap 메모리 (4GB) 및 `vm.swappiness=10` 커널 튜닝
 
-물리 메모리(2GB)가 순간적으로 고갈될 때 Linux 커널의 OOM Killer가 주요 프로세스를 강제 종료하지 않도록, 디스크(EBS)를 가상 메모리로 확장하는 Swap 메모리를 최초 프로비저닝 시 반드시 설정합니다:
+단일 2GB RAM EC2 내에서 **운영(Prod)**과 **개발/QA(Dev)** 두 개의 백엔드 컨테이너 및 MySQL을 동시에 안정적으로 구동하기 위해, 디스크(EBS) 가상 메모리를 4GB로 확장하고 리눅스 커널의 스왑 사용 적극성을 제어하는 `vm.swappiness=10` 튜닝을 필수로 적용합니다:
 
 ```bash
-# 1. 2GB 스왑 파일 생성 및 권한 설정
-sudo fallocate -l 2G /swapfile
+# 1. 4GB 스왑 파일 생성 및 권한 설정
+sudo swapoff -a || true
+sudo rm -f /swapfile
+sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 
 # 2. 스왑 포맷팅 및 활성화
@@ -722,20 +732,29 @@ sudo mkswap /swapfile
 sudo swapon /swapfile
 
 # 3. 재부팅 시 자동 마운트 등록 (/etc/fstab)
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+if ! grep -q '/swapfile none swap sw 0 0' /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+fi
 
-# 4. 스왑 활성화 확인
+# 4. 커널 vm.swappiness=10 최적화 (물리 RAM 90% 이상 차기 전까지 디스크 I/O 억제)
+sudo sysctl vm.swappiness=10
+if ! grep -q 'vm.swappiness=10' /etc/sysctl.conf; then
+    echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+fi
+
+# 5. 스왑 활성화 확인 (물리 2GB + 스왑 4GB = 총 6GB 풀 확보)
 free -h
 ```
 
-#### 11.3.2 컨테이너별 메모리 다이어트 예산 (2GB RAM 기준)
+#### 11.3.2 컨테이너별 메모리 다이어트 예산 (단일 EC2 Prod+Dev 통합 기준)
 
 | 계층 / 컨테이너 | 할당 목표치 | 튜닝 및 제약 옵션 |
 | --- | --- | --- |
 | **Host OS + Docker Daemon + Nginx** | **~ 250 MB** | Alpine 기반 Nginx 경량 이미지, 불필요한 OS 백그라운드 서비스 비활성화 |
-| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=50` |
-| **Spring Boot Container** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC` 강제 |
-| **비상 예비 물리 메모리 (Buffer)** | **~ 850 MB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
+| **MySQL 8.0 Container** | **~ 250 MB** | `--performance-schema=OFF`, `--innodb-buffer-pool-size=128M`, `--max-connections=60` |
+| **Spring Boot (운영: Prod)** | **~ 650 MB** | JVM 옵션 `-Xms256m -Xmx512m -XX:+UseSerialGC`, Docker 리밋 700M |
+| **Spring Boot (개발: Dev/QA)** | **~ 450 MB** | JVM 옵션 `-Xms128m -Xmx384m -XX:+UseSerialGC`, Docker 리밋 512M |
+| **여유 버퍼 및 스왑 확장 풀** | **물리 ~450 MB + 스왑 4GB** | 외부 API 응답 대기, 순간 트래픽, 파일 I/O 버퍼용으로 상시 보존 |
 
 #### 11.3.3 Nginx 설정 시 필수 주의사항 (사진 업로드 용량 및 AI 타임아웃)
 
@@ -910,7 +929,7 @@ flowchart TD
     A["신규 인프라 준비\n(새 AWS 계정, Lightsail, NCP, 또는 타사 클라우드)"] --> B["Docker & Compose 설치 및 /srv/mvp-data 디렉토리 생성"]
     B --> C["최신 S3 DB 덤프 다운로드 및 MySQL 복원\n(또는 rsync로 /srv/mvp-data 복제)"]
     C --> D["docker compose up -d 실행 및 헬스체크 확인"]
-    D --> E["DuckDNS 대시보드에서 A 레코드 IP를 신규 서버 IP로 변경"]
+    D --> E["가비아 DNS 관리에서 api / dev-api A 레코드 IP를 신규 서버 IP로 변경"]
     E --> F["마이그레이션 완료 (DNS 전파 즉시 서비스 정상화, 다운타임 < 30분)"]
 ```
 
@@ -922,10 +941,958 @@ flowchart TD
 
 | 프로파일 | 파일명 | 대상 환경 및 용도 | Swagger 활성화 여부 | DB 연결 및 DDL 정책 | 주요 환경변수 규격 |
 | --- | --- | --- | --- | --- | --- |
-| **`local`** | `application-local.yaml` | 개발자 로컬 PC 개발 | **ON (`true`)** | 로컬 MySQL (또는 H2), `ddl-auto: update`, SQL 출력 | `LOCAL_DB_URL`, `LOCAL_DB_USER` (기본값 제공) |
-| **`dev`** | `application-dev.yaml` | **Railway 개발 배포 (QC 테스트베드)** | **ON (`true` - QC 검증용)** | Railway 관리형 MySQL, `ddl-auto: update`, 포트 동적 바인딩 | `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`, `PORT` |
-| **`prod`** | `application-prod.yaml` | **AWS EC2 실제 운영 배포** | **OFF (`false` - 운영 보안)** | 단일 EC2 내 Docker Compose MySQL, `ddl-auto: validate`, 보안 강화 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` |
+| **`local`** | `application-local.yaml` | 개발자 로컬 PC 개발 | **ON (`true`)** | 로컬 MySQL (또는 H2), `ddl-auto: update`, SQL 출력 | `LOCAL_DB_URL`, `LOCAL_DB_USER`, `AWS_REGION`, `AWS_S3_BUCKET` (기본값 제공) |
+| **`dev`** | `application-dev.yaml` | **Railway 개발 배포 (QC 테스트베드)** | **ON (`true` - QC 검증용)** | Railway 관리형 MySQL, `ddl-auto: update`, 포트 동적 바인딩 | `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`, `PORT`, `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| **`prod`** | `application-prod.yaml` | **AWS EC2 실제 운영 배포** | **OFF (`false` - 운영 보안)** | 단일 EC2 내 Docker Compose MySQL, `ddl-auto: validate`, 보안 강화 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`, `AWS_REGION`, `AWS_S3_BUCKET` (EC2 IAM Role 연동) |
 | **`test`** | `src/test/resources/application.yaml` | Gradle 빌드 및 CI 파이프라인 | **ON (`true` - 테스트 검증용)** | 인메모리 H2 (`MODE=MySQL`), `ddl-auto: create-drop` | 독립 실행 (외부 종속성 없음) |
 
 - **시드 데이터(`DevDataInitializer`) 격리**:
   - `@Profile({"local", "dev"})`를 적용하여 로컬 및 Railway QC 환경에서만 대표원장(`director@autedi.com`) 및 선생님(`teacher@autedi.com`) 계정이 자동 생성되도록 보장하고, 실제 운영(`prod`) 및 단위 테스트(`test`) 환경은 원천 격리한다.
+
+---
+
+### 11.8 운영 DB 스키마 관리 전략 및 점진적 마이그레이션 운영 수칙 (DDL validate Policy)
+
+#### 11.8.1 의사결정 배경 및 철학
+MVP 개발 및 정식 런칭 전 단계에서는 개발 편의를 위해 `create` 또는 `update`를 임시로 허용할 수도 있으나, **AUTEDI 팀은 개발 초기부터 운영(`prod`) 환경의 JPA DDL 정책을 `validate`로 엄격히 고정**하기로 결정했다.
+
+* **결정 이유**:
+  1. **데이터 영구 유실 방지**: `create` 모드는 재기동 시 `DROP TABLE`을 수행하므로 운영 환경에서 절대 사용 불가하다.
+  2. **운영 장애 및 부작용 차단**: `update` 모드는 편리하지만, 코드 변경 시 이전 컬럼을 삭제하지 못해 쓰레기 컬럼이 누적되고, 배포 중 대용량 테이블 DDL 자동 실행으로 인한 락(Lock) 장애를 유발할 수 있다.
+  3. **실무 운영 역량 내재화**: 코드와 DB의 생명주기를 분리하고, PR 단계에서 스키마 변경을 명시하며, 배포 전 DB에 선반영하는 **프로덕션 수준의 마이그레이션 운영 프로세스를 지금부터 체화**한다.
+
+---
+
+#### 11.8.2 신규 DB 초기화 런북 (최초 1회 테이블 생성)
+신규 인프라나 빈 MySQL 인스턴스에 처음으로 테이블을 생성할 때는 아래 1회성 오버라이드를 수행한 후 원복한다:
+1. `/srv/mvp/docker-compose.yml`의 `spring-app.environment`에 임시 추가:
+   `SPRING_JPA_HIBERNATE_DDL_AUTO: update`
+2. `docker compose up -d` 실행 ➡️ Spring Boot 기동 중 전체 테이블 자동 생성 확인
+3. 생성 완료 후 해당 환경변수 라인을 제거(또는 주석 처리)하고 다시 `docker compose up -d` 실행 ➡️ 원래의 `validate` 모드로 복귀
+
+---
+
+#### 11.8.3 스키마 변경 시 표준 운영 프로세스 (팀 협업 수칙)
+향후 새로운 기능 개발로 인해 엔티티에 컬럼이 추가되거나 신규 테이블이 도입될 경우, 팀원 전원은 아래의 **"선(先) DDL 반영, 후(後) 코드 배포"** 절차를 준수한다:
+
+1. **로컬/Dev 개발 및 검증**:
+   - `local` 및 `dev` 환경(`ddl-auto: update`)에서 기능 구현 및 테스트 수행.
+   - Hibernate 콘솔 출력 로그에서 생성된 DDL 쿼리(`ALTER TABLE ...`, `CREATE TABLE ...`)를 추출 및 검증.
+2. **PR 본문에 DDL 쿼리 명시**:
+   - GitHub PR 작성 시 `## 🗄️ DB 변경 사항` 섹션을 두고, 실행해야 할 SQL 쿼리를 정확히 기재.
+   - 예시:
+     ```sql
+     ALTER TABLE users ADD COLUMN phone_number VARCHAR(20) NULL;
+     ```
+3. **운영 DB 선(先)반영 (EC2 터미널)**:
+   - PR을 `main`에 머지(배포)하기 직전에, EC2 서버에 SSH 접속하여 MySQL 컨테이너 내에서 해당 쿼리를 수동 실행.
+     ```bash
+     docker exec -i mvp-mysql mysql -u root -p"${DB_ROOT_PASSWORD}" autedi << 'EOF'
+     ALTER TABLE users ADD COLUMN phone_number VARCHAR(20) NULL;
+     EOF
+     ```
+4. **`main` 머지 및 배포 (Validate 검증)**:
+   - DDL 반영 완료 후 PR을 `main`에 머지 ➡️ GitHub Actions `deploy.yml` 트리거.
+   - 운영 서버의 Spring Boot가 `validate` 모드로 실행되며, 새로 추가된 DB 스키마와 엔티티가 정확히 일치함을 확인하고 무중단 정상 기동.
+
+---
+
+#### 11.8.4 스키마 변경 시 안전 가이드라인
+* **하위 호환성 보장 (Nullable / Default 필수)**:
+  - 기존에 데이터가 존재하는 테이블에 컬럼을 추가할 때는 반드시 `NULL`을 허용하거나 명시적 `DEFAULT` 값을 지정해야 한다. (`NOT NULL` 기본값 미지정 금지)
+* **컬럼 이름 변경/타입 변경 정책**:
+  - 컬럼명을 직접 변경(`RENAME COLUMN`)하면 배포 전환 시점에 이전 버전 애플리케이션에서 에러가 발생할 수 있으므로, **[신규 컬럼 추가 ➡️ 데이터 마이그레이션 ➡️ 구 컬럼 제거]**의 점진적 배포 방식을 권장한다.
+* **향후 고도화 경로**:
+  - 팀 규모 확장 및 스키마 변경 빈도 증가 시, 형상관리 도구인 **Flyway**를 도입하여 Git 커밋과 DB 버전 마이그레이션을 완전 자동화한다.
+
+---
+
+### 11.9 상용 B2B 서비스를 위한 엄격한 브랜치 보호(Protected Branch) 및 PR 의무화 정책
+
+#### 11.9.1 정책 수립 배경 및 목적 (상용 유료 B2B SaaS 신뢰성 보장)
+AUTEDI는 교육기관(학원, 영어 도서관)을 대상으로 구독료를 청구하는 **유료 상용 B2B SaaS**를 지향한다. 단순 토이 프로젝트나 학습용 레포지토리와 달리, 실제 고객의 결제와 학생 과제물 피드백이 실시간으로 이루어지므로 단 한 번의 사소한 실수로도 서비스 중단, 데이터 오염, 고객 이탈이 발생할 수 있다.
+
+이에 따라 팀원 편의나 속도보다 **안정성(Stability)과 추적성(Traceability)**을 최상위 가치로 두고, `main`뿐만 아니라 **`develop` 브랜치까지 예외 없이 직접 푸시(Direct Push)를 전면 금지**하고 PR 및 자동화 검증을 강제한다.
+
+---
+
+#### 11.9.2 브랜치 보호 규칙 (Branch Protection Rules) 상세
+
+| 보호 대상 브랜치 | 직접 푸시(`git push`) 허용 여부 | 필수 상태 검사 (Required Status Checks) | 배포 연동 대상 |
+| :--- | :---: | :--- | :--- |
+| **`develop`** | **❌ 전면 금지 (Admin 포함)** | • **Spotless & Unit Tests** (코드 포맷 및 테스트 100% 통과)<br>• PR 리뷰 및 머지 승인 필수 | **Railway 개발 배포** (QC 테스트베드 자동 배포) |
+| **`main`** | **❌ 전면 금지 (Admin 포함)** | • **Spotless & Unit Tests** 통과 필수<br>• `develop` 검증 완료 커밋만 인입 허용 | **AWS EC2 실제 운영 배포** (Docker Hub ➡️ EC2 무중단 배포) |
+
+* **`develop` 브랜치까지 엄격히 통제하는 핵심 이유**:
+  1. **Railway QC 환경 보호**: `develop` 브랜치는 프론트엔드 연동 및 상시 QC 테스트가 진행되는 실시간 서버이다. 깨진 코드가 직접 푸시될 경우 프론트엔드 개발팀 전체의 작업이 즉시 중단(Block)된다.
+  2. **오타/단순 문서 수정도 예외 없음**: "단순한 1줄 수정이니까 괜찮겠지"라는 방심에서 시작되는 설정 오류 및 빌드 실패를 원천 봉쇄한다. 모든 변경은 CI 파이프라인의 기계적 검증을 통과해야만 브랜치에 합류할 수 있다.
+  3. **완벽한 변경 이력 아카이빙**: 모든 기능, 버그 수정, 문서 및 인프라 변경이 GitHub PR과 연결되어 영구 보존되므로, 장애 발생 시 원인 커밋과 맥락을 수 분 내로 역추적할 수 있다.
+
+---
+
+#### 11.9.3 표준 브랜치 전략 및 작업 흐름 (Branching Workflow)
+
+```mermaid
+flowchart LR
+    subgraph Feature["작업 브랜치"]
+        F["feat/*, fix/*, docs/*"]
+    end
+
+    subgraph CI1["1단계 검증 (PR)"]
+        C1["GitHub Actions CI\n(SpotlessCheck + Tests)"]
+    end
+
+    subgraph Develop["개발 통합 브랜치"]
+        D["develop (Protected)"]
+        R["Railway 배포\n(프론트 연동 & QC)"]
+    end
+
+    subgraph CI2["2단계 검증 (Release PR)"]
+        C2["Release PR 검증"]
+    end
+
+    subgraph Main["운영 브랜치"]
+        M["main (Protected)"]
+        E["AWS EC2 운영 배포\n(Docker Compose)"]
+    end
+
+    F -->|"PR 생성"| C1
+    C1 -->|"Pass 후 머지"| D
+    D -->|"Auto Deploy"| R
+    D -->|"PR 생성 (develop ➡️ main)"| C2
+    C2 -->|"머지 승인"| M
+    M -->|"GitHub Actions"| E
+```
+
+1. **작업 브랜치 생성**: 모든 작업은 최신 `develop`을 기반으로 `feat/*`, `fix/*`, `docs/*`, `chore/*` 접두사를 붙여 생성한다.
+2. **로컬 커밋**: `pre-commit` 훅을 통해 Palantir Java Format이 자동 적용된다.
+3. **PR 생성 및 CI 통과**: `develop`을 대상으로 PR을 열고, GitHub Actions의 `Spotless & Unit Tests`가 성공해야 머지 버튼이 활성화된다.
+4. **개발 서버 검증**: `develop` 머지 즉시 Railway에 자동 배포되어 API 및 비즈니스 로직을 검증한다.
+5. **운영 릴리즈**: 검증 완료된 `develop` 브랜치를 `main`으로 PR 요청하여 최종 배포를 진행한다.
+
+---
+
+#### 11.9.4 브랜치별 머지 전략 표준 (Merge Strategy Guidelines)
+GitHub PR 머지 시 브랜치 특성에 따라 허용되는 머지 방식을 엄격히 구분한다:
+
+| 머지 경로 | 허용 머지 방식 | 상세 이유 및 목적 |
+| :--- | :---: | :--- |
+| **`feature/* ➡️ develop`** | **Squash and Merge** | 기능 개발 중에 발생한 자잘한 작업 커밋(오타 수정, 시도 등)을 1개의 기능 단위 커밋으로 압축하여 `develop`의 히스토리를 선형적이고 깔끔하게 유지한다. |
+| **`develop ➡️ main`** | **Create a Merge Commit<br>(일반 머지 - 필수)** | • `develop`에서 검증된 여러 기능 커밋들의 전체 타임라인과 이력을 원본 그대로 보존한다.<br>• **주의**: 만약 여기서 Squash 머지를 수행할 경우 `develop`과 `main`의 커밋 해시 트리가 분기되어, **차후 `develop ➡️ main` 머지 시 대규모 충돌(Conflict)과 히스토리 왜곡이 발생**하므로 절대 금지한다. |
+
+---
+
+### 11.10 Railway 개발 배포 운영 규격 및 트러블슈팅 런북 (Multi-stage Docker & Configuration)
+
+#### 11.10.1 Dockerfile 멀티 스테이지 빌드 전환 원리
+초기 런타임 전용 Dockerfile(`COPY build/libs/*SNAPSHOT.jar app.jar`)은 로컬 또는 GitHub Actions 가상머신에서 사전에 Gradle 빌드가 선행되었다는 전제 하에 작성되었다. 그러나 Railway 등 클라우드 PaaS는 소스코드를 직접 내려받아 `docker build`를 즉시 실행하므로, `build/libs` 디렉터리가 없어 배포가 중단되는 문제(`lstat /build/libs: no such file or directory`)가 발생했다.
+
+이를 해결하기 위해 **도커 자체에서 빌드와 실행을 완전히 캡슐화하는 2단계 멀티 스테이지 빌드**를 표준으로 확정했다:
+```dockerfile
+# 1단계: 빌드 환경 (JDK 21) - 컨테이너 내부에서 안전하게 bootJar 생성
+FROM eclipse-temurin:21-jdk-jammy AS builder
+WORKDIR /app
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle settings.gradle ./
+RUN chmod +x ./gradlew
+COPY src src
+RUN ./gradlew clean bootJar -x test
+
+# 2단계: 실행 환경 (가벼운 JRE 21) - 최종 경량 실행 이미지 생성
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY --from=builder /app/build/libs/*SNAPSHOT.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+* **도입 효과**:
+  - Railway는 물론 로컬 PC, GitHub Actions, EC2 등 Docker가 설치된 모든 환경에서 호스트 OS 종속성 없이 동일한 이미지 빌드 및 실행을 100% 보장한다.
+  - `.dockerignore`를 통해 `.git`, `.gradle`, `build`, `docs`를 제외하여 빌드 컨텍스트 전송 속도를 극대화했다.
+
+---
+
+#### 11.10.2 Railway 대시보드 3대 필수 설정 규칙 (Troubleshooting Runbook)
+Railway 대시보드 설정과 Dockerfile 설정 간의 충돌로 인해 발생하는 배포 장애를 방지하기 위해 다음 3대 규칙을 강제한다:
+
+1. **Custom Start Command는 반드시 비워둘 것 (Empty / Clear)**:
+   - **발생했던 문제**: 과거 Nixpacks 빌드 시절 대시보드에 설정된 `java -jar build/libs/autedi-0.0.1-SNAPSHOT.jar` 명령어가 Dockerfile의 `ENTRYPOINT`를 강제 덮어쓰기하여 `Error: Unable to access jarfile build/libs/...` 에러 발생.
+   - **해결 원칙**: Railway는 Custom Start Command가 설정되어 있으면 Dockerfile의 `ENTRYPOINT/CMD`를 무시한다. 멀티 스테이지 컨테이너의 실행 파일은 `/app/app.jar`이므로, **Start Command를 완전히 빈 칸으로 비워두어 Dockerfile의 `ENTRYPOINT ["java", "-jar", "app.jar"]`를 그대로 따르도록 한다.**
+2. **`Wait for CI` 옵션 비활성화 (OFF)**:
+   - **발생했던 문제**: `Wait for CI`가 켜져 있으면 Railway가 GitHub Actions 검사 완료 웹훅을 무한 대기한다. 하지만 `ci.yml`이 `on: pull_request`로만 동작하고 `push to develop` 트리거가 없으므로, PR 머지 시 배포가 트리거되지 않고 Skip되는 현상 발생.
+   - **해결 원칙**: PR 단계에서 이미 CI 검증이 100% 완료된 후 `develop`에 머지되므로, 불필요한 대기 없이 즉각 배포되도록 **`Wait for CI`는 상시 OFF로 유지**한다.
+3. **`PR Environments` (임시 프리뷰) 비활성화 (OFF)**:
+   - **해결 원칙**: 개발 서버 QC는 `develop` 브랜치 본체 배포 하나로 충분하며, PR이 열릴 때마다 불필요한 임시 DB/컨테이너가 복제 생성되어 자원이 낭비되는 것을 방지하기 위해 PR Environments는 OFF로 관리한다.
+
+---
+
+#### 11.10.3 Railway 개발 배포 환경변수 주입 규격
+Railway 대시보드의 **Variables** 탭에 아래 환경변수가 누락 없이 등록되어 있어야 한다:
+* **Database (Railway 관리형 MySQL)**: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`
+* **Server Port**: `PORT` (Railway가 동적 바인딩)
+* **AWS S3 자격증명 (QC 이미지 저장용)**:
+  - `AWS_REGION`: `ap-northeast-2`
+  - `AWS_S3_BUCKET`: `autedi-mvp-develop-bucket`
+  - `AWS_ACCESS_KEY_ID`: IAM 발급 키
+  - `AWS_SECRET_ACCESS_KEY`: IAM 발급 시크릿
+
+---
+
+### 11.11 이메일 발송 인프라(SMTP/SES) 아키텍처 및 비동기 처리 규격 (Email Notification Architecture)
+
+#### 11.11.1 비동기 스레드 풀 격리 설계 (`@EnableAsync`, `AsyncConfig`, `mailExecutor`) 및 메인 HTTP 서블릿 스레드 블로킹 방지 원리
+
+##### 1. 동기 메일 발송의 치명적 병목 및 결합도 문제
+SMTP(Simple Mail Transfer Protocol)는 외부 통신 프로토콜로서 DNS 질의, TCP 3-way Handshake, STARTTLS 암호화 협상, SMTP AUTH 인증, MIME 데이터 송수신 등 다단계 네트워크 통신을 거친다. 외부 메일 서버(Gmail, AWS SES 등)의 상황에 따라 통상 500ms ~ 3,000ms 이상의 긴 레이턴시가 발생하며, 일시적 네트워크 지연 시에는 수십 초까지 지연될 수 있다.
+
+만약 HTTP 서블릿 스레드(Tomcat Worker Thread)에서 메일 발송을 동기식(`Synchronous`)으로 처리할 경우 다음과 같은 심각한 장애가 유발된다:
+1. **서블릿 스레드 고갈 및 연쇄 장애 (Thread Starvation & Cascading Failure)**:
+   - 외부 SMTP 지연 시 톰캣 워커 스레드가 응답 대기 상태로 블로킹되어 빠르게 고갈된다. 이로 인해 메일과 무관한 일반 사용자(로그인, 학습지 조회 등)의 HTTP 요청까지 타임아웃이 발생하여 시스템 전체가 마비된다.
+2. **DB 트랜잭션 및 커넥션 장기 점유 (HikariCP Connection Starvation)**:
+   - `@Transactional` 범위 내에서 동기 메일 발송을 수행하면, 메일 발송이 끝날 때까지 DB 커넥션을 반환하지 못하고 락(Lock) 및 커넥션 풀을 불필요하게 점유하여 DB 병목을 가속화한다.
+3. **사용자 경험(UX) 훼손 및 트랜잭션 오염**:
+   - 원장 선생님이 [선생님 초대] 버튼을 누른 후 메일 발송이 끝날 때까지 수 초간 로딩 스피너를 대기해야 하며, 네트워크 순시 장애로 메일 발송이 실패하면 초대 레코드 생성 트랜잭션까지 롤백되는 부작용이 발생한다.
+
+##### 2. 비동기 스레드 풀 격리 설계 (`AsyncConfig.java`)
+이러한 문제를 원천 차단하기 위해 Spring의 `@EnableAsync` 기반 전용 `ThreadPoolTaskExecutor`(`mailExecutor`)를 도입하여, 메일 발송 작업을 메인 서블릿 스레드 및 기본 스프링 작업 풀로부터 완전 물리/논리 격리하였다.
+
+```java
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean(name = "mailExecutor")
+    public Executor mailExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("mail-exec-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+* **스레드 풀 튜닝 사양**:
+  - `corePoolSize(2)`: 서버 평상시 최소 2개의 백그라운드 스레드를 유지하여 초대 메일 발송을 즉각 처리.
+  - `maxPoolSize(5)`: 특정 학원에서 다수의 교사를 일괄 초대하거나 동시 요청이 몰릴 경우 최대 5개까지 동적 확장.
+  - `queueCapacity(100)`: 최대 100건의 메일 발송 작업을 메모리 큐에 대기 버퍼링하여 트래픽 버스트 수용.
+  - `threadNamePrefix("mail-exec-")`: 로깅 및 APM(핀포인트, 데이터독 등) 모니터링 시 메일 전담 스레드를 즉시 식별 가능.
+  - `waitForTasksToCompleteOnShutdown(true)` & `awaitTerminationSeconds(30)`: 서버 무중단 배포 및 종료(SIGTERM) 시, 이미 큐에 인입된 초대 메일 발송 작업을 최대 30초간 정상 완료한 후 안전하게 종료(Graceful Shutdown)하여 메일 유실 방지.
+
+* **SMTP 연결 레벨 소켓 타임아웃 방어막 (`application.yaml`)**:
+  ```yaml
+  spring:
+    mail:
+      properties:
+        mail:
+          smtp:
+            connectiontimeout: 5000  # 소켓 연결 타임아웃 (5초)
+            timeout: 5000            # 응답 읽기 타임아웃 (5초)
+            writetimeout: 5000       # 데이터 쓰기 타임아웃 (5초)
+  ```
+  - 외부 SMTP 서버가 응답하지 않는 최악의 상황에서도 스레드가 무한정 행(Hang) 상태에 빠지지 않고 최대 5초 내에 실패 처리 및 스레드 풀로 반환되도록 보장한다.
+
+##### 3. 메인 서블릿 스레드와 비동기 워커 스레드의 상호작용 흐름
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Director as 원장 (Client)
+    participant Controller as InvitationController
+    participant Service as InvitationService
+    participant DB as MySQL (JPA)
+    participant Async as Spring @Async Proxy
+    participant Pool as mailExecutor Thread
+    participant SMTP as SMTP Server (SES/Gmail)
+
+    Director->>Controller: POST /api/v1/invitations (선생님 초대)
+    Controller->>Service: createInvitation(...)
+    activate Service
+    Service->>DB: DB 토큰 저장 및 PENDING 등록 (@Transactional)
+    DB-->>Service: Commit 완료
+    Service->>Async: emailService.sendInvitationEmail(...) 호출
+    Async-->>Pool: 비동기 발송 Task 제출 (Queue 인입)
+    Service-->>Controller: InvitationResponse 반환
+    deactivate Service
+    Controller-->>Director: 201 CREATED (응답 소요: < 20ms)
+
+    Note over Pool,SMTP: 백그라운드 스레드에서 비동기 격리 실행
+    activate Pool
+    Pool->>SMTP: STARTTLS Handshake & MimeMessage 전송 (500~2000ms)
+    alt 전송 성공
+        SMTP-->>Pool: 250 OK
+        Pool->>Pool: log.info("초대 이메일 발송 성공: to={}")
+    else 전송 실패 (SMTP 장애)
+        SMTP-->>Pool: Error (Timeout / Auth Failed)
+        Pool->>Pool: log.error("초대 이메일 발송 실패: to={}, error={}")
+        Note over Pool: try-catch 방어로 예외 격리 (DB 롤백 없음)
+    end
+    deactivate Pool
+```
+
+> [!NOTE]
+> **트랜잭션 및 비즈니스 예외 격리 원칙**:
+> `EmailService.sendInvitationEmail` 메서드는 `@Async("mailExecutor")` 애노테이션을 통해 별도 스레드에서 수행되며, 내부 `try-catch` 블록으로 모든 메일 전송 예외(`Exception`)를 캡슐화하여 로깅한다. 따라서 외부 메일 서버 장애가 발생하더라도 이미 커밋된 초대장 발급 트랜잭션(`UserInvitation`)은 안전하게 영속되며, 클라이언트에게 500 Internal Server Error가 전파되지 않는다.
+
+---
+
+#### 11.11.2 환경별(Local / Dev / Prod) 다형성 메일 발송 아키텍처
+
+AUTEDI는 개발자의 로컬 개발 편의성, 개발 서버(Railway)의 SMTP 포트(587) 방화벽 제한 회피, 그리고 운영 서버(AWS SES)의 엔터프라이즈급 신뢰도를 모두 충족하기 위해 **인터페이스 기반 다형성(DIP)과 조건부 빈 등록(`MailConfig`)**을 통한 환경별 발송 전략을 수립했다.
+
+```mermaid
+classDiagram
+    class EmailService {
+        -EmailSender emailSender
+        -String frontendUrl
+        +sendInvitationEmail(toEmail, academyName, rawToken)
+    }
+
+    class EmailSender {
+        <<Interface>>
+        +send(toEmail, fromAddress, fromName, subject, htmlContent) void
+    }
+
+    class SmtpEmailSender {
+        -ObjectProvider~JavaMailSender~ mailSenderProvider
+        +send() void
+    }
+
+    class HttpEmailSender {
+        -RestClient restClient
+        -String apiKey
+        -String endpoint
+        +send() void
+    }
+
+    EmailService --> EmailSender : 의존성 역전(DIP)
+    SmtpEmailSender ..|> EmailSender : SMTP 표준 (Local/Prod)
+    HttpEmailSender ..|> EmailSender : HTTPS 443 REST API (Railway Dev)
+```
+
+| 환경 (Profile) | 활성 구현체 (`EmailSender`) | 프로토콜 및 포트 | 자격증명 관리 | Mocking / Fallback 동작 | 주 목적 및 기대 효과 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | `SmtpEmailSender`<br>(Default Fallback) | SMTP (포트 587/465) | `.env` 파일<br>(미설정 허용) | `JavaMailSender` 미설정 시<br>**경고 로그 + 콘솔 링크 출력**으로 대체 | 로컬 개발 시 SMTP 계정 설정 없이도<br>터미널 로그의 초대 링크로 가입 E2E 즉시 테스트 |
+| **Dev** (`dev`) | `HttpEmailSender`<br>(Railway 전용) | **HTTPS (포트 443)**<br>(REST API) | Railway 대시보드<br>`RESEND_API_KEY` | API 키 미입력 시 로깅 대체,<br>입력 시 443 포트로 실제 발송 | **Railway Hobby 플랜의 SMTP 포트(587) 차단 방화벽을 100% 회피**하여 안정적 메일 수신 |
+| **Prod** (`prod`) | `SmtpEmailSender`<br>(or AWS SES SDK) | HTTPS (포트 443)<br>or SMTP | EC2 IAM Role /<br>AWS SES Credential | 예외 격리 로깅 및<br>CloudWatch 모니터링 | 대규모 발송 SLA, 높은 수신 도달률(Inbox),<br>도메인 위변조 방지 및 반송률 관리 |
+
+##### 1. Local 환경: 유연한 무중단 로깅 대체(Graceful Mocking) 및 팀 Gmail SMTP
+* **무중단 로깅 대체 (Safe Mocking Fallback)**:
+  - 신규 팀원이 프로젝트를 클론한 뒤 `.env`에 SMTP 설정을 기재하지 않더라도, 초대 API 호출 시 NullPointer나 BeanCreation 에러가 발생하지 않도록 `SmtpEmailSender`에 방어 로직을 구현했다:
+    ```java
+    JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+    if (mailSender == null) {
+        log.warn("JavaMailSender가 설정되지 않아 메일 발송을 로깅으로 대체합니다. (To: {}, Subject: {})", toEmail, subject);
+        return;
+    }
+    if (mailSender instanceof JavaMailSenderImpl mailSenderImpl) {
+        if (mailSenderImpl.getHost() == null
+                || mailSenderImpl.getHost().trim().isEmpty()
+                || mailSenderImpl.getUsername() == null
+                || mailSenderImpl.getUsername().trim().isEmpty()) {
+            log.warn("메일 발송 호스트 또는 인증 계정(MAIL_USERNAME)이 설정되지 않아 메일 발송을 로깅으로 대체합니다.");
+            return;
+        }
+    }
+    ```
+  - `MAIL_USERNAME` 또는 `MAIL_HOST`가 비어있을 경우, 콘솔에 초대 URL이 즉시 출력되어 개발자가 복사-붙여넣기로 회원가입 흐름을 원활히 테스트할 수 있다.
+* **로컬에서 실제 메일 발송 테스트 (Gmail SMTP)**:
+  - 개인/팀 Gmail 계정의 [2단계 인증] 활성화 ➡️ [앱 비밀번호(16자리)] 생성 후 `.env`에 설정:
+    ```env
+    MAIL_TYPE=smtp
+    MAIL_HOST=smtp.gmail.com
+    MAIL_PORT=587
+    MAIL_USERNAME=autedi.team@gmail.com
+    MAIL_PASSWORD=xxxx xxxx xxxx xxxx
+    MAIL_FROM_ADDRESS=autedi.team@gmail.com
+    MAIL_FROM_NAME=AUTEDI
+    FRONTEND_URL=http://localhost:3000
+    ```
+
+##### 2. Dev (Railway) 환경: HTTPS 443 포트 REST API (`HttpEmailSender`)로 방화벽 회피
+* **도입 배경**:
+  - Railway는 스팸 방지 보안 정책상 Hobby 플랜을 포함한 기본 티어에서 외부 SMTP 포트(25, 465, 587)로의 아웃바운드 연결을 방화벽에서 강제로 차단(`SocketTimeoutException: Connect timed out`)한다.
+  - 이를 해결하기 위해 웹 표준 포트인 **HTTPS (443 포트)**를 통해 이메일을 전송하는 `HttpEmailSender`를 신설하고, `application-dev.yaml`에서 `app.mail.type: http`를 기본값으로 지정했다.
+* **Resend API 연동 규격**:
+  - 엔드포인트: `POST https://api.resend.com/emails` (포트 443)
+  - 헤더: `Authorization: Bearer {RESEND_API_KEY}`
+  - JSON 페이로드:
+    ```json
+    {
+      "from": "AUTEDI <onboarding@resend.dev>",
+      "to": ["teacher@example.com"],
+      "subject": "[에이플러스 학원] 선생님 초대장",
+      "html": "<!DOCTYPE html>..."
+    }
+    ```
+  - Railway 대시보드의 **Variables** 탭에 `RESEND_API_KEY` 환경변수만 등록하면, 추가 포트 개방 없이 100% 정상 발송된다.
+
+##### 3. Prod (AWS EC2) 환경: 정식 서비스 런칭 시 AWS SES 전용 인프라 전환
+* 정식 상용화 시점에는 `autedi.com` 커스텀 도메인 등록 후 AWS SES(서울 리전: `ap-northeast-2`)를 표준 게이트웨이로 전환하여, `noreply@autedi.com` 발신 전용 체계로 무제한/고신뢰도 발송을 운영한다. AWS 환경에서는 보안 그룹 기본 규칙상 아웃바운드 포트가 차단되지 않으며, AWS SDK(HTTPS 443)로도 완벽히 호환된다.
+
+---
+
+#### 11.11.3 반응형 HTML 초대장 템플릿 표준 규격 및 발신자 정책
+
+##### 1. 발신자(Sender) 및 헤더 표준 정책
+* **발신 주소(From Address)**: `noreply@autedi.com`
+  - 도메인 네임스페이스(`autedi.com`)를 통일하여 주요 메일 서비스(Gmail, Naver, Daum, Outlook)의 발신 도메인 불일치 스팸 분류 방지.
+* **발신자 명(From Name)**: `AUTEDI`
+* **메일 제목(Subject)**: `[{academyName}] 선생님 초대장`
+  - 원장 선생님이 소속된 학원명(예: `[대치 정상어학원] 선생님 초대장`)을 동적으로 주입하여 수신 교사의 신뢰성 확보 및 피싱 오인 방지.
+* **문자셋 인코딩**: `UTF-8` 강제 (`new MimeMessageHelper(mimeMessage, false, "UTF-8")`)
+  - 한글 학원명 및 안내 본문 깨짐 현상 원천 방지.
+
+##### 2. 반응형 HTML 템플릿 디자인 사양 (`buildInvitationHtml`)
+이메일 클라이언트는 웹 브라우저와 달리 외부 CSS 파일(`<link>`) 및 `<style>` 블록을 차단하거나 제한적으로 파싱하므로, **모든 서식은 인라인 스타일(Inline CSS)**로 완결되도록 설계했다:
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:540px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;padding:36px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+    <!-- 헤더 -->
+    <div style="margin-bottom:24px;">
+      <h2 style="margin:0 0 8px 0;color:#0f172a;font-size:22px;font-weight:700;">선생님 초대장</h2>
+      <p style="margin:0;color:#64748b;font-size:14px;">AUTEDI 초등 영어 학습지 AI 첨삭 서비스</p>
+    </div>
+    <!-- 본문 안내 -->
+    <div style="line-height:1.7;color:#334155;font-size:15px;margin-bottom:32px;">
+      <p style="margin:0 0 16px 0;">안녕하세요.<br><strong style="color:#0f172a;">{academyName}</strong>에 선생님으로 초대되었습니다.</p>
+      <p style="margin:0 0 16px 0;">아래 버튼을 클릭하여 회원가입을 완료해 주시면, 소속 학원의 학습지 첨삭 및 코멘트 작성 업무를 시작하실 수 있습니다.</p>
+      <p style="margin:0;color:#ef4444;font-size:13px;">* 본 초대 링크는 발송 시점으로부터 24시간 동안만 유효합니다.</p>
+    </div>
+    <!-- CTA 버튼 -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <a href="{inviteLink}" target="_blank" style="display:inline-block;padding:14px 28px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;box-shadow:0 2px 4px rgba(37,99,235,0.2);">초대 수락하고 회원가입하기</a>
+    </div>
+    <!-- 보안 만료 및 Fallback 링크 푸터 -->
+    <div style="border-top:1px solid #e2e8f0;padding-top:20px;font-size:12px;color:#94a3b8;line-height:1.6;">
+      <p style="margin:0 0 8px 0;">버튼이 동작하지 않을 경우 아래 링크를 브라우저 주소창에 직접 붙여넣어 주세요:</p>
+      <p style="margin:0;word-break:break-all;"><a href="{inviteLink}" style="color:#2563eb;text-decoration:underline;">{inviteLink}</a></p>
+      <p style="margin:16px 0 0 0;">본 메일은 {academyName}의 원장 선생님 요청으로 발송되었습니다.</p>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+* **템플릿 핵심 UX/보안 가이드라인**:
+  1. **모바일 최적화 레이아웃**: 최대 너비 `540px`의 카드 컨테이너와 `-apple-system` 산세리프 폰트를 적용하여 데스크톱 및 스마트폰 화면에서 가독성을 보장.
+  2. **명확한 CTA 버튼**: 고대비 블루 컬러(`#2563eb`)의 큼직한 가입 버튼을 배치하여 클릭률 극대화.
+  3. **보안 유효기간 명시**: Section 2.3 및 3.1에 명시된 정책에 따라, `24시간 유효` 경고 문구를 붉은색(`#ef4444`)으로 강조 안내.
+  4. **텍스트 뷰어 대비 Fallback URL**: 이미지/버튼 링크가 비활성화된 폐쇄망 환경을 대비하여 하단에 URL 원본 텍스트를 노출하고 `word-break: break-all`로 줄바꿈 처리.
+  5. **발송 출처 명시**: 학원 원장의 정당한 요청으로 생성되었음을 명시하여 스팸 신고 방지.
+
+---
+
+#### 11.11.4 운영 환경 AWS SES 연동 및 도메인(autedi.com) DNS(DKIM, SPF, DMARC) 인증 런북
+
+상용 B2B 서비스에서 기업 메일 서버나 대형 포털(Gmail, 네이버 등)에 이메일을 안정적으로 도달시키기 위해서는 발신 도메인에 대한 **암호학적 서명(DKIM)과 발신 서버 공인(SPF), 그리고 도메인 보호 정책(DMARC) 3대 인증**이 필수적이다. 인증이 누락될 경우 Gmail의 강력한 스팸 방어 정책(2024년 발효된 대량 발신자 의무 규정)에 의해 메일이 즉시 반송(Reject)되거나 스팸함으로 직행한다.
+
+##### 1. AWS SES 설정 및 Production 모드 전환 (Sandbox 해제)
+1. **AWS Management Console 접속**: 리전을 **`ap-northeast-2 (서울)`**로 선택 후 **Amazon Simple Email Service**로 이동.
+2. **도메인 Identity 생성**:
+   - [Configuration] ➡️ [Identities] ➡️ [Create identity] 클릭.
+   - Identity type: **Domain** 선택.
+   - Domain: `autedi.com` 입력.
+   - Advanced DKIM settings: **Easy DKIM** 선택, DKIM key length: **RSA_2048_BIT** 선택.
+   - [Create identity] 완료.
+3. **SES Production Sandbox 해제 신청**:
+   - 신규 AWS 계정의 SES는 Sandbox 모드로 시작되어 사전에 인증된 이메일 주소로만 발송이 가능하다.
+   - [Account dashboard] ➡️ [Request production access] 클릭:
+     - Mail type: **Transactional** (B2B SaaS 초대장 및 알림 메일)
+     - Website URL: `https://autedi.com`
+     - Use case description: "AUTEDI B2B SaaS 학원 선생님 초대 및 시스템 알림 메일 발송용. 모든 메일은 원장의 명시적 초대 행위로만 발송되며 마케팅 스팸 발송은 일절 없음" 기재 후 제출. (통상 24~48시간 내 승인)
+
+##### 2. DNS 3대 인증 레코드 등록 런북 (Route 53 / 호스팅 네임서버)
+도메인 네임서버 관리 콘솔(Route 53 또는 가비아/Cloudflare 등)에 아래 레코드를 정확히 등록한다:
+
+| 인증 규격 | 레코드 타입 (Type) | 이름 / 호스트 (Host/Name) | 값 / 데이터 (Value/Content) | TTL | 설명 및 역할 |
+| :--- | :---: | :--- | :--- | :---: | :--- |
+| **SPF** | **TXT** | `@` (또는 `autedi.com`) | `v=spf1 include:amazonses.com ~all` | 300 | `autedi.com` 도메인 명의로 메일을 발송할 권한이 있는 공인 발송 인프라로 AWS SES를 지정. |
+| **DKIM #1** | **CNAME** | `[token1]._domainkey.autedi.com` | `[token1].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 1번 공개키 CNAME 레코드. |
+| **DKIM #2** | **CNAME** | `[token2]._domainkey.autedi.com` | `[token2].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 2번 공개키 CNAME 레코드. |
+| **DKIM #3** | **CNAME** | `[token3]._domainkey.autedi.com` | `[token3].dkim.amazonses.com` | 300 | AWS SES가 제공하는 Easy DKIM 3번 공개키 CNAME 레코드 (키 로테이션용). |
+| **DMARC** | **TXT** | `_dmarc.autedi.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@autedi.com; pct=100` | 300 | SPF/DKIM 인증 실패 메일을 스팸 격리(`quarantine`) 처리하고 집계 리포트를 수신하도록 수신 메일 서버에 지시. |
+
+> [!IMPORTANT]
+> **SPF 레코드 중복 주의**:
+> DNS TXT 레코드에 `v=spf1 ...` 레코드는 도메인당 반드시 **단 1개만 존재**해야 한다. 만약 이미 구글 워크스페이스나 타 메일 서비스용 SPF가 존재한다면 두 개의 TXT 레코드를 만들지 말고 기존 레코드에 `include:amazonses.com`을 병합해야 한다:
+> `v=spf1 include:_spf.google.com include:amazonses.com ~all`
+
+##### 3. AWS SES SMTP 자격증명(Credentials) 생성
+1. SES Console ➡️ [Configuration] ➡️ [SMTP settings] 메뉴로 이동.
+2. SMTP Configuration 정보 확인:
+   - **Server Name**: `email-smtp.ap-northeast-2.amazonaws.com`
+   - **Port**: `587` (STARTTLS 지원 포트)
+3. [Create SMTP credentials] 버튼 클릭:
+   - IAM User Name 지정 (예: `ses-smtp-user.autedi`).
+   - [Create] 클릭 후 생성된 **SMTP Username**과 **SMTP Password**를 안전하게 다운로드/보관 (비밀번호는 최초 1회만 노출됨).
+
+##### 4. 운영 서버 환경변수 주입 규격 (`/srv/mvp/.env` or Docker Compose)
+운영 EC2 인스턴스의 환경변수 파일에 아래 값을 누락 없이 주입한다:
+
+```env
+# ==============================================================================
+# SMTP Mail Configuration (AWS SES Production)
+# ==============================================================================
+MAIL_HOST=email-smtp.ap-northeast-2.amazonaws.com
+MAIL_PORT=587
+MAIL_USERNAME=AKIAIOSFODNN7EXAMPLE
+MAIL_PASSWORD=BJ45...[SES_SMTP_GENERATED_PASSWORD]...
+MAIL_FROM_ADDRESS=noreply@autedi.com
+MAIL_FROM_NAME=AUTEDI
+FRONTEND_URL=https://autedi.com
+```
+
+##### 5. 발송 도메인 검증 및 수신 테스팅 체크리스트
+- [ ] AWS SES Console에서 `autedi.com` 도메인의 Verification status 및 DKIM status가 모두 **"Success (Verified)"**로 표시되는지 확인.
+- [ ] 운영 서버 기동 후 초대 API 호출 시 `mail-exec-*` 스레드에서 `초대 이메일 발송 성공: to=...` 로그 확인.
+- [ ] Gmail, Naver 메일함으로 초대장을 발송하여 **스팸함이 아닌 일반 편지함(Inbox)**으로 수신되는지 확인.
+- [ ] 수신된 메일의 원본 보기(Show Original)에서 **`SPF: PASS`, `DKIM: PASS`, `DMARC: PASS`** 3대 검증 항목이 모두 합격 판정을 받았는지 확인.
+
+---
+
+### 11.12 AWS S3 파일 스토리지 아키텍처 및 미디어 서빙 규격 (AWS S3 Storage Architecture & Zero-Frontend-Impact Media Serving)
+
+#### 11.12.1 도입 배경 및 스토리지 전환 필요성
+
+초기 개발 단계에서 채택했던 로컬 파일 스토리지(`LocalStorageService`)는 서버 인스턴스 내부의 로컬 디스크(`uploads/`)에 파일을 저장하고, 백엔드 애플리케이션의 엔드포인트(`/files/**`)를 통해 정적 리소스를 직접 서빙하는 방식을 취했다.
+
+그러나 B2B 상용 SaaS 런칭 및 프론트엔드 연동 과정에서 다음과 같은 구조적 한계와 병목이 확인되었다:
+1. **정적 리소스 인증 충돌 (`401 Unauthorized`)**:
+   - 백엔드의 `SecurityConfig`는 무상태(Stateless) JWT Bearer 토큰 기반으로 보호된다.
+   - 표준 HTML `<img src="...">` 태그는 브라우저 네이티브 HTTP GET 요청을 보내므로 별도의 `Authorization` 헤더를 포함할 수 없다. 로컬 서빙 방식에서는 `/files/**` 경로를 `permitAll()`로 열고 `WebMvcConfigurer` 정적 리소스 핸들러를 별도로 구성해야 하는 번거로움과 보안 구멍이 발생했다.
+2. **단일 서버 디스크 용량 한계 및 인스턴스 무상태성(Stateless) 훼손**:
+   - Docker 컨테이너 및 EC2 인스턴스 교체/재배포 시 로컬 볼륨 마운트가 누락되면 저장된 학생 과제물이 영구 유실될 위험이 있다.
+3. **네트워크 대역폭 및 I/O 블로킹 병목**:
+   - 고해상도(A4 300DPI, 5~15MB) 학습지 이미지를 Spring Boot 톰캣 스레드가 직접 읽어서 스트리밍할 경우, 교사들의 동시 조회 시 애플리케이션 스레드 풀이 고갈되고 네트워크 대역폭 비용이 가중된다.
+
+이에 따라 백엔드 팀은 고가용성 오브젝트 스토리지인 **AWS S3 (`S3FileStorageService`)**로 스토리지 인프라를 전격 전환하였다.
+
+---
+
+#### 11.12.2 DIP(의존성 역전 원칙) 기반 스토리지 설계
+
+비즈니스 도메인 계층(`WorksheetService`)이 AWS SDK나 파일 시스템의 저수준 구현에 직접 의존하지 않도록 순수 도메인 인터페이스 `FileStorageService`와 불변 DTO `StoredFile`을 중심으로 결합도를 격리하였다.
+
+```mermaid
+classDiagram
+    class WorksheetService {
+        -FileStorageService fileStorageService
+        +uploadWorksheet()
+        +replaceWorksheetFile()
+    }
+
+    class FileStorageService {
+        <<Interface>>
+        +upload(MultipartFile file, String subDir) StoredFile
+        +delete(String fileUrl) void
+    }
+
+    class LocalStorageService {
+        -Path rootLocation
+        -String baseUrl
+        +upload() StoredFile
+        +delete() void
+    }
+
+    class S3FileStorageService {
+        -S3Client s3Client
+        -String bucketName
+        -String region
+        +upload() StoredFile
+        +delete() void
+    }
+
+    class StoredFile {
+        <<Record>>
+        +String originalFilename
+        +String storedFilename
+        +String fileUrl
+        +FileType fileType
+        +Long fileSize
+        +String fileHash
+        +Integer width
+        +Integer height
+    }
+
+    WorksheetService --> FileStorageService : 의존 (DIP)
+    LocalStorageService ..|> FileStorageService : 구현 (로컬 Fallback)
+    S3FileStorageService ..|> FileStorageService : 구현 (운영 메인)
+    FileStorageService ..> StoredFile : 반환 계약
+```
+
+- **도메인 계약 불변성**:
+  - `WorksheetService`는 주입된 Bean이 `S3FileStorageService`인지 `LocalStorageService`인지 알 필요가 없으며, 단 1줄의 서비스 비즈니스 로직 수정 없이 스토리지 백엔드를 교체할 수 있다 (개방-폐쇄 원칙 OCP 준수).
+- **불변 메타데이터 레코드 (`StoredFile`)**:
+  - 파일 업로드 시 파일 원본명, S3 고유 저장 키, 영구 접근 URL(`fileUrl`), SHA-256 해시값(`fileHash`), 이미지 가로/세로 픽셀 해상도(`width`, `height`)를 한 번에 캡슐화하여 반환한다.
+
+---
+
+#### 11.12.3 테넌트 격리 S3 객체 키 네이밍 및 업로드 메커니즘
+
+1. **테넌트 격리 객체 키 경로**:
+   - `worksheets/{academyId}/{UUID}.{ext}`
+   - 학원(`academyId`)별 폴더 구조를 강제하여 S3 버킷 내부에서도 테넌트 간 파일 충돌을 방지하고 추후 학원 단위 데이터 아카이빙/용량 측정을 용이하게 한다.
+2. **MIME 타입 보존 및 인라인 렌더링 (`Content-Type`)**:
+   - S3에 파일 업로드 시 `PutObjectRequest`의 `contentType` 메타데이터(예: `image/jpeg`, `image/png`, `application/pdf`)를 정확히 지정한다.
+   - MIME 타입이 누락되어 기본값(`binary/octet-stream`)으로 업로드되면, 브라우저가 이미지를 렌더링하지 않고 강제 다운로드 팝업을 띄우는 현상을 원천 방지한다.
+3. **영구 퍼블릭 URL 산출**:
+   - 표준 S3 가상 호스팅 URL 규격을 채택한다:
+     `https://{bucketName}.s3.{region}.amazonaws.com/{s3Key}`
+   - 추후 CloudFront CDN 도입 시 도메인 접두사(`https://cdn.autedi.com/{s3Key}`)만 손쉽게 교체 가능하도록 구조화한다.
+
+---
+
+#### 11.12.4 유연한 빈 등록 및 무중단 로컬 Fallback 메커니즘
+
+새로운 팀원이 프로젝트를 클론하거나 CI 서버에서 테스트를 수행할 때, AWS 계정이나 S3 API 키가 없더라도 애플리케이션 기동 및 테스트가 실패하지 않도록 2단계 Fallback 빈 등록 전략을 적용한다.
+
+```mermaid
+flowchart TD
+    Start[Spring Boot 애플리케이션 시작] --> CheckS3Config{cloud.aws.s3.bucket 설정 및\nAWS 자격증명 유효한가?}
+    CheckS3Config -- Yes --> RegisterS3[S3FileStorageService Bean 등록\n@Primary / 활성화]
+    CheckS3Config -- No --> FallbackLocal[LocalStorageService Fallback Bean 등록\n로컬 uploads/ 디렉터리 사용]
+    RegisterS3 --> Complete[FileStorageService 주입 완료]
+    FallbackLocal --> Complete
+```
+
+- **조건부 주입 구현 원칙**:
+  - `@ConditionalOnProperty(name = "cloud.aws.s3.bucket")` 애노테이션 또는 `StorageConfig` 팩토리 클래스를 통해 S3 버킷 환경변수가 주입된 경우에만 `S3FileStorageService`를 우선 등록한다.
+  - 버킷 설정이 없거나 비어있는 경우 자동으로 `LocalStorageService`가 활성화되어 로컬 개발 환경의 연속성을 보장한다.
+
+| 환경 (Profile) | 활성 스토리지 구현체 | 자격증명 방식 | URL 형태 | 비고 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** (`local`) | `S3FileStorageService`<br>(or `LocalStorageService`) | `.env`의 AWS Key<br>(미설정 시 Fallback) | S3 HTTPS URL<br>(Fallback 시 `http://localhost:8080/files/...`) | S3 키 주입 시 실제 버킷 테스트 가능,<br>미주입 시 로컬 디스크 무중단 개발 |
+| **Dev** (`dev`) | `S3FileStorageService` | Railway Variables 주입 | `https://autedi-mvp-develop-bucket.s3...` | 프론트-백 간 실서버 연동 QC |
+| **Prod** (`prod`) | `S3FileStorageService` | EC2 IAM Role<br>(Instance Profile) | `https://autedi-mvp-bucket.s3...` | 키 하드코딩 없는 안전한 IAM 권한 위임 |
+
+---
+
+#### 11.12.5 프론트엔드 호환성 (Zero-Frontend-Impact / 0 LOC)
+
+AWS S3 전환은 프론트엔드 코드베이스에 단 1줄의 변경도 요구하지 않는다 (**0 Lines of Code Change**).
+
+1. **완벽한 API 응답 스키마 보존**:
+   - 학습지 상세 조회(`WorksheetDetailResponse`) 및 검토 집계(`ReviewAggregationResponse`)에서 반환되는 DTO 필드 구조(`previewImageUrl`, `fileUrl`)가 100% 동일하다:
+     ```json
+     {
+       "pages": [
+         {
+           "pageId": 1,
+           "pageNumber": 1,
+           "previewImageUrl": "https://autedi-mvp-bucket.s3.ap-northeast-2.amazonaws.com/worksheets/50/a9b8c7...png"
+         }
+       ]
+     }
+     ```
+2. **브라우저 `<img src="...">` 네이티브 렌더링**:
+   - S3 퍼블릭 객체 URL을 제공하므로, 프론트엔드는 이전 로컬 스토리지처럼 `fetch()` + `blob` 생성 + Bearer 헤더 주입과 같은 비표준적 우회 코드를 작성할 필요가 없다.
+   - `<img src={page.previewImageUrl} alt="과제물 미리보기" />` 한 줄로 즉각적인 브라우저 캐싱과 렌더링이 이루어진다.
+3. **CORS 이슈 해결**:
+   - 프론트엔드 호스트(Vercel, Localhost)에서 S3 이미지의 픽셀 좌표 분석이나 캔버스 오버레이(`toDataURL`, Fabric.js, Canvas 2D)를 안전하게 수행할 수 있도록 S3 버킷 레벨의 CORS 허용 정책을 사전에 완비한다.
+
+---
+
+#### 11.12.6 슬라이스 및 단위 테스트 전략 (Mockito 기반 외부 격리)
+
+- **원칙**: 단위 및 슬라이스 테스트(`S3FileStorageServiceTest`, `WorksheetControllerTest`) 실행 시 **실제 AWS S3 네트워크 호출이나 라이브 자격증명을 일절 요구하지 않는다.**
+- **구현 방식**:
+  - AWS SDK의 `S3Client`를 Mockito의 `@Mock`으로 격리하여 `putObject`, `deleteObject` 메서드의 정상 호출 여부와 예외 처리(네트워크 단절, S3Exception 등)를 검증한다.
+  - `./gradlew test`를 오프라인 상태에서도 100% 신속하고 안정적으로 통과시킨다.
+
+```java
+@ExtendWith(MockitoExtension.class)
+class S3FileStorageServiceTest {
+
+    @Mock
+    private S3Client s3Client;
+
+    private S3FileStorageService s3FileStorageService;
+
+    @BeforeEach
+    void setUp() {
+        s3FileStorageService = new S3FileStorageService(s3Client, "autedi-test-bucket", "ap-northeast-2");
+    }
+
+    @Test
+    @DisplayName("파일 업로드 성공 시 S3 PutObject 호출 및 올바른 StoredFile 반환")
+    void upload_success() {
+        // given
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "homework.png", "image/png", "<dummy-png-bytes>".getBytes());
+
+        // when
+        StoredFile result = s3FileStorageService.upload(file, "worksheets/1");
+
+        // then
+        assertThat(result.fileUrl()).contains("https://autedi-test-bucket.s3.ap-northeast-2.amazonaws.com/worksheets/1/");
+        assertThat(result.originalFilename()).isEqualTo("homework.png");
+        verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
+}
+```
+
+---
+
+#### 11.12.7 S3 버킷 CORS 및 퍼블릭 읽기 권한 정책 런북
+
+프론트엔드 웹 애플리케이션에서 캔버스 이미지 조작 및 CORS 차단을 방지하기 위해 S3 버킷 설정에 아래 JSON 정책을 적용한다:
+
+1. **S3 버킷 CORS 설정 (Cross-Origin Resource Sharing)**:
+   ```json
+   [
+     {
+       "AllowedHeaders": ["*"],
+       "AllowedMethods": ["GET", "HEAD"],
+       "AllowedOrigins": [
+         "http://localhost:3000",
+         "https://*.vercel.app",
+         "https://autedi.com",
+         "https://*.autedi.com",
+         "https://autedi.co.kr"
+       ],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+2. **S3 버킷 읽기 정책 (Bucket Policy - GetObject Public Read)**:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "PublicReadGetObject",
+         "Effect": "Allow",
+         "Principal": "*",
+         "Action": "s3:GetObject",
+         "Resource": "arn:aws:s3:::autedi-mvp-bucket/*"
+       }
+     ]
+   }
+   ```
+
+---
+
+### 11.13 프론트엔드 연동 캔버스 협의 스펙 확장 아키텍처 (Canvas Collaboration & Multi-page Specifications)
+
+#### 11.13.1 배경 및 목적
+노션 연동 가이드 Section 3(프론트-백 협의 항목)에서 확인된 화면 UI 상의 미반영 요구사항 5가지를 단일 마일스톤으로 수용하여 프론트엔드 팀의 캔버스 조작(그리기, 채택, 바운딩 박스 리사이징, 다중 페이지 검토)을 완벽히 지원한다.
+
+#### 11.13.2 5대 핵심 도메인 아키텍처 확장
+1. **피드백 채택 상태 머신 (`Correction.isApplied`)**:
+   - AI 첨삭 항목의 채택/반영 여부를 즉시 토글하는 경량 엔드포인트(`PATCH /corrections/{id}/apply?applied=true/false`)를 신설하여 캔버스 상의 원클릭 인터랙션을 보장.
+2. **교사 캔버스 그리기 도구 확장 (`HighlightType`)**:
+   - `HIGHLIGHT`, `UNDERLINE` 외에 `STRIKETHROUGH`(취소선), `ARROW`(화살표), `TEXTBOX`(텍스트상자), `CARET`(삽입기호 `^`) ENUM을 추가하여 캔버스 벡터 오브젝트를 수용.
+3. **교사 표시 색상 스키마 (`CommentColor`)**:
+   - `Comment.color` 컬럼(`RED`, `BLUE`, `YELLOW`, `GREEN`)을 추가하여 교사의 시각적 코멘트 강조를 다채화 (기본값: `BLUE`).
+4. **AI 바운딩 박스 동적 좌표 갱신 (`CorrectionUpdateRequest.regions`)**:
+   - AI가 인식한 캔버스 좌표가 미세하게 어긋났을 때 교사가 드래그/리사이징한 신규 `RegionPayload` 리스트를 부분 수정(`PATCH`) 바디로 받아 영속화.
+5. **다중 페이지 업로드 파이프라인 (Short-term Multi-Page Pipeline)**:
+   - `POST /api/v1/worksheets`에서 `files: List<MultipartFile>`을 지원하여 업로드된 파일 순서대로 1, 2, ... 페이지로 자동 분할 생성 (기존 단일 `file` 파라미터와 100% 하위 호환).
+
+*상세 API I/O 명세 및 JSON 예시는 [`docs/FRONTEND_COLLABORATION_SPECS.md`](./FRONTEND_COLLABORATION_SPECS.md)를 참조한다.*
+
+---
+
+### 11.14 단일 EC2 멀티 컨테이너(Prod + Dev/QA) 통합 아키텍처 및 CI/CD 분리 운영 규격 (Single EC2 Multi-Container Consolidation & CI/CD)
+
+#### 11.14.1 도입 배경 및 해결 과제
+1. **환경 패리티(Dev/Prod Parity) 붕괴 해결**:
+   - 기존 Railway 개발 배포 환경은 보안 정책상 외부 SMTP 587/465 포트가 차단되어 초대 이메일 발송(`SmtpEmailSender`)이 실패하고, 이를 회피하기 위한 임시 REST API(`HttpEmailSender`)로 인해 운영(AWS)과 개발 환경의 코드가 이원화되는 문제가 있었다.
+2. **비용 0원 증설 원칙 (AWS 잔여 크레딧 $41 내 완결)**:
+   - 개발 및 QA 전용 서버를 별도 인스턴스(월 $15~$35)로 분리 증설하지 않고, 기존 운영 AWS EC2 인스턴스(`t4g.small`, 2GB RAM) 1대 내부에서 Docker Compose 멀티 컨테이너로 통합하여 **추가 인프라 비용 0원**을 유지한다.
+3. **QA와 개발 배포의 안정적 공존**:
+   - 일상적인 프론트엔드 연동 테스트베드와 릴리즈 전 QA 검증 환경을 단일 Dev 컨테이너로 수용하되, **QA 집중 기간 `develop` 머지 동결(Merge Freeze)** 협업 규칙을 통해 환경 간섭을 차단한다.
+
+---
+
+#### 11.14.2 통합 아키텍처 다이어그램 및 리소스 예산
+
+```mermaid
+flowchart TD
+    subgraph Client["외부 클라이언트"]
+        User["실제 사용자 (학원 교사/원장)"]
+        Tester["프론트엔드 개발자 / QA 테스터"]
+    end
+
+    subgraph AWS_EC2["AWS EC2 Host (3.39.135.10, 2GB RAM + 4GB Swap = 6GB Pool)"]
+        subgraph Nginx_Proxy["Nginx Reverse Proxy (포트 80 / 443 SSL)"]
+            Router{"도메인 기반 라우팅\n(Dynamic DNS Resolver 127.0.0.11)"}
+        end
+
+        subgraph Docker_Prod["운영 환경 (spring-app)"]
+            SpringProd["Spring Boot (Prod)\n- Port: 8080 (내부)\n- JVM: -Xms256m -Xmx512m\n- Docker Limit: 700M\n- Profile: prod"]
+        end
+
+        subgraph Docker_Dev["개발 / QA 환경 (spring-app-dev)"]
+            SpringDev["Spring Boot (Dev/QA)\n- Port: 8080 (내부)\n- JVM: -Xms128m -Xmx384m\n- Docker Limit: 512M\n- Profile: dev"]
+        end
+
+        subgraph Docker_MySQL["공유 MySQL 8.0 (mvp-mysql, Limit: 400M)"]
+            DB_Prod[("autedi_mvp_db (Prod)\nDDL: validate")]
+            DB_Dev[("autedi_dev (Dev/QA)\nDDL: update")]
+        end
+    end
+
+    User -->|"https://api.autedi.co.kr"| Router
+    Tester -->|"https://dev-api.autedi.co.kr"| Router
+
+    Router -->|"Host: api.autedi.co.kr"| SpringProd
+    Router -->|"Host: dev-api.autedi.co.kr"| SpringDev
+
+    SpringProd -->|"JDBC :3306/autedi_mvp_db"| DB_Prod
+    SpringDev -->|"JDBC :3306/autedi_dev"| DB_Dev
+```
+
+| 서비스 / 계층 | 컨테이너명 | JVM / 프로세스 설정 | Docker 메모리 한도 | 데이터베이스 스키마 | 외부 도메인 및 SSL |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Nginx 프록시** | `mvp-nginx` | 경량 Alpine Nginx | `100M` | - | 포트 80 ➔ 443 강제 리다이렉트 |
+| **운영 백엔드 (Prod)** | `mvp-spring` | `-Xms256m -Xmx512m -XX:+UseSerialGC` | `700M` | `autedi_mvp_db` (`validate`) | `api.autedi.co.kr` (Let's Encrypt, 기존 `autedi-mvp.duckdns.org` 공존 후 제거) |
+| **개발/QA 백엔드 (Dev)**| `mvp-spring-dev` | `-Xms128m -Xmx384m -XX:+UseSerialGC` | `512M` | `autedi_dev` (`update`) | `dev-api.autedi.co.kr` (Let's Encrypt, 기존 `autedi-mvp-dev.duckdns.org` 공존 후 제거) |
+| **공유 데이터베이스** | `mvp-mysql` | buffer-pool: `128M`, connections: `50` | `400M` | 논리 DB 분리 | 로컬 도커 네트워크 격리 |
+| **OS + 가상 메모리** | 호스트 커널 | 4GB 스왑 파일, `vm.swappiness = 10` | 총 6GB 풀 | - | OOM Killer 방어 및 디스크 I/O 억제 |
+
+---
+
+#### 11.14.3 Nginx 독립 라우팅 및 동적 리졸버 규격 (`infra/nginx/conf.d/dev.conf`)
+
+> [!NOTE]
+> 아래 예시는 이전 전(DuckDNS) 기준이다. 현재 설정은 `infra/nginx/conf.d/dev.conf`(개발)와 `default.conf`(운영)를 기준으로 하며, `dev-api.autedi.co.kr` / `api.autedi.co.kr` 블록이 추가되어 있다 (11.15).
+
+개발/QA 컨테이너(`spring-app-dev`)가 배포 중 재시작되거나 일시 정지되더라도 운영 컨테이너(`spring-app`)에 영향이 없도록 Docker 내부 DNS(`127.0.0.11`) 기반 동적 리졸버 설정을 적용한다:
+
+```nginx
+server {
+    listen 80;
+    server_name autedi-mvp-dev.duckdns.org auteddi-mvp-dev.duckdns.org;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name autedi-mvp-dev.duckdns.org auteddi-mvp-dev.duckdns.org;
+
+    ssl_certificate /etc/letsencrypt/live/autedi-mvp-dev.duckdns.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/autedi-mvp-dev.duckdns.org/privkey.pem;
+
+    client_max_body_size 25M;
+
+    # Docker 내부 DNS 리졸버 적용: 컨테이너 부재 시에도 Nginx 구동 실패 방지
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $dev_backend spring-app-dev:8080;
+
+    location / {
+        proxy_pass http://$dev_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # OCR 및 첨삭 응답 타임아웃 여유 확보
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 60s;
+    }
+}
+```
+
+---
+
+#### 11.14.4 CI/CD 배포 파이프라인 분리 운영 규격
+
+운영 배포와 개발 배포의 트리거 브랜치와 타겟 컨테이너를 명확히 분리하여 배포 충돌을 원천 방지한다:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as 개발자
+    participant Git as GitHub Repository
+    participant Actions as GitHub Actions
+    participant DockerHub as Docker Hub
+    participant EC2 as AWS EC2 Host
+
+    alt 1. 개발 / QA 배포 파이프라인 (deploy-dev.yml)
+        Dev->>Git: PR 머지 to develop 브랜치
+        Git->>Actions: deploy-dev.yml 트리거
+        Actions->>Actions: Gradle clean bootJar -x test
+        Actions->>DockerHub: docker build & push :dev 태그
+        Actions->>EC2: SSH 실행 (docker compose pull spring-app-dev && up -d)
+        EC2-->>Actions: 배포 완료 (포트 8080 바인딩, Swagger /autedi-docs 활성화)
+    else 2. 운영 배포 파이프라인 (deploy.yml)
+        Dev->>Git: PR 머지 to main 브랜치 (릴리즈 승인 후)
+        Git->>Actions: deploy.yml 트리거
+        Actions->>Actions: Gradle clean bootJar -x test
+        Actions->>DockerHub: docker build & push :latest 태그
+        Actions->>EC2: SSH 실행 (docker compose pull spring-app && up -d)
+        EC2-->>Actions: 운영 컨테이너만 무중단 갱신 완료
+    end
+```
+
+---
+
+#### 11.14.5 개발 환경 설정 최적화 (`application-dev.yaml`)
+1. **SMTP 587 STARTTLS 기본화**:
+   - `app.mail.type: smtp` 및 Gmail SMTP(포트 587) 설정을 기본값으로 복원하여 운영 환경과 100% 동일한 이메일 발송 파이프라인 검증.
+2. **콘솔 로그 폴링 노이즈 억제**:
+   - 첨삭 디스패처 2초 폴링 쿼리로 인한 콘솔 도배를 방지하기 위해 `jpa.show-sql: false` 적용 및 디스패치 인터벌을 30초(`dispatch-interval-ms: 30000`)로 조정.
+3. **CORS 도메인 확장**:
+   - (초기) `SecurityConfig`에 duckdns 와일드카드를 허용했으나, 도메인 이전(11.15)으로 폐기. 현재는 환경변수 `CORS_ALLOWED_ORIGINS`에 명시한 정확한 origin만 허용한다.
+
+---
+
+#### 11.14.6 팀 협업 및 릴리즈 QA 운영 규칙 (Operational Rules)
+- **평시 (일반 개발 연동 기간)**:
+  - 프론트엔드-백엔드 연동 개발은 `dev-api.autedi.co.kr` 엔드포인트를 사용한다 (전환 기간에는 기존 `autedi-mvp-dev.duckdns.org`도 응답).
+  - `develop` 브랜치 머지는 단위 테스트 통과 시 상시 허용된다.
+- **QA 집중 기간 (릴리즈 1~2일 전)**:
+  - 프론트엔드와 백엔드 팀 전체가 주요 플로우를 전수 검증하는 기간에는 **`develop` 브랜치 머지를 전면 동결(Merge Freeze)**한다.
+  - QA 중 발견된 결함은 별도의 핫픽스 브랜치에서 일괄 검증 후 한 번에 머지하여 테스트베드의 연속성을 보장한다.
+
+---
+
+### 11.15 백엔드 도메인 이전 (DuckDNS → 자체 도메인 `autedi.co.kr`)
+
+#### 11.15.1 결정과 이유
+- **결정**: 백엔드 도메인을 무료 DuckDNS에서 구매한 도메인(가비아 등록)의 서브도메인으로 이전한다.
+  - 운영: `api.autedi.co.kr`
+  - 개발/QA: `dev-api.autedi.co.kr`
+  - 프런트(운영): `https://autedi.co.kr`
+- **이유**: 무료 DuckDNS 의존 제거, 프런트와 일관된 브랜드 도메인, HTTPS 인증서·운영 안정성 확보.
+- **인증**: JWT(`Authorization` 헤더) 기반을 유지한다. 쿠키에 의존하지 않고 소셜 로그인 도입 계획이 없으므로 쿠키 설정은 변경하지 않는다.
+
+#### 11.15.2 구조
+```
+api.autedi.co.kr      ─┐
+dev-api.autedi.co.kr  ─┴→ EC2 탄력적 IP → Nginx(80/443) ─ Host 헤더(server_name) 분기 ─┬→ spring-app:8080      (운영)
+                                                                                      └→ spring-app-dev:8080  (개발)
+```
+- DNS(가비아): `api`, `dev-api` A 레코드를 같은 EC2 탄력적 IP로 등록.
+- Nginx: 같은 80/443 포트에서 `server_name`(요청의 Host 헤더)으로 컨테이너를 분기한다. 설정 파일은 `infra/nginx/conf.d/default.conf`(운영), `dev.conf`(개발)이며 서버의 `/srv/mvp-data/nginx/conf.d/`에 수동 반영한다 (저장소는 기록본, 서버 반영은 `nginx -t` 후 `nginx -s reload`).
+- HTTPS: certbot(Let's Encrypt) webroot 방식으로 도메인별 인증서를 따로 발급한다. 80 → 443 리다이렉트 유지.
+
+#### 11.15.3 전환 원칙
+- 기존 DuckDNS server 블록과 인증서는 삭제하지 않고 새 도메인 검증이 끝날 때까지 공존시킨다. 검증 후 별도 작업으로 제거한다.
+- **CORS**: 환경별 프런트 origin을 `CORS_ALLOWED_ORIGINS`(쉼표 구분)로 명시하고 `*` 및 와일드카드 도메인은 사용하지 않는다.
+  - 운영: `https://autedi.co.kr`
+  - 개발: `https://autedi-frontend.vercel.app`, `http://localhost:3000` (프런트 개발 서브도메인이 정해지면 추가)
+- **영향 없음**: MySQL 컨테이너와 데이터 볼륨(`/srv/mvp-data/mysql`)은 변경하지 않는다. Nginx 설정 변경은 컨테이너 재시작 없이 reload로 적용한다.
+- 서버에서 서비스명 없이 `docker compose up -d`를 실행하지 않는다 (mysql 재생성 방지). CORS 환경변수 반영 시 `docker compose up -d --no-deps <spring-app|spring-app-dev>`를 사용한다.
+
+#### 11.15.4 후속 확인 사항
+- 인증서 자동 갱신(`certbot renew` + Nginx reload)이 아직 설정되어 있지 않다. 기존 운영 인증서 만료일은 2027-01-26.
+- S3 버킷 CORS(11.12.7)에 `https://autedi.co.kr` origin 추가가 필요하다.
+- 이전 완료 후 DuckDNS 블록·인증서·관련 문서 표기를 제거한다.

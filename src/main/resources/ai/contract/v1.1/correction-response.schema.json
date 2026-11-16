@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autedi:ai:contract:v1.1",
+  "title": "AUTEDI-AI-CONTRACT-v1.1",
+  "description": "AI correction candidates. Action combinations, enabled areas and levels, anchor continuity, edit consistency, positive box area and per-area card limits require server post-processing.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "required": ["items"],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": { "type": "string", "enum": ["REPLACE", "GUIDANCE", "REVIEW"] },
+        "feedback_type": { "type": ["string", "null"], "enum": ["CORRECTION", "SUGGESTION", null] },
+        "area": {
+          "type": ["string", "null"],
+          "enum": ["GRAMMAR_SPELLING", "VOCABULARY_EXPRESSION", "SENTENCE_STRUCTURE", "CONTENT_SUMMARY", null]
+        },
+        "issue_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["grammar", "spelling", "punctuation", "vocabulary", "sentence_structure", "content", "ocr_mismatch", "illegible", "unclear_intent", "image_problem"]
+          }
+        },
+        "anchors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/anchor" }
+        },
+        "replacement": { "type": ["string", "null"] },
+        "guidance": { "type": ["string", "null"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "location_uncertain": { "type": "boolean" },
+        "target_boxes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/box" }
+        },
+        "revision_scope": {
+          "type": ["string", "null"],
+          "enum": ["WORD", "PHRASE", "CLAUSE", "SENTENCE", "SENTENCE_GROUP", null]
+        },
+        "edit": {
+          "anyOf": [{ "$ref": "#/$defs/edit" }, { "type": "null" }]
+        }
+      },
+      "required": ["action", "feedback_type", "area", "issue_kinds", "anchors", "replacement", "guidance", "reason", "location_uncertain", "target_boxes", "revision_scope", "edit"]
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line_id": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "original": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" },
+        "occurrence": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "required": ["line_id", "original", "occurrence"]
+    },
+    "edit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "type": "string", "enum": ["INSERT", "DELETE", "REPLACE", "RESTRUCTURE"] },
+        "text": { "type": "string" },
+        "position": { "type": ["string", "null"], "enum": ["BEFORE", "AFTER", null] }
+      },
+      "required": ["operation", "text", "position"]
+    },
+    "box": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number", "minimum": 0, "maximum": 1 }
+    }
+  }
+}

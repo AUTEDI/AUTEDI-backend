@@ -17,6 +17,25 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
 
+# AWS S3 테스트 설정 (외부 종속성 격리)
+cloud:
+  aws:
+    region:
+      static: ap-northeast-2
+    s3:
+      bucket: test-bucket
+    credentials:
+      access-key: test-key
+      secret-key: test-secret
+
+aws:
+  region: ap-northeast-2
+  s3:
+    bucket: test-bucket
+  credentials:
+    access-key: test-key
+    secret-key: test-secret
+
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -35,3 +54,21 @@ jwt:
   secret: ${JWT_SECRET:autedi-local-dev-secret-key-must-be-at-least-32-bytes-long-2026}
   access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:3600000}
   refresh-token-expiration-days: ${JWT_REFRESH_EXPIRATION_DAYS:14}
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000,https://autedi.co.kr
+  qr:
+    base-url: http://localhost:3000
+    expiration-minutes: 3
+    rate-limit:
+      scan-per-minute: 1000
+      token-per-minute: 1000
+      status-per-minute: 1000
+      link-per-minute: 1000
+  sse:
+    # 테스트에서는 하트비트를 직접 호출하므로 스케줄 주기는 사실상 끈다. 타이밍 테스트는 클래스별로 줄여서 쓴다.
+    heartbeat-interval-ms: 3600000
+    emitter-timeout-ms: 60000
+  storage:
+    type: ${STORAGE_TYPE:local}

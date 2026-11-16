@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autedi:ai:contract:v1",
+  "title": "AUTEDI-AI-CONTRACT-v1",
+  "description": "AI correction candidates. Action combinations, transcription matching, box area, settings and card limits require server post-processing.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    }
+  },
+  "required": ["items"],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": { "type": "string", "enum": ["REPLACE", "GUIDANCE", "REVIEW"] },
+        "feedback_type": { "type": ["string", "null"], "enum": ["CORRECTION", "SUGGESTION", null] },
+        "area": {
+          "type": ["string", "null"],
+          "enum": ["GRAMMAR_SPELLING", "VOCABULARY_EXPRESSION", "SENTENCE_STRUCTURE", "CONTENT_SUMMARY", null]
+        },
+        "issue_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["grammar", "spelling", "punctuation", "vocabulary", "sentence_structure", "content", "ocr_mismatch", "illegible", "unclear_intent", "image_problem"]
+          }
+        },
+        "anchor": {
+          "anyOf": [{ "$ref": "#/$defs/anchor" }, { "type": "null" }]
+        },
+        "replacement": { "type": ["string", "null"] },
+        "guidance": { "type": ["string", "null"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "location_uncertain": { "type": "boolean" },
+        "boxes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/box" }
+        }
+      },
+      "required": ["action", "feedback_type", "area", "issue_kinds", "anchor", "replacement", "guidance", "reason", "location_uncertain", "boxes"]
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line_id": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "original": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" },
+        "occurrence": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "required": ["line_id", "original", "occurrence"]
+    },
+    "box": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number", "minimum": 0, "maximum": 1 }
+    }
+  }
+}

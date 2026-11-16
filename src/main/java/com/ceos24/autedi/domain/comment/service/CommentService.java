@@ -70,15 +70,20 @@ public class CommentService {
 
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        Comment comment = Comment.builder()
+        Comment newComment = Comment.builder()
                 .worksheet(worksheet)
                 .page(page)
                 .user(user)
                 .highlightType(request.highlightType())
+                .color(
+                        request.color() != null
+                                ? request.color()
+                                : com.ceos24.autedi.domain.comment.entity.CommentColor.BLUE)
                 .regions(request.regions())
                 .content(request.content().trim())
                 .build();
-        commentRepository.save(comment);
+        // @Version이 미리 채워져 있어 save()가 merge로 동작하므로, 반드시 반환된 영속 엔티티를 사용한다.
+        Comment comment = commentRepository.save(newComment);
 
         log.info("교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}", comment.getId(), worksheetId, page.getId());
 
@@ -94,8 +99,8 @@ public class CommentService {
 
         validateIfMatch(ifMatch, comment.getEtag());
 
-        comment.updateContent(request.content().trim());
-        log.info("교사 코멘트 내용 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
+        comment.updateContent(request.content().trim(), request.color());
+        log.info("교사 코멘트 내용/색상 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
 
         String nextEtag = "\"com_" + comment.getId() + "-v" + (comment.getVersion() + 1) + "\"";
         return CommentResponse.of(comment, nextEtag);
