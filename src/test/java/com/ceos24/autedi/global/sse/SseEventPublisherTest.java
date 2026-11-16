@@ -79,6 +79,9 @@ class SseEventPublisherTest {
                 .extracting(SseEmitterRegistry.Connection::emitter)
                 .containsExactly(healthy);
         verify(healthy).send(any(SseEmitter.SseEventBuilder.class));
+        // 끊긴 클라이언트는 에러가 아니므로 completeWithError(에러 처리 경로 재진입) 대신 정상 종료한다.
+        verify(broken).complete();
+        verify(broken, never()).completeWithError(any());
     }
 
     @Test

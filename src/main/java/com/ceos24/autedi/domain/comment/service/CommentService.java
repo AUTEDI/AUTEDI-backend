@@ -70,7 +70,7 @@ public class CommentService {
 
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        Comment comment = Comment.builder()
+        Comment newComment = Comment.builder()
                 .worksheet(worksheet)
                 .page(page)
                 .user(user)
@@ -82,7 +82,8 @@ public class CommentService {
                 .regions(request.regions())
                 .content(request.content().trim())
                 .build();
-        commentRepository.save(comment);
+        // @Version이 미리 채워져 있어 save()가 merge로 동작하므로, 반드시 반환된 영속 엔티티를 사용한다.
+        Comment comment = commentRepository.save(newComment);
 
         log.info("교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}", comment.getId(), worksheetId, page.getId());
 
