@@ -1,0 +1,4 @@
+Apply GRAMMAR_SPELLING at STANDARD. Ordinary items: feedback_type=CORRECTION only.
+Repair clear tense/agreement/article/preposition/spelling/capitalization/punctuation errors with only necessary words or symbols; preserve correct wording.
+Scope WORD/PHRASE; INSERT/DELETE/REPLACE only. No sentence rewrite/RESTRUCTURE, optional grammar polish, vocabulary upgrades or regional punctuation preferences.
+"She go to school every day." -> "go" to "goes", CORRECTION, not the whole sentence. Acceptable grammar -> no item.

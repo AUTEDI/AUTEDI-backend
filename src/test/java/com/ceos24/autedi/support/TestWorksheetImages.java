@@ -84,9 +84,25 @@ public final class TestWorksheetImages {
 
     /** 실제 MPF 인덱스와 별도 XMP를 가진 두 JPEG. 기본 사진은 2×3·EXIF 6, 보조 이미지는 1×1이다. */
     public static byte[] jpegWithAuxiliary(String primaryXmp, String auxiliaryXmp) throws IOException {
+        return jpegWithAuxiliary(primaryXmp, auxiliaryXmp, false);
+    }
+
+    /**
+     * 갤럭시 Ultra HDR처럼 보조 이미지가 "APP1(XMP) 다음에 JFIF APP0"가 오는 구조. ImageIO는 이 보조 이미지의 메타데이터를 읽지
+     * 못해 예외를 던진다.
+     */
+    public static byte[] hdrJpegWithJfifAfterXmpInAuxiliary() throws IOException {
+        String adobeXmp =
+                xmp("xmlns:g='http://ns.adobe.com/hdr-gain-map/1.0/' g:Version='1.0' g:BaseRenditionIsHDR='False'", "");
+        return jpegWithAuxiliary(adobeXmp, adobeXmp, true);
+    }
+
+    private static byte[] jpegWithAuxiliary(String primaryXmp, String auxiliaryXmp, boolean keepAuxiliaryJfif)
+            throws IOException {
         byte[] primary = withoutJfif(withOrientation(true, 6, ByteOrder.BIG_ENDIAN));
         if (primaryXmp != null) primary = withXmp(primary, primaryXmp);
-        byte[] auxiliary = withoutJfif(encode(pattern(1, 1, false), "jpeg"));
+        byte[] auxiliaryJpeg = encode(pattern(1, 1, false), "jpeg");
+        byte[] auxiliary = keepAuxiliaryJfif ? auxiliaryJpeg : withoutJfif(auxiliaryJpeg);
         if (auxiliaryXmp != null) auxiliary = withXmp(auxiliary, auxiliaryXmp);
         int primaryLength = primary.length + 90;
         ByteBuffer mpf = ByteBuffer.allocate(86);

@@ -1,0 +1,5 @@
+Apply SENTENCE_STRUCTURE at ADVANCED. First retain necessary CORRECTION for fragments, run-ons, comma splices, clause links and confusing order.
+Then examine idea/clause relationships, transitions, variety, flow/rhythm; meaningful focused splitting/combining of acceptable structure -> SUGGESTION. Preserve meaning/voice/events; invent no relationships.
+Local clause -> REPLACE; complete SENTENCE/SENTENCE_GROUP replacement -> RESTRUCTURE. Use a smaller change if equally effective.
+Example: "I finished my homework. I took a shower. I went to bed." may become "After finishing my homework and taking a shower, I went to bed." as one optional SUGGESTION, not an error claim.
+Connect consecutive-line source with anchors as one item; no blank-line paragraph crossing, paragraph/essay rewrite or changes without clear contextual benefit.

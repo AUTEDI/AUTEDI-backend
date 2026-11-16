@@ -6,9 +6,15 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.prompt.AiCorrectionPromptComposer;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
+import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
+import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
+import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
 import com.ceos24.autedi.domain.generation.service.GenerationClientFailure;
 import com.ceos24.autedi.domain.worksheet.service.PreparedWorksheetImage;
@@ -27,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -160,6 +167,59 @@ class TerraGenerationClientTest {
         assertFalse(logged.contains("test-only-value"));
         assertFalse(logged.contains("We go"));
         assertFalse(logged.contains("data:image/png;base64,"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void pinnedV11ProfileSendsItsExactPromptModelAndTransportSchema(AiCorrectionPromptVariant variant) {
+        var profile =
+                GenerationClientProfiles.profile(GenerationClientMode.TERRA, GenerationContractVersion.V1_1, variant);
+        var settings = Map.of(
+                AiArea.GRAMMAR_SPELLING,
+                AiCorrectionLevel.STANDARD,
+                AiArea.SENTENCE_STRUCTURE,
+                AiCorrectionLevel.ADVANCED);
+        var lines = List.of("I have dog.", "It is fun.");
+        var prompt =
+                new GenerationContractRouter().compose(profile, new GenerationContractRouter.Input(1, lines, settings));
+        server.enqueue(200, FakeResponsesServer.completed("{\"items\":[]}"));
+        assertEquals("{\"items\":[]}", client.correct(GENERATION_ID, image, frozen(lines), settings, profile));
+        var body = server.requests().getFirst().body();
+        assertEquals(profile.metadata().model(), body.get("model").asString());
+        assertEquals(prompt.instructions(), body.get("instructions").asString());
+        assertEquals(
+                "Normalized PNG dimensions: 2 x 3 pixels.\n" + prompt.inputText(),
+                body.at("/input/0/content/0/text").asString());
+        assertEquals("autedi_correction_v1_1", body.at("/text/format/name").asString());
+        var schema = (ObjectNode) JSON.readTree(prompt.responseSchema());
+        assertTrue(schema.at("/$defs/item/properties/issue_kinds/uniqueItems").asBoolean());
+        schema.remove("$schema");
+        schema.remove("$id");
+        ((ObjectNode) schema.at("/$defs/item/properties/issue_kinds")).remove("uniqueItems");
+        assertEquals(schema, body.at("/text/format/schema"));
+        assertTrue(body.at("/text/format/schema/$defs/item/properties/anchors").isObject());
+        assertTrue(body.at("/text/format/schema/$defs/item/properties/anchor").isMissingNode());
+        assertEquals("autedi_correction_v1_1", callLog(0).get("operation").asString());
+        assertEquals(
+                profile.metadata().model(), callLog(0).get("requested_model").asString());
+    }
+
+    @Test
+    void unknownPinnedPromptDoesNotSendAnHttpRequest() {
+        var known = GenerationClientProfiles.profile(
+                GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT);
+        var unknown = new GenerationAiProfile(
+                known.version(),
+                known.promptVariant(),
+                new GenerationResultMetadata(
+                        known.metadata().model(),
+                        known.metadata().contractVersion(),
+                        "unavailable-prompt",
+                        known.metadata().validationVersion()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> client.correct(GENERATION_ID, image, frozen(List.of("text")), Map.of(), unknown));
+        assertTrue(server.requests().isEmpty());
     }
 
     @Test

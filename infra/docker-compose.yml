@@ -1,5 +1,6 @@
-version: '3.8'
-
+# $schema: https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
+# Reference configuration: CI deploys with /srv/mvp/docker-compose.yml on EC2.
+# This repository file is not copied to EC2 by the current deployment workflows.
 services:
   # ========================================================
   # 1. Nginx Reverse Proxy (SSL Termination & Subdomain Routing)
@@ -30,11 +31,18 @@ services:
     image: ${DOCKER_IMAGE_NAME:-autedi/autedi-mvp-backend}:latest
     container_name: mvp-spring
     restart: unless-stopped
+    mem_limit: 896m
+    memswap_limit: 1408m
     expose:
       - "8080"
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:+UseSerialGC"
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:+UseSerialGC -Duser.timezone=Asia/Seoul"
+      APP_GENERATION_WORKERCOUNT: "3"
+      APP_AI_CLIENT: "TERRA"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is missing}"
+      AI_CORRECTION_CONTRACT_VERSION: "v1.1"
+      AI_CORRECTION_PROMPT_VARIANT: "DEFAULT"
       DB_URL: jdbc:mysql://mysql:3306/${DB_NAME:-autedi}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       DB_USERNAME: ${DB_USER:-autedi}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -49,14 +57,15 @@ services:
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      FRONTEND_URL: ${PROD_FRONTEND_URL:-https://autedi.com}
+      FRONTEND_URL: ${PROD_FRONTEND_URL:-https://autedi.co.kr}
+      CORS_ALLOWED_ORIGINS: ${PROD_CORS_ALLOWED_ORIGINS:-https://autedi.co.kr}
       QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql
     deploy:
       resources:
         limits:
-          memory: 700M
+          memory: 896M
 
   # ========================================================
   # 3. Dev / QA Backend (Port 8080 internal, Dev profile)
@@ -65,11 +74,18 @@ services:
     image: ${DOCKER_IMAGE_NAME:-autedi/autedi-mvp-backend}:dev
     container_name: mvp-spring-dev
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 1024m
     expose:
       - "8080"
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:+UseSerialGC"
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:+UseSerialGC -Duser.timezone=Asia/Seoul"
+      APP_GENERATION_WORKERCOUNT: "2"
+      APP_AI_CLIENT: "TERRA"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is missing}"
+      AI_CORRECTION_CONTRACT_VERSION: "v1.1"
+      AI_CORRECTION_PROMPT_VARIANT: "DEFAULT"
       DEV_DB_URL: jdbc:mysql://mysql:3306/${DEV_DB_NAME:-autedi_dev}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       DEV_DB_USERNAME: ${DB_USER:-autedi}
       DEV_DB_PASSWORD: ${DB_PASSWORD}
@@ -85,6 +101,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       FRONTEND_URL: ${DEV_FRONTEND_URL:-https://autedi-frontend.vercel.app}
+      CORS_ALLOWED_ORIGINS: ${DEV_CORS_ALLOWED_ORIGINS:-https://autedi-frontend.vercel.app,http://localhost:3000}
       QR_RATE_LIMIT_CLIENT_IP_HEADER: X-Forwarded-For
     depends_on:
       - mysql

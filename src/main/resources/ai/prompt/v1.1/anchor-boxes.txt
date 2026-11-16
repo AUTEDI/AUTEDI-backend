@@ -1,0 +1,23 @@
+Each anchors element has exactly line_id, original and occurrence.
+line_id is the supplied 1-based transcription line ID, including blank lines; do not renumber, merge or move lines.
+original is an exact, nonempty substring of that line with no CR or LF. Preserve case, spelling, punctuation and spaces.
+occurrence is the 1-based non-overlapping occurrence of that exact string on that line. Do not return character indexes.
+Use the smallest connected source range appropriate for the permitted edit. Do not anchor an unrelated phrase or the whole essay.
+
+A multi-line item uses several anchors to describe one contiguous range on the same page and confirmed transcription version.
+Use one element per line, in ascending order with consecutive line IDs. No duplicate lines, reversal, skipped lines or disjoint fragments.
+The first anchor extends to its line end, the last starts at its line beginning, and every intermediate anchor covers its complete line.
+Never cross a blank or whitespace-only paragraph boundary. Do not merge unrelated sentences from different locations.
+The server joins the verified originals with LF to obtain the complete source range. replacement substitutes for that entire range.
+Several anchors still describe one item. A short phrase can wrap onto two lines and remain revision_scope=PHRASE.
+For GUIDANCE, anchor the related existing passage; for a whole-text development instruction, use the last relevant passage.
+If the source range cannot be identified responsibly, use REVIEW rather than inventing anchors for an ordinary item.
+
+target_boxes locates the ORIGINAL handwriting, not replacement text, an annotation, a margin or a selection highlight.
+Each box is [left, top, right, bottom] with four finite numbers normalized to the ENTIRE same EXIF-corrected PNG.
+The origin is top-left, x increases rightward and y downward. Require 0 <= left < right <= 1 and 0 <= top < bottom <= 1.
+Cover complete target letters without unrelated writing. Return boxes in reading order; the number need not equal the anchor count.
+Do not crop, rotate, reorder corners or clamp invented coordinates to make a box look valid.
+When image location is unreliable, use target_boxes=[] and location_uncertain=true even when the exact text source is known.
+Set location_uncertain=true whenever the proposed source location is uncertain, even if some candidate boxes are supplied.
+Do not create arbitrary coordinates, UTF-16 start/end, pixel boxes, annotation layout or click regions. The server computes text indexes.

@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.generation.entity;
 
+import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.global.entity.BaseTimeEntity;
@@ -59,6 +60,10 @@ public class WorksheetGeneration extends BaseTimeEntity {
     @Column(name = "client_mode", length = 30, updatable = false)
     private GenerationClientMode clientMode;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "request_ai_profile", columnDefinition = "json", updatable = false)
+    private GenerationAiProfile requestAiProfile;
+
     @Column(name = "request_file_hash", length = 64, nullable = false)
     private String requestFileHash;
 
@@ -105,6 +110,7 @@ public class WorksheetGeneration extends BaseTimeEntity {
             Integer retryCount,
             Long retryOfGenerationId,
             GenerationClientMode clientMode,
+            GenerationAiProfile requestAiProfile,
             Long inputTranscriptionId) {
         this.worksheet = worksheet;
         this.requestedBy = requestedBy;
@@ -112,6 +118,7 @@ public class WorksheetGeneration extends BaseTimeEntity {
         this.status = GenerationStatus.PENDING;
         this.currentStage = GenerationStage.QUEUED;
         this.clientMode = clientMode;
+        this.requestAiProfile = requestAiProfile;
         this.inputTranscriptionId = inputTranscriptionId;
         this.requestFileHash = requestFileHash;
         this.requestSettingsSnapshot = requestSettingsSnapshot;

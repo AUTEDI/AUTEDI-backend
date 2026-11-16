@@ -150,6 +150,20 @@ class S3FileStorageServiceTest {
     }
 
     @Test
+    @DisplayName("확장자와 실제 형식이 다른 이미지는 INVALID_IMAGE와 구체적인 거부 사유를 반환하고 S3를 호출하지 않는다")
+    void upload_formatMismatch_throwsInvalidImageWithReason() throws Exception {
+        MockMultipartFile mismatched =
+                new MockMultipartFile("file", "photo.jpg", "image/jpeg", TestWorksheetImages.png(2, 3));
+
+        assertThatThrownBy(() -> storageService.upload(mismatched, "worksheets/1"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_IMAGE)
+                .hasMessageContaining("확장자와 실제 JPG/JPEG·PNG 형식이 일치해야 합니다");
+
+        verifyNoInteractions(s3Client);
+    }
+
+    @Test
     @DisplayName("S3 putObject 실패 시 fallbackService가 없으면 FILE_STORAGE_FAILED 예외로 전환된다")
     void upload_s3Exception_throwsFileStorageFailed() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "image.png", "image/png", TestWorksheetImages.png(2, 3));

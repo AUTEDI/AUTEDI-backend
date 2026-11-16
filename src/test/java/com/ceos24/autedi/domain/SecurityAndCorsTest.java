@@ -77,14 +77,19 @@ class SecurityAndCorsTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "ETag, Authorization, Location"));
 
-        // Railway 도메인 CORS 검증
+        // 설정에 명시된 운영 프런트 origin은 허용
         mockMvc.perform(options("/api/v1/auth/login")
-                        .header(HttpHeaders.ORIGIN, "https://autedi-backend-production.up.railway.app")
+                        .header(HttpHeaders.ORIGIN, "https://autedi.co.kr")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type"))
                 .andExpect(status().isOk())
-                .andExpect(header().string(
-                                HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
-                                "https://autedi-backend-production.up.railway.app"));
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://autedi.co.kr"));
+
+        // 목록에 없는 origin은 와일드카드 도메인(vercel.app 등)이라도 거부
+        mockMvc.perform(options("/api/v1/auth/login")
+                        .header(HttpHeaders.ORIGIN, "https://evil.vercel.app")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type"))
+                .andExpect(status().isForbidden());
     }
 }

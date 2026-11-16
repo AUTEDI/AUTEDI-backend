@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "description": "test_data/test11.jpg의 손글씨 본문을 직접 읽어 전사한 고정 입력입니다. 본문 16줄을 대상으로 하며 인쇄 문구·이름·책 제목·날짜는 전사에서 제외했습니다. 네 영역을 선택하고 같은 이미지·전사에서 Standard와 Advanced를 비교합니다.",
+  "cases": [
+    {
+      "id": "test11",
+      "category": "GRAMMAR_ERROR",
+      "image": "../../../../../../../test_data/test11.jpg",
+      "transcription": "../../../ocr/test11-transcription.txt",
+      "page_number": 1,
+      "areas": [
+        "GRAMMAR_SPELLING",
+        "VOCABULARY_EXPRESSION",
+        "SENTENCE_STRUCTURE",
+        "CONTENT_SUMMARY"
+      ],
+      "rubric": [
+        "두 레벨 모두 원문의 객관적인 문법·철자·표현 오류를 확인하고, 발견한 기본 오류의 공통점과 누락을 비교한다.",
+        "Standard는 올바른 표현·구조·내용에 선택적인 개선 제안을 만들지 않는다.",
+        "Advanced는 기본 오류를 먼저 다룬 뒤 실제로 도움이 되는 선택적 개선만 SUGGESTION으로 제안한다.",
+        "이미지의 인쇄 문구·이름·책 제목·날짜를 본문 첨삭 대상으로 삼거나, 책에 관한 외부 지식으로 학생의 줄거리를 바꾸지 않는다.",
+        "학생의 의미·등장인물·사건 순서를 보존하고, anchors와 좌표가 실제 본문의 원문 위치를 가리키는지 확인한다.",
+        "영역별 최대 7개 한도에 따른 제외와 기본 오류 누락을 구분하며, VALIDATED 상태만으로 품질 합격을 판정하지 않는다."
+      ]
+    }
+  ]
+}

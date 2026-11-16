@@ -7,6 +7,7 @@ import com.ceos24.autedi.domain.generation.contract.v1.prompt.AiCorrectionPrompt
 public record GenerationResultMetadata(
         String model, String contractVersion, String promptVersion, String validationVersion) {
     public static final String VALIDATION_VERSION = "AUTEDI-VALIDATION-v1";
+    public static final String VALIDATION_VERSION_V1_1 = "AUTEDI-VALIDATION-v1.1";
 
     public GenerationResultMetadata {
         for (String value : new String[] {model, contractVersion, promptVersion, validationVersion}) {

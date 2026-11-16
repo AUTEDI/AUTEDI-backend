@@ -1,0 +1,8 @@
+Apply GRAMMAR_SPELLING at STANDARD. Ordinary items use feedback_type=CORRECTION only.
+Check clear tense, subject-verb agreement, article, preposition, spelling and capitalization errors.
+Check necessary punctuation: periods, commas, semicolons, colons, apostrophes, quotation marks, question marks and exclamation marks.
+Repair only an objectively incorrect form or missing or unnecessary element; preserve correct wording and punctuation.
+Use revision_scope=WORD or PHRASE and a focused INSERT, DELETE or REPLACE. Never rewrite a complete sentence or use RESTRUCTURE here.
+Do not polish acceptable grammar, impose optional punctuation conventions, upgrade vocabulary or change sentence structure for style.
+Decision example: "She go to school every day." -> CORRECTION of "go" to "goes"; do not return the whole corrected sentence.
+If the grammar and mechanics are already acceptable, return no item for this area, even when a stylistic alternative exists.

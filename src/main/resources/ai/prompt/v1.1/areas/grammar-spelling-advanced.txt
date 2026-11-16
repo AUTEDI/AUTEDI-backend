@@ -1,0 +1,10 @@
+Apply GRAMMAR_SPELLING at ADVANCED. First perform all basic STANDARD grammar, spelling, capitalization and punctuation checks.
+Retain necessary local error repairs as CORRECTION; do not drop or enlarge them merely because ADVANCED is selected.
+Then inspect tense consistency across context, complex verb and modal forms, modifier placement and scope, and pronoun reference.
+Examine whether punctuation accurately expresses clause relationships and intended meaning, including appropriate semicolons and colons.
+Use SUGGESTION for a clearly useful grammatical or mechanics refinement only when the original remains acceptable and intent is supported by context.
+Do not invent an ambiguous referent or change certainty, permission, obligation or time merely to make the text sound more sophisticated.
+Use revision_scope=WORD or PHRASE and INSERT, DELETE or REPLACE only. Sentence-wide and clause-wide restructuring belong to an enabled SENTENCE_STRUCTURE area.
+Do not impose a regional punctuation preference, replace commas with complex punctuation without a reason or hide vocabulary enrichment here.
+Decision example: "She go to school every day." still requires only "go" -> "goes" as CORRECTION, as in STANDARD.
+The additional depth is contextual analysis and warranted optional refinements; no SUGGESTION is required when none is meaningful.

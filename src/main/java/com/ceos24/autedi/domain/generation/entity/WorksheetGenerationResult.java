@@ -1,7 +1,9 @@
 package com.ceos24.autedi.domain.generation.entity;
 
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationResult;
 import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
+import com.ceos24.autedi.domain.generation.persistence.GenerationValidationStorageCodec;
 import com.ceos24.autedi.domain.generation.persistence.StoredCorrectionLink;
 import com.ceos24.autedi.domain.generation.persistence.StoredGenerationResult;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
@@ -20,6 +22,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.util.List;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -82,7 +85,7 @@ public class WorksheetGenerationResult extends BaseCreatedTimeEntity {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "validation_result", columnDefinition = "json", updatable = false)
-    private AiValidationResult validationResult;
+    private Map<String, Object> validationResult;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "correction_links", columnDefinition = "json", nullable = false, updatable = false)
@@ -97,6 +100,44 @@ public class WorksheetGenerationResult extends BaseCreatedTimeEntity {
             GenerationResultMetadata metadata,
             String rawResponse,
             AiValidationResult validationResult,
+            List<StoredCorrectionLink> links,
+            String parseError) {
+        this(
+                generation,
+                transcription,
+                metadata,
+                rawResponse,
+                GenerationValidationStorageCodec.encode(
+                        metadata,
+                        validationResult == null ? null : new GenerationContractRouter.V1Validation(validationResult)),
+                links,
+                parseError);
+    }
+
+    public static WorksheetGenerationResult validatedV11(
+            WorksheetGeneration generation,
+            WorksheetTranscription transcription,
+            GenerationResultMetadata metadata,
+            String rawResponse,
+            com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationResult validation,
+            List<StoredCorrectionLink> links) {
+        return new WorksheetGenerationResult(
+                generation,
+                transcription,
+                metadata,
+                rawResponse,
+                GenerationValidationStorageCodec.encode(
+                        metadata, new GenerationContractRouter.V11Validation(validation)),
+                links,
+                null);
+    }
+
+    private WorksheetGenerationResult(
+            WorksheetGeneration generation,
+            WorksheetTranscription transcription,
+            GenerationResultMetadata metadata,
+            String rawResponse,
+            Map<String, Object> validationResult,
             List<StoredCorrectionLink> links,
             String parseError) {
         if (rawResponse == null
@@ -121,14 +162,17 @@ public class WorksheetGenerationResult extends BaseCreatedTimeEntity {
     }
 
     public StoredGenerationResult snapshot() {
+        var metadata = new GenerationResultMetadata(model, contractVersion, promptVersion, validationVersion);
+        var decoded = GenerationValidationStorageCodec.decode(metadata, validationResult);
         return new StoredGenerationResult(
                 id,
                 generation.getId(),
                 transcription.snapshot(),
                 status,
-                new GenerationResultMetadata(model, contractVersion, promptVersion, validationVersion),
+                metadata,
                 rawResponse,
-                validationResult,
+                decoded instanceof GenerationContractRouter.V1Validation v1 ? v1.result() : null,
+                decoded instanceof GenerationContractRouter.V11Validation v11 ? v11.result() : null,
                 correctionLinks,
                 parseError);
     }

@@ -8,6 +8,10 @@ import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
+import com.ceos24.autedi.domain.generation.client.GenerationClientProfiles;
+import com.ceos24.autedi.domain.generation.contract.GenerationAiProfile;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.AiCorrectionResponseParser;
@@ -16,6 +20,8 @@ import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionRe
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationCode;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationContext;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationResult;
+import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
+import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
 import com.ceos24.autedi.domain.generation.entity.GenerationResultStatus;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
@@ -43,6 +49,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,6 +59,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -61,6 +71,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** 메모리 H2에 실제 커밋하고 다른 영속성 컨텍스트에서 아카이브를 복원한다. 외부 API는 사용하지 않는다. */
 @ActiveProfiles("test")
@@ -83,6 +95,7 @@ class GenerationResultStorageTest {
     }
 
     private static final GenerationResultMetadata META = GenerationResultMetadata.current();
+    private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final List<String> LINES = List.of("😀 go then go", "", "I like this book.", "");
     private static final Map<AiArea, AiCorrectionLevel> SETTINGS = Map.of(
             AiArea.GRAMMAR_SPELLING, AiCorrectionLevel.STANDARD,
@@ -90,6 +103,9 @@ class GenerationResultStorageTest {
 
     @Autowired
     GenerationResultStorageService storage;
+
+    @Autowired
+    GenerationContractRouter contracts;
 
     @Autowired
     WorksheetService worksheets;
@@ -506,11 +522,303 @@ class GenerationResultStorageTest {
         assertNull(loadCard(id).getAnchor());
     }
 
+    @ParameterizedTest(name = "v1.1 저장·복원: {0}")
+    @MethodSource("acceptedV11Cases")
+    void commitsAndRestoresEveryAcceptedV11FixtureWithoutLosingCandidatesOrEdits(String fixtureId) throws Exception {
+        var input = v11Case(fixtureId);
+        long id = saveV11(input);
+        var restored = storage.restoreResult(academyId, id);
+        assertEquals(GenerationResultStatus.VALIDATED, restored.status());
+        assertEquals(input.raw(), restored.rawResponse());
+        assertEquals(input.profile().metadata(), restored.metadata());
+        assertEquals(input.validation(), restored.validationResultV11());
+        assertInstanceOf(GenerationContractRouter.V11Validation.class, restored.versionedValidationResult());
+        assertThrows(IllegalStateException.class, restored::validationResult);
+        assertEquals(
+                input.validation().cards().size(), restored.correctionLinks().size());
+        String storedJson = jdbc.queryForObject(
+                "select validation_result from worksheet_generation_results where id=?", String.class, id);
+        assertTrue(JSON.readTree(storedJson).isObject(), "JSON 문자열의 이중 인코딩 금지");
+        assertTrue(JSON.readTree(storedJson).has("originalResponse"), "기존 JSON 루트 형태 유지");
+        for (var link : restored.correctionLinks()) {
+            var candidate = input.validation().candidates().get(link.candidateIndex());
+            var card = loadCard(link.correctionId());
+            var details = card.getV11Details();
+            assertNotNull(details);
+            assertEquals(candidate.location().originalText(), card.getOriginalText());
+            assertEquals(
+                    candidate.original().anchors().size(), details.anchors().size());
+            assertEquals(candidate.original().revisionScope(), details.revisionScope());
+            assertEquals(candidate.original().edit(), details.aiInitialEdit());
+            assertEquals(candidate.original().edit(), details.edit());
+            assertEquals(candidate.issues(), details.warnings());
+            assertEquals(candidate.requiresReview(), card.getRequiresReview());
+            assertEquals(
+                    candidate.location().validTargetBoxes().size(),
+                    card.getRegions().size());
+            for (var anchor : details.anchors()) assertEquals(input.transcriptionId(), anchor.transcriptionId());
+            if (details.anchors().size() == 1) assertEquals(details.anchors().getFirst(), card.getAnchor());
+            else assertNull(card.getAnchor(), "다중 줄을 단일 anchor로 축약하지 않는다.");
+        }
+        assertEquals(
+                input.validation().reviewIssues(),
+                restored.validationResultV11().reviewIssues());
+        assertEquals(
+                input.validation().excludedItems(),
+                restored.validationResultV11().excludedItems());
+    }
+
+    @Test
+    void v1AndV11ArchivesCoexistAndOldV1JsonIsStillReadable() throws Exception {
+        long oldId = storage.recordValidatedResult(academyId, generationId, transcript(), META, raw, validation);
+        var next = v11Case("advanced-structure-multiline");
+        long newId = saveV11(next);
+        assertEquals(validation, storage.restoreResult(academyId, oldId).validationResult());
+        assertNull(storage.restoreResult(academyId, oldId).validationResultV11());
+        assertEquals(next.validation(), storage.restoreResult(academyId, newId).validationResultV11());
+        assertEquals(raw, storage.restoreResult(academyId, oldId).rawResponse());
+        assertEquals(2, count("worksheet_generation_results"));
+        // 새 래퍼·버전 키 없이 이전 v1 직렬화 JSON을 직접 넣어도 같은 객체로 복원한다.
+        jdbc.update(
+                "update worksheet_generation_results set validation_result=? format json where id=?",
+                JSON.writeValueAsString(validation),
+                oldId);
+        assertEquals(validation, storage.restoreResult(academyId, oldId).validationResult());
+    }
+
+    @Test
+    void v11ReplayDoesNotOverwriteTeacherEditsAndOriginalArchiveIsImmutable() throws Exception {
+        var input = v11Case("advanced-structure-multiline");
+        long id = saveV11(input);
+        var initial = storage.restoreResult(academyId, id);
+        long cardId = initial.correctionLinks().getFirst().correctionId();
+        tx.executeWithoutResult(status -> corrections
+                .findById(cardId)
+                .orElseThrow()
+                .update(loadCard(cardId).getContent(), null, false));
+        assertNotNull(loadCard(cardId).getV11Details().edit(), "동일 내용 재전송은 동작을 무효화하지 않는다.");
+        tx.executeWithoutResult(
+                status -> corrections.findById(cardId).orElseThrow().editContent("teacher changed text"));
+        var edited = loadCard(cardId);
+        assertNull(edited.getV11Details().edit());
+        assertNotNull(edited.getV11Details().aiInitialEdit());
+        assertEquals(id, saveV11(input));
+        assertEquals("teacher changed text", loadCard(cardId).getContent());
+        assertEquals(initial, storage.restoreResult(academyId, id));
+        assertThrows(
+                IllegalStateException.class,
+                () -> storage.recordValidatedResultV11(
+                        academyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        input.profile().metadata(),
+                        input.raw() + " ",
+                        input.validation()));
+        tx.executeWithoutResult(
+                status -> corrections.findById(cardId).orElseThrow().delete());
+        tx.executeWithoutResult(
+                status -> corrections.findById(cardId).orElseThrow().restore());
+        assertEquals("teacher changed text", loadCard(cardId).getContent());
+        assertEquals(initial, storage.restoreResult(academyId, id));
+    }
+
+    @Test
+    void v11CardsAndArchiveRollBackTogetherWhileCommittedTranscriptionRemains() throws Exception {
+        var input = v11Case("advanced-structure-multiline");
+        tx.executeWithoutResult(status -> {
+            saveV11(input);
+            entityManager.flush();
+            assertEquals(1, count("corrections"));
+            assertEquals(1, count("worksheet_generation_results"));
+            status.setRollbackOnly();
+        });
+        assertEquals(0, count("corrections"));
+        assertEquals(0, count("worksheet_generation_results"));
+        assertNotNull(storage.restoreTranscription(academyId, input.transcriptionId()));
+    }
+
+    @Test
+    void v11UnreadableResponsesUseTheirOwnParserAndArePreservedIdempotently() throws Exception {
+        var input = v11Case("standard-grammar-replace");
+        String broken = "\n{invalid json}\n확인 필요\n";
+        long id = storage.recordUnreadableResult(
+                academyId,
+                input.generationId(),
+                input.transcriptionId(),
+                input.profile().metadata(),
+                broken,
+                "v1.1 구조 오류");
+        var restored = storage.restoreResult(academyId, id);
+        assertEquals(GenerationResultStatus.UNREADABLE, restored.status());
+        assertEquals(broken, restored.rawResponse());
+        assertNull(restored.versionedValidationResult());
+        assertNull(restored.validationResultV11());
+        assertTrue(restored.correctionLinks().isEmpty());
+        assertEquals(
+                id,
+                storage.recordUnreadableResult(
+                        academyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        input.profile().metadata(),
+                        broken,
+                        "v1.1 구조 오류"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> storage.recordUnreadableResult(
+                        academyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        input.profile().metadata(),
+                        input.raw(),
+                        "가짜 구조 오류"));
+        assertThrows(IllegalStateException.class, () -> saveV11(input));
+        assertEquals(0, count("corrections"));
+    }
+
+    @Test
+    void v11RejectsWrongContractProfileValidationAndTenantBeforeCreatingCards() throws Exception {
+        var input = v11Case("standard-grammar-replace");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> storage.recordValidatedResult(
+                        academyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        input.profile().metadata(),
+                        input.raw(),
+                        validation));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> storage.recordValidatedResultV11(
+                        academyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        META,
+                        input.raw(),
+                        input.validation()));
+        var forged = new com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationResult(
+                input.validation().originalResponse(),
+                input.validation().context(),
+                List.of(),
+                input.validation().summary());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> storage.recordValidatedResultV11(
+                        academyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        input.profile().metadata(),
+                        input.raw(),
+                        forged));
+        assertThrows(
+                CustomException.class,
+                () -> storage.recordValidatedResultV11(
+                        otherAcademyId,
+                        input.generationId(),
+                        input.transcriptionId(),
+                        input.profile().metadata(),
+                        input.raw(),
+                        input.validation()));
+        assertEquals(0, count("corrections"));
+        assertEquals(0, count("worksheet_generation_results"));
+    }
+
+    @Test
+    void databaseConstraintKeepsV1StrictAndAllowsOnlyVersionedMultilineCards() throws Exception {
+        var input = v11Case("advanced-structure-multiline");
+        long result = saveV11(input);
+        long cardId = storage.restoreResult(academyId, result)
+                .correctionLinks()
+                .getFirst()
+                .correctionId();
+        assertNull(loadCard(cardId).getAnchor());
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbc.update("update corrections set v11_details=null where id=?", cardId));
+        assertNotNull(loadCard(cardId).getV11Details());
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbc.update("update corrections set action='REVIEW' where id=?", cardId));
+    }
+
+    @Test
+    void restoreRejectsUnknownStoredContractOrValidationVersionsWithoutFallback() throws Exception {
+        var input = v11Case("standard-grammar-replace");
+        long id = saveV11(input);
+        jdbc.update("update worksheet_generation_results set contract_version=? where id=?", "unknown-contract", id);
+        assertThrows(IllegalArgumentException.class, () -> storage.restoreResult(academyId, id));
+        jdbc.update(
+                "update worksheet_generation_results set contract_version=?, validation_version=? where id=?",
+                input.profile().metadata().contractVersion(),
+                "unknown-validator",
+                id);
+        assertThrows(IllegalArgumentException.class, () -> storage.restoreResult(academyId, id));
+    }
+
+    private record V11Case(
+            Long generationId,
+            Long transcriptionId,
+            GenerationAiProfile profile,
+            String raw,
+            com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationResult validation) {}
+
+    private static java.util.stream.Stream<String> acceptedV11Cases() throws Exception {
+        return JSON.readTree(resource("/ai/contract/v1.1/cases.json"))
+                .get("cases")
+                .valueStream()
+                .filter(value ->
+                        "ACCEPT".equals(value.at("/expected/parse_result").asString()))
+                .map(value -> value.get("id").asString());
+    }
+
+    private V11Case v11Case(String fixtureId) throws Exception {
+        JsonNode fixture = JSON.readTree(resource("/ai/contract/v1.1/cases.json"))
+                .get("cases")
+                .valueStream()
+                .filter(value -> value.get("id").asString().equals(fixtureId))
+                .findFirst()
+                .orElseThrow();
+        List<String> lines = new ArrayList<>();
+        fixture.at("/context/transcription_lines")
+                .forEach(line -> lines.add(line.get("text").asString()));
+        Map<AiArea, AiCorrectionLevel> selected = new EnumMap<>(AiArea.class);
+        fixture.at("/context/selected_areas")
+                .forEach(setting -> selected.put(
+                        AiArea.valueOf(setting.get("area").asString()),
+                        AiCorrectionLevel.valueOf(setting.get("level").asString())));
+        var profile = GenerationClientProfiles.profile(
+                GenerationClientMode.TERRA, GenerationContractVersion.V1_1, AiCorrectionPromptVariant.DEFAULT);
+        long generation = newGeneration(worksheetId, selected, profile);
+        long transcription = storage.recordTranscription(
+                academyId, generation, image, lines, profile.metadata().model());
+        String response =
+                resource("/ai/contract/v1.1/" + fixture.get("response_file").asString());
+        if (fixtureId.equals("advanced-structure-multiline")) response = "\n" + " ".repeat(70_000) + response + "\n  ";
+        var checked = (GenerationContractRouter.V11Validation)
+                contracts.parseAndValidate(profile, response, new GenerationContractRouter.Input(1, lines, selected));
+        return new V11Case(generation, transcription, profile, response, checked.result());
+    }
+
+    private long saveV11(V11Case value) {
+        return storage.recordValidatedResultV11(
+                academyId,
+                value.generationId(),
+                value.transcriptionId(),
+                value.profile().metadata(),
+                value.raw(),
+                value.validation());
+    }
+
     private Long transcript() {
         return storage.recordTranscription(academyId, generationId, image, LINES, META.model());
     }
 
     private Long newGeneration(Long worksheetId, Map<AiArea, AiCorrectionLevel> selected) {
+        return newGeneration(worksheetId, selected, null);
+    }
+
+    private Long newGeneration(Long worksheetId, Map<AiArea, AiCorrectionLevel> selected, GenerationAiProfile profile) {
         return tx.execute(status -> {
             var worksheet = worksheetRepository.findById(worksheetId).orElseThrow();
             List<Map<String, String>> snapshot = selected.entrySet().stream()
@@ -527,6 +835,8 @@ class GenerationResultStorageTest {
                             .idempotencyKey(UUID.randomUUID().toString())
                             .requestFileHash(worksheet.getFileHash())
                             .requestSettingsSnapshot(snapshot)
+                            .clientMode(profile == null ? null : GenerationClientMode.TERRA)
+                            .requestAiProfile(profile)
                             .build())
                     .getId();
         });

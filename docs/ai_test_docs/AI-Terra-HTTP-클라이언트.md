@@ -7,8 +7,8 @@
 1. 저장된 EXIF 보정 PNG를 한 번 조회한다.
 2. Responses API에 PNG를 보내 원문 전사 `{"text":"..."}`를 받는다. 기존 실험처럼 철자·문법을 고치지 않고 반복·줄바꿈을 보존한다. CRLF/CR만 LF로 통일한다.
 3. 모델명·PNG 해시·크기와 이번 전사를 불변 전사로 먼저 커밋한다.
-4. **같은 PNG**와 이 전사의 줄 번호·텍스트를 첨삭 요청에 보낸다. `AiCorrectionPromptComposer`의 공통 원칙·선택 영역·독립적인 Standard/Advanced 규칙·anchor/boxes·계약 v1을 사용한다. 꺼진 영역의 상세 규칙을 추가하지 않는다.
-5. completed 응답에서 계약 JSON을 꺼내 기존 파서·검증기를 통과한 결과만 저장한다. REPLACE/GUIDANCE, reviewIssues, 경고는 기존 검토 API로 조회한다.
+4. **같은 PNG**와 이 전사의 줄 번호·텍스트를 첨삭 요청에 보낸다. 작업별 AI 프로필의 계약 버전·프롬프트 후보로 라우터가 공통 원칙·선택 영역·독립적인 Standard/Advanced 규칙·Schema를 조립한다. 꺼진 영역의 상세 규칙을 추가하지 않는다.
+5. completed 응답에서 계약 JSON을 꺼내 해당 버전의 파서·검증기를 통과한 결과만 저장한다. REPLACE/GUIDANCE, reviewIssues, 경고는 기존 검토 API로 조회한다. [v1.1 서비스 생성 연결](AI-공통-응답-계약-v1.1-서비스-생성-연결.md)에서 DEFAULT/COMPACT와 버전별 저장까지 확장했다.
 
 외부 대기에는 DB 트랜잭션이 없다. 전사 후 첨삭이 실패해도 전사는 보존한다. 수동 재시도는 파일·설정·모델·PNG·전사 무결성이 맞으면 OCR 없이 첨삭만 실행한다. 재시도는 접수 당시 실행 경로를 유지한다.
 
@@ -32,7 +32,7 @@ app.ai.terra.max-output-tokens=12000
 
 ## 계약과 오류 처리
 
-전사와 첨삭 모두 `text.format`의 strict JSON Schema를 사용한다. 첨삭의 전송 스키마는 기존 v1에서 `$schema`, `$id` 메타 필드와 `uniqueItems`를 제외한 사본이다. 원본 스키마를 수정하지 않았고, issue_kinds 중복 여부 등 전체 규칙은 기존 서버 파서·검증기가 계속 검사한다.
+전사와 첨삭 모두 `text.format`의 strict JSON Schema를 사용한다. 첨삭의 전송 스키마는 선택한 v1/v1.1 Schema에서 `$schema`, `$id` 메타 필드와 issue_kinds의 `uniqueItems`를 제외한 사본이다. 원본 스키마를 수정하지 않았고, 중복 여부 등 전체 규칙은 해당 버전의 서버 파서·검증기가 계속 검사한다.
 
 | 상황 | 코드 | 수동 재시도 가능 |
 |---|---|---|
@@ -66,6 +66,8 @@ MVC·H2 테스트는 TERRA 설정 선택부터 실제 HTTP 어댑터, 전사 커
 
 ## 검증 결과
 
+아래는 최초 v1 HTTP 연결 시점의 결과다. 현재 v1.1까지 확장한 검증 결과와 실행 명령은 [서비스 생성 연결 문서](AI-공통-응답-계약-v1.1-서비스-생성-연결.md)를 따른다.
+
 - HTTP 클라이언트 테스트 18건, 기존 기능을 포함한 MVC·H2 연결 테스트 29건 통과.
 - 빈 전사를 성공으로 기대한 새 테스트 1건은 기존 검증 정책과 맞지 않아 TERRA_NO_TEXT 분류·기대값을 수정했다. 이후 HTTP 관련 범위만 재실행했고, 통과한 MVC·DB 사례는 전체 검사 전 반복하지 않았다.
 - 연결 완료 후 전체 검사를 한 번 실행했다. 19개 클래스, 347건 모두 통과(실패·오류·건너뜀 0). `build`, `spotlessCheck`, `git diff --check`도 통과했다.
@@ -76,4 +78,4 @@ MVC·H2 테스트는 TERRA 설정 선택부터 실제 HTTP 어댑터, 전사 커
 
 요청 형식과 모델은 [Terra 공식 문서](https://developers.openai.com/api/docs/models/gpt-6.1-terra), [Responses 이미지 입력](https://developers.openai.com/api/docs/guides/images-vision), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)와 대조했다.
 
-실제 외부 API 호출·키 유효성·계정 권한·실제 모델 품질·요금은 검증하지 않았다. 공유·운영 DB 적용, 실제 모드 활성화, PDF·다중 서버 lease, HTTP envelope 전문·사용량 저장도 포함하지 않았다. 다음 단계 구현은 시작하지 않는다.
+실제 외부 API 호출·키 유효성·계정 권한·실제 모델 품질·요금은 검증하지 않았다. 공유·운영 DB 적용, 실제 모드 활성화, PDF·다중 서버 lease, HTTP envelope 전문·사용량 저장도 포함하지 않았다.

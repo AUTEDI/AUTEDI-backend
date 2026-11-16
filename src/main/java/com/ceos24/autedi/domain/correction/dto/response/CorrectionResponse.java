@@ -7,7 +7,8 @@ import com.ceos24.autedi.domain.correction.entity.RegionCoordinateUnit;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.generation.contract.v1.AiAction;
 import com.ceos24.autedi.domain.generation.contract.v1.AiIssueKind;
-import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationIssue;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiEdit;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiRevisionScope;
 import com.ceos24.autedi.domain.worksheet.entity.CorrectionArea;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
@@ -37,9 +38,15 @@ public record CorrectionResponse(
         List<AiIssueKind> issueKinds,
         CorrectionAnchorResponse anchor,
         Boolean locationUncertain,
-        List<AiValidationIssue> warnings,
+        List<CorrectionWarningResponse> warnings,
         Boolean requiresReview,
-        RegionCoordinateUnit regionCoordinateUnit) {
+        RegionCoordinateUnit regionCoordinateUnit,
+        @Schema(description = "저장된 AI 계약 식별자. 결과 아카이브가 없는 과거 자료는 null") String contractVersion,
+        @Schema(description = "전체 검증 원문 연결. 자료가 없으면 빈 배열") List<CorrectionAnchorResponse> anchors,
+        AiRevisionScope revisionScope,
+        AiEdit aiInitialEdit,
+        AiEdit edit,
+        @Schema(description = "regions와 동일한 현재 원문 좌표") List<RegionPayload> targetRegions) {
     public static CorrectionResponse from(Correction correction) {
         return of(correction, correction.getEtag());
     }
@@ -49,6 +56,25 @@ public record CorrectionResponse(
     }
 
     public static CorrectionResponse of(Correction correction, String etag, String source) {
+        return of(correction, etag, source, null);
+    }
+
+    public static CorrectionResponse of(Correction correction, String etag, String source, String contractVersion) {
+        var details = correction.getV11Details();
+        List<CorrectionAnchorResponse> anchors = details != null
+                ? details.anchors().stream().map(CorrectionAnchorResponse::from).toList()
+                : correction.getAnchor() == null
+                        ? List.of()
+                        : List.of(CorrectionAnchorResponse.from(correction.getAnchor()));
+        List<CorrectionWarningResponse> warnings = details != null
+                ? details.warnings().stream()
+                        .map(CorrectionWarningResponse::from)
+                        .toList()
+                : correction.getWarnings() == null
+                        ? null
+                        : correction.getWarnings().stream()
+                                .map(CorrectionWarningResponse::from)
+                                .toList();
         return new CorrectionResponse(
                 correction.getId(),
                 etag,
@@ -71,8 +97,14 @@ public record CorrectionResponse(
                 correction.getIssueKinds(),
                 CorrectionAnchorResponse.from(correction.getAnchor()),
                 correction.getLocationUncertain(),
-                correction.getWarnings(),
+                warnings,
                 correction.getRequiresReview(),
-                RegionCoordinateUnit.NORMALIZED_0_1);
+                RegionCoordinateUnit.NORMALIZED_0_1,
+                contractVersion,
+                anchors,
+                details == null ? null : details.revisionScope(),
+                details == null ? null : details.aiInitialEdit(),
+                details == null ? null : details.edit(),
+                correction.getRegions());
     }
 }

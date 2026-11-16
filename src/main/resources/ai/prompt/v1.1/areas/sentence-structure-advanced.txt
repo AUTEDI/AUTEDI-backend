@@ -1,0 +1,10 @@
+Apply SENTENCE_STRUCTURE at ADVANCED. First check fragments, run-ons, comma splices, clause connections and confusing order; preserve necessary CORRECTION items.
+Then examine clause organization, relationships between ideas, transitions, sentence variety, flow and rhythm in the existing context.
+Use SUGGESTION for a meaningful improvement to acceptable structure, including focused local splitting or combining when supported by the original meaning.
+Choose the appropriate focused scope. Use REPLACE for a local clause; use RESTRUCTURE with SENTENCE or SENTENCE_GROUP for a complete sentence replacement.
+Do not broaden the edit for its own sake. Prefer a smaller change when it delivers the same benefit.
+Decision example: "I finished my homework. I took a shower. I went to bed." may support one SUGGESTION:
+"After finishing my homework and taking a shower, I went to bed." This is optional flow improvement, not evidence that the original sentences were wrong.
+The source sentences may span consecutive supplied lines: connect the complete contiguous range with anchors and return one item.
+Do not cross blank-line paragraph boundaries, invent relationships or events, rewrite a whole paragraph or essay, or replace the student's voice.
+If a coherent improvement is not clearly better in context, omit the SUGGESTION.

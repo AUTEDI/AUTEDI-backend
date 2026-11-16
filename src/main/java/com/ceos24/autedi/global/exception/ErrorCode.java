@@ -67,6 +67,7 @@ public enum ErrorCode implements BaseErrorCode {
     GENERATION_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "GENERATION_006", "생성 결과 기록을 찾을 수 없습니다."),
     CANNOT_RETRY_GENERATION(HttpStatus.CONFLICT, "GENERATION_005", "재시도할 수 없는 작업 상태이거나 파일/설정이 변경되었습니다."),
     GENERATION_REQUEST_CONFLICT(HttpStatus.CONFLICT, "GENERATION_007", "다른 생성·재시도 요청에 사용된 멱등키입니다."),
+    AI_CONTRACT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "GENERATION_008", "선택한 AI 계약의 서비스 생성 경로가 아직 연결되지 않았습니다."),
 
     // Correction
     CORRECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "CORRECTION_001", "첨삭 항목을 찾을 수 없습니다."),

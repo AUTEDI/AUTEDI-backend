@@ -2,6 +2,7 @@ package com.ceos24.autedi.global.config;
 
 import com.ceos24.autedi.domain.generation.client.TerraClientProperties;
 import com.ceos24.autedi.domain.generation.client.TerraGenerationClient;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
 import java.net.http.HttpClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,9 +16,10 @@ public class TerraHttpConfiguration {
     public TerraGenerationClient terraGenerationClient(
             HttpClient terraHttpClient,
             TerraClientProperties properties,
+            GenerationContractRouter contracts,
             @Value("${app.ai.terra.api-key:${OPENAI_API_KEY:}}") String key) {
         properties.setApiKey(key);
-        return new TerraGenerationClient(terraHttpClient, properties);
+        return new TerraGenerationClient(terraHttpClient, properties, contracts);
     }
 
     @Bean(destroyMethod = "shutdownNow")

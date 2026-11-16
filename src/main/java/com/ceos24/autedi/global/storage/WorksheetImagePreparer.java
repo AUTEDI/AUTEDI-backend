@@ -37,7 +37,7 @@ public final class WorksheetImagePreparer {
                 if (width < 1 || height < 1 || (long) width * height > MAX_PIXELS)
                     throw new ImageLimitException("이미지 해상도 제한은 4천만 픽셀입니다.");
                 int imageCount = reader.getNumImages(true);
-                if (imageCount != 1 && !(jpeg && JpegGainMapMetadata.isSupported(reader, imageCount)))
+                if (imageCount != 1 && !(jpeg && JpegGainMapMetadata.isSupported(reader, imageCount, bytes)))
                     throw new IllegalArgumentException("한 장의 정지 이미지 또는 HDR 보조 이미지가 포함된 사진만 지원합니다.");
                 raw = reader.read(0);
             } finally {

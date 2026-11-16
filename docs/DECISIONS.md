@@ -643,7 +643,7 @@ chmod +x scripts/pre-commit && cp scripts/pre-commit .git/hooks/pre-commit
 | 구분 | 확정 기술 / 구성 | 세부 역할 및 선정 이유 |
 | --- | --- | --- |
 | **Frontend** | **React + Vercel** | 프론트엔드 호스팅, 기본 HTTPS 제공, 추후 커스텀 도메인 연결 용이 ($0) |
-| **Backend Domain & SSL** | **DuckDNS + Nginx + Let’s Encrypt** | 무료 동적 도메인(`*.duckdns.org`) + 무료 SSL 인증서로 Vercel↔︎EC2 간 종단간 HTTPS 암호화 통신 보장 ($0) |
+| **Backend Domain & SSL** | **자체 도메인(`api.autedi.co.kr`, `dev-api.autedi.co.kr`) + Nginx + Let’s Encrypt** | 구매 도메인의 서브도메인 + 무료 SSL 인증서로 Vercel↔︎EC2 간 종단간 HTTPS 보장. 기존 DuckDNS는 이전 완료 시까지 공존 후 제거 (11.15 참조) |
 | **Backend & DB** | **Spring Boot + MySQL 8.0** | 단일 EC2 내 **Docker Compose**로 통합 구동 (컨테이너 메모리 엄격 상한선 적용) |
 | **Storage** | **AWS S3** | 첨삭 대상 영어 손글씨 이미지 원본/변환본 저장 및 일일 DB 백업 아카이브 보관 |
 | **OCR & AI** | **Google Cloud Vision + 외부 AI API** | 외부 API 호출 방식으로 EC2 내부의 CPU/메모리 연산 부하 원천 차단 |
@@ -689,7 +689,7 @@ flowchart TB
     end
 
     User --> React
-    React -- "HTTPS 요청 (CORS 통과)\n(https://autedi-api.duckdns.org)" --> Nginx
+    React -- "HTTPS 요청 (CORS 통과)\n(https://api.autedi.co.kr)" --> Nginx
     Nginx -- "Reverse Proxy (HTTP)" --> Spring
     Spring -- "1. 이미지 저장" --> S3
     Spring -- "2. OCR 추출" --> Vision
@@ -929,7 +929,7 @@ flowchart TD
     A["신규 인프라 준비\n(새 AWS 계정, Lightsail, NCP, 또는 타사 클라우드)"] --> B["Docker & Compose 설치 및 /srv/mvp-data 디렉토리 생성"]
     B --> C["최신 S3 DB 덤프 다운로드 및 MySQL 복원\n(또는 rsync로 /srv/mvp-data 복제)"]
     C --> D["docker compose up -d 실행 및 헬스체크 확인"]
-    D --> E["DuckDNS 대시보드에서 A 레코드 IP를 신규 서버 IP로 변경"]
+    D --> E["가비아 DNS 관리에서 api / dev-api A 레코드 IP를 신규 서버 IP로 변경"]
     E --> F["마이그레이션 완료 (DNS 전파 즉시 서비스 정상화, 다운타임 < 30분)"]
 ```
 
@@ -1655,7 +1655,8 @@ class S3FileStorageServiceTest {
          "http://localhost:3000",
          "https://*.vercel.app",
          "https://autedi.com",
-         "https://*.autedi.com"
+         "https://*.autedi.com",
+         "https://autedi.co.kr"
        ],
        "ExposeHeaders": ["ETag"],
        "MaxAgeSeconds": 3600
@@ -1741,11 +1742,11 @@ flowchart TD
         end
     end
 
-    User -->|"https://autedi-mvp.duckdns.org"| Router
-    Tester -->|"https://autedi-mvp-dev.duckdns.org"| Router
+    User -->|"https://api.autedi.co.kr"| Router
+    Tester -->|"https://dev-api.autedi.co.kr"| Router
 
-    Router -->|"Host: autedi-mvp.duckdns.org"| SpringProd
-    Router -->|"Host: autedi-mvp-dev.duckdns.org"| SpringDev
+    Router -->|"Host: api.autedi.co.kr"| SpringProd
+    Router -->|"Host: dev-api.autedi.co.kr"| SpringDev
 
     SpringProd -->|"JDBC :3306/autedi_mvp_db"| DB_Prod
     SpringDev -->|"JDBC :3306/autedi_dev"| DB_Dev
@@ -1754,14 +1755,17 @@ flowchart TD
 | 서비스 / 계층 | 컨테이너명 | JVM / 프로세스 설정 | Docker 메모리 한도 | 데이터베이스 스키마 | 외부 도메인 및 SSL |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Nginx 프록시** | `mvp-nginx` | 경량 Alpine Nginx | `100M` | - | 포트 80 ➔ 443 강제 리다이렉트 |
-| **운영 백엔드 (Prod)** | `mvp-spring` | `-Xms256m -Xmx512m -XX:+UseSerialGC` | `700M` | `autedi_mvp_db` (`validate`) | `autedi-mvp.duckdns.org` (Let's Encrypt) |
-| **개발/QA 백엔드 (Dev)**| `mvp-spring-dev` | `-Xms128m -Xmx384m -XX:+UseSerialGC` | `512M` | `autedi_dev` (`update`) | `autedi-mvp-dev.duckdns.org` (Let's Encrypt) |
+| **운영 백엔드 (Prod)** | `mvp-spring` | `-Xms256m -Xmx512m -XX:+UseSerialGC` | `700M` | `autedi_mvp_db` (`validate`) | `api.autedi.co.kr` (Let's Encrypt, 기존 `autedi-mvp.duckdns.org` 공존 후 제거) |
+| **개발/QA 백엔드 (Dev)**| `mvp-spring-dev` | `-Xms128m -Xmx384m -XX:+UseSerialGC` | `512M` | `autedi_dev` (`update`) | `dev-api.autedi.co.kr` (Let's Encrypt, 기존 `autedi-mvp-dev.duckdns.org` 공존 후 제거) |
 | **공유 데이터베이스** | `mvp-mysql` | buffer-pool: `128M`, connections: `50` | `400M` | 논리 DB 분리 | 로컬 도커 네트워크 격리 |
 | **OS + 가상 메모리** | 호스트 커널 | 4GB 스왑 파일, `vm.swappiness = 10` | 총 6GB 풀 | - | OOM Killer 방어 및 디스크 I/O 억제 |
 
 ---
 
 #### 11.14.3 Nginx 독립 라우팅 및 동적 리졸버 규격 (`infra/nginx/conf.d/dev.conf`)
+
+> [!NOTE]
+> 아래 예시는 이전 전(DuckDNS) 기준이다. 현재 설정은 `infra/nginx/conf.d/dev.conf`(개발)와 `default.conf`(운영)를 기준으로 하며, `dev-api.autedi.co.kr` / `api.autedi.co.kr` 블록이 추가되어 있다 (11.15).
 
 개발/QA 컨테이너(`spring-app-dev`)가 배포 중 재시작되거나 일시 정지되더라도 운영 컨테이너(`spring-app`)에 영향이 없도록 Docker 내부 DNS(`127.0.0.11`) 기반 동적 리졸버 설정을 적용한다:
 
@@ -1846,14 +1850,49 @@ sequenceDiagram
 2. **콘솔 로그 폴링 노이즈 억제**:
    - 첨삭 디스패처 2초 폴링 쿼리로 인한 콘솔 도배를 방지하기 위해 `jpa.show-sql: false` 적용 및 디스패치 인터벌을 30초(`dispatch-interval-ms: 30000`)로 조정.
 3. **CORS 도메인 확장**:
-   - `SecurityConfig`에 `https://*.duckdns.org` 및 `http://*.duckdns.org`를 허용하여 Vercel 및 DuckDNS 간의 통신 보장.
+   - (초기) `SecurityConfig`에 duckdns 와일드카드를 허용했으나, 도메인 이전(11.15)으로 폐기. 현재는 환경변수 `CORS_ALLOWED_ORIGINS`에 명시한 정확한 origin만 허용한다.
 
 ---
 
 #### 11.14.6 팀 협업 및 릴리즈 QA 운영 규칙 (Operational Rules)
 - **평시 (일반 개발 연동 기간)**:
-  - 프론트엔드-백엔드 연동 개발은 `autedi-mvp-dev.duckdns.org` 엔드포인트를 사용한다.
+  - 프론트엔드-백엔드 연동 개발은 `dev-api.autedi.co.kr` 엔드포인트를 사용한다 (전환 기간에는 기존 `autedi-mvp-dev.duckdns.org`도 응답).
   - `develop` 브랜치 머지는 단위 테스트 통과 시 상시 허용된다.
 - **QA 집중 기간 (릴리즈 1~2일 전)**:
   - 프론트엔드와 백엔드 팀 전체가 주요 플로우를 전수 검증하는 기간에는 **`develop` 브랜치 머지를 전면 동결(Merge Freeze)**한다.
   - QA 중 발견된 결함은 별도의 핫픽스 브랜치에서 일괄 검증 후 한 번에 머지하여 테스트베드의 연속성을 보장한다.
+
+---
+
+### 11.15 백엔드 도메인 이전 (DuckDNS → 자체 도메인 `autedi.co.kr`)
+
+#### 11.15.1 결정과 이유
+- **결정**: 백엔드 도메인을 무료 DuckDNS에서 구매한 도메인(가비아 등록)의 서브도메인으로 이전한다.
+  - 운영: `api.autedi.co.kr`
+  - 개발/QA: `dev-api.autedi.co.kr`
+  - 프런트(운영): `https://autedi.co.kr`
+- **이유**: 무료 DuckDNS 의존 제거, 프런트와 일관된 브랜드 도메인, HTTPS 인증서·운영 안정성 확보.
+- **인증**: JWT(`Authorization` 헤더) 기반을 유지한다. 쿠키에 의존하지 않고 소셜 로그인 도입 계획이 없으므로 쿠키 설정은 변경하지 않는다.
+
+#### 11.15.2 구조
+```
+api.autedi.co.kr      ─┐
+dev-api.autedi.co.kr  ─┴→ EC2 탄력적 IP → Nginx(80/443) ─ Host 헤더(server_name) 분기 ─┬→ spring-app:8080      (운영)
+                                                                                      └→ spring-app-dev:8080  (개발)
+```
+- DNS(가비아): `api`, `dev-api` A 레코드를 같은 EC2 탄력적 IP로 등록.
+- Nginx: 같은 80/443 포트에서 `server_name`(요청의 Host 헤더)으로 컨테이너를 분기한다. 설정 파일은 `infra/nginx/conf.d/default.conf`(운영), `dev.conf`(개발)이며 서버의 `/srv/mvp-data/nginx/conf.d/`에 수동 반영한다 (저장소는 기록본, 서버 반영은 `nginx -t` 후 `nginx -s reload`).
+- HTTPS: certbot(Let's Encrypt) webroot 방식으로 도메인별 인증서를 따로 발급한다. 80 → 443 리다이렉트 유지.
+
+#### 11.15.3 전환 원칙
+- 기존 DuckDNS server 블록과 인증서는 삭제하지 않고 새 도메인 검증이 끝날 때까지 공존시킨다. 검증 후 별도 작업으로 제거한다.
+- **CORS**: 환경별 프런트 origin을 `CORS_ALLOWED_ORIGINS`(쉼표 구분)로 명시하고 `*` 및 와일드카드 도메인은 사용하지 않는다.
+  - 운영: `https://autedi.co.kr`
+  - 개발: `https://autedi-frontend.vercel.app`, `http://localhost:3000` (프런트 개발 서브도메인이 정해지면 추가)
+- **영향 없음**: MySQL 컨테이너와 데이터 볼륨(`/srv/mvp-data/mysql`)은 변경하지 않는다. Nginx 설정 변경은 컨테이너 재시작 없이 reload로 적용한다.
+- 서버에서 서비스명 없이 `docker compose up -d`를 실행하지 않는다 (mysql 재생성 방지). CORS 환경변수 반영 시 `docker compose up -d --no-deps <spring-app|spring-app-dev>`를 사용한다.
+
+#### 11.15.4 후속 확인 사항
+- 인증서 자동 갱신(`certbot renew` + Nginx reload)이 아직 설정되어 있지 않다. 기존 운영 인증서 만료일은 2027-01-26.
+- S3 버킷 CORS(11.12.7)에 `https://autedi.co.kr` origin 추가가 필요하다.
+- 이전 완료 후 DuckDNS 블록·인증서·관련 문서 표기를 제거한다.
