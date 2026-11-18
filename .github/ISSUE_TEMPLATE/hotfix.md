@@ -2,7 +2,7 @@
 name: '🚨 Hotfix'
 about: 운영(Production) 환경에서 긴급히 해결해야 하는 치명적 오류나 장애를 다룰 때 사용합니다.
 title: '[Hotfix] '
-labels: 'hotfix'
+labels: '🚨hotfix'
 assignees: ''
 ---
 

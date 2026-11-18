@@ -2,7 +2,7 @@
 name: '🐛 Bug'
 about: 발견된 버그나 비정상 동작을 보고하고 수정 작업을 시작할 때 사용합니다.
 title: '[Bug] '
-labels: 'bug'
+labels: '🪳bug'
 assignees: ''
 ---
 

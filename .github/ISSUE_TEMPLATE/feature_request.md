@@ -2,7 +2,7 @@
 name: '✨ Feat'
 about: 새로운 기능 또는 API를 제안하거나 개발 작업을 시작할 때 사용합니다.
 title: '[Feat] '
-labels: 'enhancement'
+labels: '👾feature'
 assignees: ''
 ---
 

@@ -2,7 +2,7 @@
 name: '♻️ Refactor'
 about: 동작은 그대로 두고 코드 구조, 중복, 가독성을 개선하는 작업을 시작할 때 사용합니다.
 title: '[Refactor] '
-labels: 'refactor'
+labels: '🪛refactor'
 assignees: ''
 ---
 
