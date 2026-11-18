@@ -1,7 +1,7 @@
 ---
-name: '📚 Documentation'
+name: '📚 Docs'
 about: API 명세서, README, 아키텍처 문서, 기획/설계 문서 등을 작성하거나 수정할 때 사용합니다.
-title: '[Docs]: '
+title: '[Docs] '
 labels: 'documentation'
 assignees: ''
 ---

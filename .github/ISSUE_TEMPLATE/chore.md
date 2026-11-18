@@ -1,7 +1,7 @@
 ---
 name: '🔧 Chore'
 about: 인프라, 빌드, 의존성, CI/CD, 패키지 설정 등 비즈니스 로직 외의 부가적인 작업을 시작할 때 사용합니다.
-title: '[Chore]: '
+title: '[Chore] '
 labels: 'chore'
 assignees: ''
 ---
