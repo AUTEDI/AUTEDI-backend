@@ -84,11 +84,12 @@ public final class AiCorrectionResponseValidator {
                         AiValidationCode.ISSUE_AREA_NOT_SELECTED, "issue_kinds", "선택하지 않은 " + area + " 영역의 수정을 포함합니다.");
             }
         }
+        // 제안의 레벨은 대표 영역으로 판단한다. STANDARD 보조 영역은 허용하되 위의 OFF 검사는 유지한다.
         if (item.feedbackType() == AiFeedbackType.SUGGESTION
-                && (item.area() != null && selected.get(item.area()) == AiCorrectionLevel.STANDARD
-                        || issueAreas.stream().anyMatch(area -> selected.get(area) == AiCorrectionLevel.STANDARD))) {
+                && item.area() != null
+                && selected.get(item.area()) == AiCorrectionLevel.STANDARD) {
             candidate.exclude(
-                    AiValidationCode.STANDARD_SUGGESTION, "feedback_type", "Standard 영역에는 선택적 개선 제안을 포함할 수 없습니다.");
+                    AiValidationCode.STANDARD_SUGGESTION, "feedback_type", "대표 영역이 Standard인 선택적 개선 제안은 포함할 수 없습니다.");
         }
     }
 

@@ -148,7 +148,22 @@ class AiCorrectionResponseValidatorTest {
                 List.of(1),
                 result.cards().stream().map(AiValidatedItem::candidateIndex).toList());
         AiCorrectionItem mixed = withIssues(vocabulary, List.of(AiIssueKind.VOCABULARY, AiIssueKind.GRAMMAR));
-        // STANDARD 보조 영역을 일괄 제외하던 기대값은 policy-* 고정 응답의 허용 사례로 대체한다.
+        AiValidatedItem standardSupport = check(List.of(mixed), List.of("go", "good"), selected)
+                .candidates()
+                .getFirst();
+        assertEquals(AiItemDisposition.CARD, standardSupport.disposition());
+        assertTrue(standardSupport.issues().isEmpty());
+        AiValidatedItem standardPrimary = check(
+                        List.of(mixed),
+                        List.of("go", "good"),
+                        Map.of(
+                                AiArea.GRAMMAR_SPELLING,
+                                AiCorrectionLevel.ADVANCED,
+                                AiArea.VOCABULARY_EXPRESSION,
+                                AiCorrectionLevel.STANDARD))
+                .candidates()
+                .getFirst();
+        assertDisposition(standardPrimary, AiItemDisposition.EXCLUDED, AiValidationCode.STANDARD_SUGGESTION);
         AiValidatedItem disabledBypass = check(
                         List.of(mixed),
                         List.of("go", "good"),

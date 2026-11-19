@@ -1,6 +1,6 @@
 # ADVANCED 정책 변경의 기대 결과
 
-이 문서는 구현 전 합의할 정책과 합성 JSON 응답의 기대 처리를 고정한다. 운영 검증기·프롬프트·API·DB는 수정하지 않는다. AI 응답 형식은 `AUTEDI-AI-CONTRACT-v1.1`의 기존 12개 필드를 유지한다.
+이 문서는 합의한 정책과 합성 JSON 응답의 기대 처리를 고정하고 단계별 구현 결과를 기록한다. AI 응답 형식은 `AUTEDI-AI-CONTRACT-v1.1`의 기존 12개 필드를 유지한다. 현재는 `checkSettings()`의 영역·레벨 검증만 변경했으며 프롬프트·API·DB·수정 범위 정책은 유지한다.
 
 `cases.json`의 `ADVANCED_POLICY_TARGET` 태그가 붙은 18개 사례를 기존 테스트 경로에 연결했다. 이 자료는 실제 모델 출력이나 첨삭 품질의 정답지가 아니다. 설명용 좌표를 사용하며, 서버의 허용·검토·제외 정책을 검증한다.
 
@@ -35,14 +35,14 @@ AI에 보내는 응답은 `responses/*.json`뿐이다. 입력·설정·기대값
 | ID / 응답 | 목표 처리 | 현재 코드와의 차이 |
 | --- | --- | --- |
 | [policy-all-standard-correction](responses/policy-all-standard-correction.json) | 네 영역 STANDARD에서 `go → went` CORRECTION 유지 | 동일 |
-| [policy-structure-standard-grammar-support](responses/policy-structure-standard-grammar-support.json) | 구조 ADVANCED + 문법 STANDARD의 보조 수정 허용 | 현재 STANDARD_SUGGESTION으로 제외 |
-| [policy-structure-standard-vocabulary-support](responses/policy-structure-standard-vocabulary-support.json) | 구조 ADVANCED + 어휘 STANDARD의 보조 수정 허용 | 현재 STANDARD_SUGGESTION으로 제외 |
+| [policy-structure-standard-grammar-support](responses/policy-structure-standard-grammar-support.json) | 구조 ADVANCED + 문법 STANDARD의 보조 수정 허용 | checkSettings 반영: 통과 |
+| [policy-structure-standard-vocabulary-support](responses/policy-structure-standard-vocabulary-support.json) | 구조 ADVANCED + 어휘 STANDARD의 보조 수정 허용 | checkSettings 반영: 통과 |
 | [policy-overlap-all-advanced](responses/policy-overlap-all-advanced.json) | 교정·개선 두 카드 유지, 둘 다 겹침 경고·검토 필요, 자동 배치 금지 | 동일 |
-| [policy-overlap-standard-grammar-support](responses/policy-overlap-standard-grammar-support.json) | 문법 STANDARD여도 두 카드와 겹침 경고 유지 | 현재 개선 카드가 먼저 제외됨 |
+| [policy-overlap-standard-grammar-support](responses/policy-overlap-standard-grammar-support.json) | 문법 STANDARD여도 두 카드와 겹침 경고 유지 | checkSettings 반영: 통과 |
 | [policy-grammar-sentence-suggestion](responses/policy-grammar-sentence-suggestion.json) | 능동태 전환을 문법 SENTENCE + RESTRUCTURE로 허용 | 현재 범위·동작 정책상 검토 대상 |
 | [policy-grammar-clause-suggestion](responses/policy-grammar-clause-suggestion.json) | 관계절 축약을 문법 CLAUSE + REPLACE로 허용 | 현재 범위 정책상 검토 대상 |
 | [policy-content-summary-suggestion](responses/policy-content-summary-suggestion.json) | 기존 내용의 연속 문장 요약 허용 | 현재 범위·동작 정책상 검토 대상 |
-| [policy-content-standard-structure-support](responses/policy-content-standard-structure-support.json) | 내용 요약에 필요한 구조 STANDARD 보조 수정 허용 | 현재 제외되며 범위·동작 위반도 기록됨 |
+| [policy-content-standard-structure-support](responses/policy-content-standard-structure-support.json) | 내용 요약에 필요한 구조 STANDARD 보조 수정 허용 | checkSettings 통과, 현재 범위·동작 정책상 검토 대상 |
 | [policy-standard-primary-suggestion-excluded](responses/policy-standard-primary-suggestion-excluded.json) | 대표 영역 STANDARD의 독립 제안 제외 | 동일 |
 | [policy-disabled-support-excluded](responses/policy-disabled-support-excluded.json) | OFF 보조 영역을 포함한 제안 제외 | 동일 |
 | [policy-grammar-sentence-correction-review](responses/policy-grammar-sentence-correction-review.json) | 문법 CORRECTION의 문장 전체 수정은 검토 대상 | 동일 |
@@ -79,7 +79,7 @@ Java 21에서 실행한다. 실제 AI·DB·네트워크는 사용하지 않는�
 .\gradlew.bat --offline test --tests "*domain.generation.contract.v1_1.*" spotlessCheck --continue
 ```
 
-이 테스트 작성 단계에서는 파서·자료 무결성·원문·좌표·동작 검사가 통과하고, 정책 검증의 새 허용 사례만 실패해야 한다. 실패를 피하려고 `@Disabled`를 추가하거나 새 기대값을 현재 동작으로 되돌리지 않는다.
+정책을 단계적으로 구현하는 동안 파서·자료 무결성·원문·좌표·동작 검사는 통과하고, 미구현 정책의 목표 테스트만 실패해야 한다. 실패를 피하려고 `@Disabled`를 추가하거나 새 기대값을 현재 동작으로 되돌리지 않는다.
 
 기존 혼합 영역 단위 테스트에서 STANDARD 보조 영역을 무조건 제외하던 단언은 새 `policy-*` 허용 사례로 대체했다. 대표 STANDARD 제안 차단, OFF 보조 영역 차단, CORRECTION 범위 행렬은 유지한다.
 
@@ -92,4 +92,15 @@ Java 21에서 위 명령으로 682개를 실행했다. 671개 통과, 11개 실�
 - 실패 7개는 표의 STANDARD 보조 수정 허용·문법 및 내용 범위 확장 사례다.
 - 실패 4개는 범위 행렬의 문법 CLAUSE/SENTENCE 및 내용 SENTENCE/SENTENCE_GROUP 허용 조합이다.
 - 파서·Schema·DTO·자료 무결성·원문·좌표·수정 동작·프롬프트 조립 테스트는 모두 통과했다.
-- 운영 검증기와 프롬프트는 변경하지 않았으므로 정책 차이의 실패를 의도적으로 남겼다. 현재 전체 테스트 명령도 이 11개 때문에 실패한다.
+- 이 단계에서는 운영 검증기와 프롬프트를 변경하지 않아 정책 차이의 실패 11개를 의도적으로 남겼다.
+
+### checkSettings 구현 단계의 실행 결과
+
+제안의 STANDARD 차단 여부는 관련 영역 전체가 아니라 대표 영역 `area`로 판단하도록 변경했다. 대표 영역이 STANDARD이거나 관련 영역이 OFF인 제안은 계속 제외하며, 대표 영역과 문제 종류의 일치 검사도 유지한다. 보조 수정이 의미적으로 필요한지 판정하는 검사는 추가하지 않는다.
+
+Java 21에서 같은 명령으로 682개를 실행했다. 674개 통과, 8개 실패, 오류·건너뜀 0개이며 `spotlessCheck`는 통과했다.
+
+- 문법 STANDARD 보조 수정, 어휘 STANDARD 보조 수정, 문법 STANDARD 교정·구조 개선 카드 겹침의 3개 고정 응답 사례가 새로 통과했다.
+- 대표 STANDARD의 혼합 제안 차단과 OFF 보조 영역 차단도 단위 테스트에서 확인했다.
+- 내용 요약의 STANDARD 구조 보조 수정도 영역·레벨 단계는 통과하지만, 미구현 범위·동작 정책 때문에 검토 대상으로 남는다.
+- 남은 실패는 문법·내용의 범위 확장 사례 4개와 범위 행렬 4개다. 따라서 전체 테스트 명령은 아직 실패한다.
