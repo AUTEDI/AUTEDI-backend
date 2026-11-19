@@ -63,8 +63,10 @@
 ```
 
 ### 예외: `AI_API_CALL`
-현재 `TerraGenerationClient`에서 AI 호출 기록을 로그로 남기는데, 필드가 많고 비용·토큰 집계 용도라서 JSON을 사용한다. 이 AI 호출 로그는 일단 JSON 형식을 유지한다. 필드명(snake_case) 정리는 모니터링 도구가 정해진 뒤에 판단한다.
-이 로그에 담기는 `request_id`는 AI 제공사의 요청 ID다. 우리 서비스의 `requestId`와 겹친다. 이 둘을 구분하기 위해, 문서와 새 로그에서는 제공사 쪽 ID를 `aiRequestId`라고 부르는 식으로 정했는데 팀원과 더 논의가 필요할 것 같다.
+`TerraGenerationClient`는 LLM API 요청 1건마다 `AI_API_CALL` 로그를 남긴다. 요청당 토큰 수를 받아 가격을 비교하려고 만든 로그라서 필드가 많고, 집계하기 쉽도록 JSON을 사용한다.
+프롬프트가 확정되고 비용 통계가 어느 정도 쌓이기 전까지는 형식과 필드명(snake_case)을 그대로 유지한다. 삭제하거나 바꾸는 것은 그 뒤에 판단한다.
+
+`aiRequestId`는 `AI_API_CALL` JSON 로그의 `request_id`를 가리키며, AI 제공사 응답 헤더 `x-request-id`에서 가져온 값이다. 우리 서비스의 `requestId`(응답 헤더 `X-Request-Id`, 4.1절)와 이름이 겹치므로, 문서와 새 로그에서는 제공사 쪽 ID를 `aiRequestId`로 구분해 부른다.
 
 ---
 
