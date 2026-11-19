@@ -126,8 +126,8 @@ class AiCorrectionPromptComposerTest {
         AiCorrectionPrompt compact = composer.compose(context, AiCorrectionPromptVariant.COMPACT);
         assertEquals(composer.compose(context, AiCorrectionPromptVariant.DEFAULT), normal);
         assertEquals(AiCorrectionPromptVariant.DEFAULT, normal.variant());
-        assertEquals("AUTEDI-CORRECTION-PROMPT-v1.1", normal.promptVersion());
-        assertEquals("AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT", compact.promptVersion());
+        assertEquals("AUTEDI-CORRECTION-PROMPT-v1.2", normal.promptVersion());
+        assertEquals("AUTEDI-CORRECTION-PROMPT-v1.2-COMPACT", compact.promptVersion());
         assertEquals("gpt-6.1-terra", normal.model());
         assertEquals(normal.model(), compact.model());
         assertEquals("AUTEDI-AI-CONTRACT-v1.1", normal.contractId());

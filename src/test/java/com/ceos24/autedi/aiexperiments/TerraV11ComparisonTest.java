@@ -197,7 +197,7 @@ class TerraV11ComparisonTest {
         assertEquals(List.of("STANDARD", "ADVANCED", "ADVANCED", "STANDARD"), labels(report));
         report.get("trials")
                 .forEach(t -> assertEquals(
-                        "AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT",
+                        "AUTEDI-CORRECTION-PROMPT-v1.2-COMPACT",
                         t.get("promptVersion").asString()));
     }
 

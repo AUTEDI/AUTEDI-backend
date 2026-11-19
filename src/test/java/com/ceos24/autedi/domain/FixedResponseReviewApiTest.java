@@ -25,6 +25,7 @@ import com.ceos24.autedi.domain.generation.contract.v1.prompt.AiCorrectionPrompt
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
 import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
 import com.ceos24.autedi.domain.generation.entity.*;
+import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
 import com.ceos24.autedi.domain.generation.persistence.StoredGenerationResult;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
@@ -1549,6 +1550,95 @@ class FixedResponseReviewApiTest {
         assertEquals(0, count("worksheet_generation_results"));
         verify(terra, never()).transcribe(anyLong(), any());
         verify(terra, never()).correct(anyLong(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void pendingLegacyV11JobsRunWithV12AndPreserveTheirOriginalRequest(AiCorrectionPromptVariant variant)
+            throws Exception {
+        try (var upstream = new FakeResponsesServer()) {
+            useTerra(upstream);
+            var legacy = legacyV11Profile(variant);
+            long id = persistedPending("legacy-v11-pending", GenerationClientMode.TERRA, legacy);
+            upstream.enqueue(200, FakeResponsesServer.transcription("She go to school every day."));
+            upstream.enqueue(
+                    200, FakeResponsesServer.completed(v11Resource("responses/standard-grammar-replace.json")));
+            worker.process(id);
+            assertEquals("SUCCEEDED", awaitTerminal(id).get("status").asString());
+            assertEquals(legacy, generations.findById(id).orElseThrow().getRequestAiProfile());
+            var current = GenerationClientProfiles.profile(
+                    GenerationClientMode.TERRA, GenerationContractVersion.V1_1, variant);
+            assertEquals(current.metadata(), reviewMetadata());
+            assertEquals(2, upstream.requests().size());
+            assertEquals(
+                    "autedi_correction_v1_1",
+                    upstream.requests().get(1).body().at("/text/format/name").asString());
+            var prompt = contracts.compose(
+                    current,
+                    new GenerationContractRouter.Input(
+                            1,
+                            List.of("She go to school every day."),
+                            Map.of(
+                                    AiArea.GRAMMAR_SPELLING,
+                                    AiCorrectionLevel.STANDARD,
+                                    AiArea.CONTENT_SUMMARY,
+                                    AiCorrectionLevel.ADVANCED)));
+            assertEquals(
+                    prompt.instructions(),
+                    upstream.requests().get(1).body().get("instructions").asString());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void retryOfLegacyV11JobRecordsV12AndKeepsTheOriginalProviderAndVariant(AiCorrectionPromptVariant variant)
+            throws Exception {
+        try (var upstream = new FakeResponsesServer()) {
+            useTerra(upstream);
+            var legacy = legacyV11Profile(variant);
+            long first = persistedPending("legacy-v11-failed", GenerationClientMode.TERRA, legacy);
+            workStore.fail(first, "TERRA_HTTP_ERROR", "과거 작업 실패", true);
+            ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.FIXED);
+            doThrow(new AssertionError("재시도에서 현재 서버의 기본 프로필을 참조했습니다."))
+                    .when(contractSelector)
+                    .configuredProfile(any());
+            upstream.enqueue(200, FakeResponsesServer.transcription("She go to school every day."));
+            upstream.enqueue(
+                    200, FakeResponsesServer.completed(v11Resource("responses/standard-grammar-replace.json")));
+            var accepted = body(attempt(base() + "/generations/" + first + "/retry", "legacy-v11-retry", bearer));
+            long id = accepted.get("id").longValue();
+            assertEquals("SUCCEEDED", awaitTerminal(id).get("status").asString());
+            var current = GenerationClientProfiles.profile(
+                    GenerationClientMode.TERRA, GenerationContractVersion.V1_1, variant);
+            var retried = generations.findById(id).orElseThrow();
+            assertEquals(current, retried.getRequestAiProfile());
+            assertEquals(GenerationClientMode.TERRA, retried.getClientMode());
+            assertEquals(first, retried.getRetryOfGenerationId());
+            assertEquals(legacy, generations.findById(first).orElseThrow().getRequestAiProfile());
+            assertEquals(current.metadata(), reviewMetadata());
+            assertEquals(2, upstream.requests().size());
+            assertEquals(2, count("worksheet_generations"));
+            verify(fixed, never()).transcribe(any(), any());
+            verify(fixed, never()).correct(any(), any());
+        }
+    }
+
+    private GenerationResultMetadata reviewMetadata() throws Exception {
+        return archives.restoreResult(academyId, review().at("/aiResults/0/id").longValue())
+                .metadata();
+    }
+
+    private static GenerationAiProfile legacyV11Profile(AiCorrectionPromptVariant variant) {
+        return new GenerationAiProfile(
+                GenerationContractVersion.V1_1,
+                variant,
+                new GenerationResultMetadata(
+                        "gpt-6.1-terra",
+                        "AUTEDI-AI-CONTRACT-v1.1",
+                        variant == AiCorrectionPromptVariant.DEFAULT
+                                ? "AUTEDI-CORRECTION-PROMPT-v1.1"
+                                : "AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT",
+                        "AUTEDI-VALIDATION-v1.1"));
     }
 
     @ParameterizedTest(name = "v1.1 서비스 생성·조회: {0}")
