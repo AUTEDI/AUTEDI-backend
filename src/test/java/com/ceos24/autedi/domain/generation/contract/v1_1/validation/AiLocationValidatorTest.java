@@ -73,8 +73,11 @@ class AiLocationValidatorTest {
             }
             assertEquals(ranges, result.resolvedAnchors(), id);
             assertEquals(boxes(expected.get("valid_target_boxes")), result.validTargetBoxes(), id);
-            assertEquals(expected.get("requires_review").asBoolean(), result.requiresReview(), id);
-            assertEquals(expected.get("auto_place").asBoolean(), result.canAutoPlace(), id);
+            // 최종 카드의 겹침 경고 등 후속 정책 판정을 위치 검증 단계에 요구하지 않는다.
+            JsonNode stage =
+                    expected.has("stage_expectations") ? expected.at("/stage_expectations/location") : expected;
+            assertEquals(stage.get("requires_review").asBoolean(), result.requiresReview(), id);
+            assertEquals(stage.get("auto_place").asBoolean(), result.canAutoPlace(), id);
         }
         if (id.equals("anchor-not-found-review")) {
             assertUnresolved(results.getFirst(), AiValidationCode.ANCHOR_NOT_FOUND);

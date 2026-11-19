@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "SUGGESTION",
+      "area": "CONTENT_SUMMARY",
+      "issue_kinds": [
+        "content",
+        "sentence_structure"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "Benjamin helped the group escape.",
+          "occurrence": 1
+        },
+        {
+          "line_id": 3,
+          "original": "He used a file to free them.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "Benjamin used a file to free the group.",
+      "guidance": null,
+      "reason": "원문의 의미를 유지하며 해당 영역을 선택적으로 개선합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.25
+        ],
+        [
+          0.1,
+          0.3,
+          0.8,
+          0.35
+        ]
+      ],
+      "revision_scope": "SENTENCE_GROUP",
+      "edit": {
+        "operation": "RESTRUCTURE",
+        "text": "Benjamin used a file to free the group.",
+        "position": null
+      }
+    }
+  ]
+}

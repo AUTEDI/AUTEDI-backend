@@ -2904,6 +2904,1911 @@
         "summary": [],
         "parse_issue_tag": "malformed_json"
       }
+    },
+    {
+      "id": "policy-all-standard-correction",
+      "category": "valid",
+      "description": "네 영역 STANDARD에서는 기본 오류 교정 카드를 기존과 동일하게 유지한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "STANDARD_REGRESSION"
+      ],
+      "response_file": "responses/policy-all-standard-correction.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He go home. He was tired."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 3,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "went"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-structure-standard-grammar-support",
+      "category": "valid",
+      "description": "문장 구조 ADVANCED의 주된 개선을 완성하는 문법 STANDARD 보조 수정을 허용한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "STANDARD_SUPPORT"
+      ],
+      "response_file": "responses/policy-structure-standard-grammar-support.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Tom opened the door. Tom walked into the room."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "Tom opened the door. Tom walked into the room.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 46
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "After opening the door, Tom walked into the room."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-structure-standard-vocabulary-support",
+      "category": "valid",
+      "description": "문장 결합에 수반되는 표현 조정을 어휘 STANDARD라는 이유로 제외하지 않는다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "STANDARD_SUPPORT"
+      ],
+      "response_file": "responses/policy-structure-standard-vocabulary-support.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Mia gave a short talk. Mia explained the plan."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "Mia gave a short talk. Mia explained the plan.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 46
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "In a short talk, Mia explained the plan."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-overlap-all-advanced",
+      "category": "edge",
+      "description": "교정과 최종 개선문은 모두 학생 원문에 연결하고 겹침 경고와 검토 필요 상태를 유지한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "OVERLAPPING_ANCHORS",
+        "ORIGINAL_ANCHORS",
+        "CORRECTION_PRESERVED"
+      ],
+      "response_file": "responses/policy-overlap-all-advanced.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He go home. He was tired."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 3,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": true,
+            "issue_tags": [
+              "overlapping_anchors"
+            ],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "went"
+            },
+            "auto_place": false,
+            "stage_expectations": {
+              "location": {
+                "requires_review": false,
+                "auto_place": true
+              },
+              "edit": {
+                "requires_review": false,
+                "auto_place": true
+              }
+            }
+          },
+          {
+            "candidate_index": 1,
+            "original_text": "He go home. He was tired.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 25
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": true,
+            "issue_tags": [
+              "overlapping_anchors"
+            ],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "He was tired when he went home."
+            },
+            "auto_place": false,
+            "stage_expectations": {
+              "location": {
+                "requires_review": false,
+                "auto_place": true
+              },
+              "edit": {
+                "requires_review": false,
+                "auto_place": true
+              }
+            }
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          1,
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-overlap-standard-grammar-support",
+      "category": "edge",
+      "description": "교정과 최종 개선문은 모두 학생 원문에 연결하고 겹침 경고와 검토 필요 상태를 유지한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "OVERLAPPING_ANCHORS",
+        "ORIGINAL_ANCHORS",
+        "CORRECTION_PRESERVED"
+      ],
+      "response_file": "responses/policy-overlap-standard-grammar-support.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He go home. He was tired."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "go",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 3,
+                "end": 5
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": true,
+            "issue_tags": [
+              "overlapping_anchors"
+            ],
+            "annotation": {
+              "base_type": "strikethrough",
+              "category": "error",
+              "color": "red",
+              "correction_text": "went"
+            },
+            "auto_place": false,
+            "stage_expectations": {
+              "location": {
+                "requires_review": false,
+                "auto_place": true
+              },
+              "edit": {
+                "requires_review": false,
+                "auto_place": true
+              }
+            }
+          },
+          {
+            "candidate_index": 1,
+            "original_text": "He go home. He was tired.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 25
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": true,
+            "issue_tags": [
+              "overlapping_anchors"
+            ],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "He was tired when he went home."
+            },
+            "auto_place": false,
+            "stage_expectations": {
+              "location": {
+                "requires_review": false,
+                "auto_place": true
+              },
+              "edit": {
+                "requires_review": false,
+                "auto_place": true
+              }
+            }
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          1,
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-grammar-sentence-suggestion",
+      "category": "valid",
+      "description": "문법 ADVANCED의 능동태 전환은 문장 단위 선택적 개선으로 허용한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "ADVANCED_SCOPE"
+      ],
+      "response_file": "responses/policy-grammar-sentence-suggestion.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "The mystery was solved by Nate."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "The mystery was solved by Nate.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 31
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "Nate solved the mystery."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-grammar-clause-suggestion",
+      "category": "valid",
+      "description": "문법 ADVANCED의 관계절 축약을 CLAUSE와 REPLACE로 표현할 수 있다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "ADVANCED_SCOPE"
+      ],
+      "response_file": "responses/policy-grammar-clause-suggestion.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "The tortoise that was sitting by the door was lost."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "that was sitting by the door",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 13,
+                "end": 41
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "sitting by the door"
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-content-summary-suggestion",
+      "category": "valid",
+      "description": "기존 정보의 반복을 줄이는 내용 ADVANCED 요약은 연속 문장 묶음으로 허용한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "ADVANCED_SCOPE",
+        "MULTILINE"
+      ],
+      "response_file": "responses/policy-content-summary-suggestion.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Benjamin helped the group escape."
+          },
+          {
+            "line_id": 2,
+            "text": "He used a file to free them."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "Benjamin helped the group escape.\nHe used a file to free them.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 33
+              },
+              {
+                "line_id": 2,
+                "start": 0,
+                "end": 28
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ],
+              [
+                0.1,
+                0.3,
+                0.8,
+                0.35
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "Benjamin used a file to free the group."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-content-standard-structure-support",
+      "category": "valid",
+      "description": "내용 ADVANCED의 요약에 필요한 문장 구조 STANDARD 보조 수정을 허용한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "ADVANCED_SCOPE",
+        "STANDARD_SUPPORT",
+        "MULTILINE"
+      ],
+      "response_file": "responses/policy-content-standard-structure-support.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Benjamin helped the group escape."
+          },
+          {
+            "line_id": 2,
+            "text": "He used a file to free them."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [
+          {
+            "candidate_index": 0,
+            "original_text": "Benjamin helped the group escape.\nHe used a file to free them.",
+            "resolved_anchors": [
+              {
+                "line_id": 1,
+                "start": 0,
+                "end": 33
+              },
+              {
+                "line_id": 2,
+                "start": 0,
+                "end": 28
+              }
+            ],
+            "valid_target_boxes": [
+              [
+                0.1,
+                0.2,
+                0.8,
+                0.25
+              ],
+              [
+                0.1,
+                0.3,
+                0.8,
+                0.35
+              ]
+            ],
+            "requires_review": false,
+            "issue_tags": [],
+            "annotation": {
+              "base_type": "underline",
+              "category": "improvement",
+              "color": "blue",
+              "correction_text": "Benjamin used a file to free the group."
+            },
+            "auto_place": true
+          }
+        ],
+        "reviews": [],
+        "excluded": [],
+        "display_order": [
+          0
+        ],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 1,
+            "displayed_count": 1,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-standard-primary-suggestion-excluded",
+      "category": "validation",
+      "description": "대표 영역이 STANDARD인 독립적인 선택적 어휘 제안은 다른 영역이 ADVANCED여도 제외한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "STANDARD_REGRESSION",
+        "STANDARD_SUGGESTION"
+      ],
+      "response_file": "responses/policy-standard-primary-suggestion-excluded.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "good"
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "standard_suggestion"
+            ]
+          }
+        ],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "STANDARD",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-disabled-support-excluded",
+      "category": "validation",
+      "description": "보조 수정의 문법 영역이 OFF라면 주된 문장 구조가 ADVANCED여도 계속 제외한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "DISABLED_AREA"
+      ],
+      "response_file": "responses/policy-disabled-support-excluded.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Tom opened the door. Tom walked into the room."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [],
+        "excluded": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "issue_area_not_selected"
+            ]
+          }
+        ],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": null,
+            "maximum_count": 0,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-grammar-sentence-correction-review",
+      "category": "validation",
+      "description": "문법 ADVANCED여도 CORRECTION의 문장 전체 재작성 제한은 유지한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "CORRECTION_SCOPE_UNCHANGED"
+      ],
+      "response_file": "responses/policy-grammar-sentence-correction-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He go home."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "area_scope_violation"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-content-sentence-correction-review",
+      "category": "validation",
+      "description": "내용 ADVANCED에서도 CORRECTION의 범위는 단어·구로 유지한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "CORRECTION_SCOPE_UNCHANGED"
+      ],
+      "response_file": "responses/policy-content-sentence-correction-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "The trip was fun fun."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "area_scope_violation"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-vocabulary-sentence-suggestion-review",
+      "category": "validation",
+      "description": "어휘 ADVANCED의 제안도 문장 전체 재작성으로 확대하지 않는다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "VOCABULARY_SCOPE_UNCHANGED"
+      ],
+      "response_file": "responses/policy-vocabulary-sentence-suggestion-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He gave a talk."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "area_scope_violation"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-grammar-sentence-group-suggestion-review",
+      "category": "validation",
+      "description": "문법 ADVANCED의 확장은 한 문장까지이며 문장 묶음의 흐름 개선은 계속 문장 구조의 책임이다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "GRAMMAR_GROUP_BOUNDARY"
+      ],
+      "response_file": "responses/policy-grammar-sentence-group-suggestion-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He go home. He was tired."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "area_scope_violation"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-corrected-baseline-anchor-review",
+      "category": "validation",
+      "description": "가상 교정본은 앵커 원문으로 사용할 수 없으며 실제 학생 원문과 불일치하면 검토 대상으로 남긴다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "ORIGINAL_ANCHORS",
+        "ANCHOR_MISMATCH"
+      ],
+      "response_file": "responses/policy-corrected-baseline-anchor-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "He go home. He was tired."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "anchor_not_found"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-sentence-replace-operation-review",
+      "category": "validation",
+      "description": "문법의 문장 범위가 허용되어도 문장 전체 교체를 일반 REPLACE 동작으로 신고할 수 없다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "SCOPE_OPERATION_MISMATCH"
+      ],
+      "response_file": "responses/policy-sentence-replace-operation-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "The mystery was solved by Nate."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "scope_operation_mismatch"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "policy-paragraph-boundary-review",
+      "category": "validation",
+      "description": "내용 요약 범위를 확대해도 빈 줄을 넘는 원문 연결은 계속 차단한다.",
+      "tags": [
+        "ADVANCED_POLICY_TARGET",
+        "PARAGRAPH_BOUNDARY"
+      ],
+      "response_file": "responses/policy-paragraph-boundary-review.json",
+      "context": {
+        "page_number": 1,
+        "transcription_lines": [
+          {
+            "line_id": 1,
+            "text": "Benjamin helped the group escape."
+          },
+          {
+            "line_id": 2,
+            "text": ""
+          },
+          {
+            "line_id": 3,
+            "text": "He used a file to free them."
+          }
+        ],
+        "selected_areas": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED"
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED"
+          }
+        ]
+      },
+      "expected": {
+        "parse_result": "ACCEPT",
+        "generation_status": "SUCCEEDED",
+        "cards": [],
+        "reviews": [
+          {
+            "candidate_index": 0,
+            "issue_tags": [
+              "paragraph_boundary"
+            ]
+          }
+        ],
+        "excluded": [],
+        "display_order": [],
+        "summary": [
+          {
+            "area": "GRAMMAR_SPELLING",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "VOCABULARY_EXPRESSION",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "SENTENCE_STRUCTURE",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 0
+          },
+          {
+            "area": "CONTENT_SUMMARY",
+            "level": "ADVANCED",
+            "maximum_count": 7,
+            "validated_count": 0,
+            "displayed_count": 0,
+            "omitted_count": 1
+          }
+        ]
+      }
     }
   ]
 }

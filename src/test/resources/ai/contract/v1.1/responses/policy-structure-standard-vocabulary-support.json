@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "SUGGESTION",
+      "area": "SENTENCE_STRUCTURE",
+      "issue_kinds": [
+        "sentence_structure",
+        "vocabulary"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "Mia gave a short talk. Mia explained the plan.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "In a short talk, Mia explained the plan.",
+      "guidance": null,
+      "reason": "원문의 의미를 유지하며 해당 영역을 선택적으로 개선합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.25
+        ]
+      ],
+      "revision_scope": "SENTENCE_GROUP",
+      "edit": {
+        "operation": "RESTRUCTURE",
+        "text": "In a short talk, Mia explained the plan.",
+        "position": null
+      }
+    }
+  ]
+}
