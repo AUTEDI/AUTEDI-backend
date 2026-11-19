@@ -345,6 +345,59 @@ class AiCorrectionResponseValidatorTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(AiCorrectionLevel.class)
+    void keepsNonStructureSentenceCorrectionsInReviewAtBothLevels(AiCorrectionLevel level) {
+        for (AiArea area : List.of(AiArea.GRAMMAR_SPELLING, AiArea.VOCABULARY_EXPRESSION, AiArea.CONTENT_SUMMARY)) {
+            AiCorrectionItem item = withScope(
+                    replacement(1, "I go home.", "I went home.", area, AiFeedbackType.CORRECTION),
+                    AiRevisionScope.SENTENCE,
+                    AiEditOperation.RESTRUCTURE);
+            AiValidatedItem result = check(List.of(item), List.of("I go home."), Map.of(area, level))
+                    .candidates()
+                    .getFirst();
+            assertDisposition(result, AiItemDisposition.REVIEW, AiValidationCode.AREA_SCOPE_VIOLATION);
+            assertHasCode(result, AiValidationCode.SCOPE_OPERATION_MISMATCH);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AiArea.class,
+            names = {"GRAMMAR_SPELLING", "CONTENT_SUMMARY"})
+    void doesNotExpandSentenceScopeForStandardSuggestions(AiArea area) {
+        AiCorrectionItem item = withScope(
+                replacement(1, "I go home.", "I went home.", area, AiFeedbackType.SUGGESTION),
+                AiRevisionScope.SENTENCE,
+                AiEditOperation.RESTRUCTURE);
+        AiValidatedItem result = check(List.of(item), List.of("I go home."), Map.of(area, AiCorrectionLevel.STANDARD))
+                .candidates()
+                .getFirst();
+        assertDisposition(result, AiItemDisposition.EXCLUDED, AiValidationCode.STANDARD_SUGGESTION);
+        assertHasCode(result, AiValidationCode.AREA_SCOPE_VIOLATION);
+        assertHasCode(result, AiValidationCode.SCOPE_OPERATION_MISMATCH);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "policy-grammar-clause-suggestion, RESTRUCTURE",
+        "policy-grammar-sentence-suggestion, REPLACE",
+        "policy-content-summary-suggestion, REPLACE"
+    })
+    void rejectsWrongOperationsEvenWhenTheAdvancedSuggestionScopeIsAllowed(String fixtureId, AiEditOperation operation)
+            throws IOException {
+        JsonNode fixture = fixtureCase(fixtureId);
+        ObjectNode response =
+                (ObjectNode) JSON.readTree(resource(fixture.get("response_file").asString()));
+        ((ObjectNode) response.at("/items/0/edit")).put("operation", operation.name());
+        AiValidatedItem result = validator
+                .validate(parser.parse(response.toString()), context(fixture))
+                .candidates()
+                .getFirst();
+        assertDisposition(result, AiItemDisposition.REVIEW, AiValidationCode.SCOPE_OPERATION_MISMATCH);
+        assertFalse(result.issues().stream().anyMatch(issue -> issue.code() == AiValidationCode.AREA_SCOPE_VIOLATION));
+    }
+
     @Test
     void checksWordScopeAgainstVerifiedSourceWithoutUsingPhysicalLineCountAsScope() {
         AiCorrectionItem phrase = replacement(

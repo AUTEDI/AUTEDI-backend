@@ -1,6 +1,6 @@
 # ADVANCED 정책 변경의 기대 결과
 
-이 문서는 합의한 정책과 합성 JSON 응답의 기대 처리를 고정하고 단계별 구현 결과를 기록한다. AI 응답 형식은 `AUTEDI-AI-CONTRACT-v1.1`의 기존 12개 필드를 유지한다. 현재는 `checkSettings()`의 영역·레벨 검증만 변경했으며 프롬프트·API·DB·수정 범위 정책은 유지한다.
+이 문서는 합의한 정책과 합성 JSON 응답의 기대 처리를 고정하고 단계별 구현 결과를 기록한다. AI 응답 형식은 `AUTEDI-AI-CONTRACT-v1.1`의 기존 12개 필드를 유지한다. 현재는 `checkSettings()`의 영역·레벨 검증과 `checkScope()`의 수정 범위·동작 조합을 구현했으며 프롬프트·API·DB는 유지한다.
 
 `cases.json`의 `ADVANCED_POLICY_TARGET` 태그가 붙은 18개 사례를 기존 테스트 경로에 연결했다. 이 자료는 실제 모델 출력이나 첨삭 품질의 정답지가 아니다. 설명용 좌표를 사용하며, 서버의 허용·검토·제외 정책을 검증한다.
 
@@ -39,10 +39,10 @@ AI에 보내는 응답은 `responses/*.json`뿐이다. 입력·설정·기대값
 | [policy-structure-standard-vocabulary-support](responses/policy-structure-standard-vocabulary-support.json) | 구조 ADVANCED + 어휘 STANDARD의 보조 수정 허용 | checkSettings 반영: 통과 |
 | [policy-overlap-all-advanced](responses/policy-overlap-all-advanced.json) | 교정·개선 두 카드 유지, 둘 다 겹침 경고·검토 필요, 자동 배치 금지 | 동일 |
 | [policy-overlap-standard-grammar-support](responses/policy-overlap-standard-grammar-support.json) | 문법 STANDARD여도 두 카드와 겹침 경고 유지 | checkSettings 반영: 통과 |
-| [policy-grammar-sentence-suggestion](responses/policy-grammar-sentence-suggestion.json) | 능동태 전환을 문법 SENTENCE + RESTRUCTURE로 허용 | 현재 범위·동작 정책상 검토 대상 |
-| [policy-grammar-clause-suggestion](responses/policy-grammar-clause-suggestion.json) | 관계절 축약을 문법 CLAUSE + REPLACE로 허용 | 현재 범위 정책상 검토 대상 |
-| [policy-content-summary-suggestion](responses/policy-content-summary-suggestion.json) | 기존 내용의 연속 문장 요약 허용 | 현재 범위·동작 정책상 검토 대상 |
-| [policy-content-standard-structure-support](responses/policy-content-standard-structure-support.json) | 내용 요약에 필요한 구조 STANDARD 보조 수정 허용 | checkSettings 통과, 현재 범위·동작 정책상 검토 대상 |
+| [policy-grammar-sentence-suggestion](responses/policy-grammar-sentence-suggestion.json) | 능동태 전환을 문법 SENTENCE + RESTRUCTURE로 허용 | checkScope 반영: 통과 |
+| [policy-grammar-clause-suggestion](responses/policy-grammar-clause-suggestion.json) | 관계절 축약을 문법 CLAUSE + REPLACE로 허용 | checkScope 반영: 통과 |
+| [policy-content-summary-suggestion](responses/policy-content-summary-suggestion.json) | 기존 내용의 연속 문장 요약 허용 | checkScope 반영: 통과 |
+| [policy-content-standard-structure-support](responses/policy-content-standard-structure-support.json) | 내용 요약에 필요한 구조 STANDARD 보조 수정 허용 | checkSettings/checkScope 반영: 통과 |
 | [policy-standard-primary-suggestion-excluded](responses/policy-standard-primary-suggestion-excluded.json) | 대표 영역 STANDARD의 독립 제안 제외 | 동일 |
 | [policy-disabled-support-excluded](responses/policy-disabled-support-excluded.json) | OFF 보조 영역을 포함한 제안 제외 | 동일 |
 | [policy-grammar-sentence-correction-review](responses/policy-grammar-sentence-correction-review.json) | 문법 CORRECTION의 문장 전체 수정은 검토 대상 | 동일 |
@@ -104,3 +104,14 @@ Java 21에서 같은 명령으로 682개를 실행했다. 674개 통과, 8개 �
 - 대표 STANDARD의 혼합 제안 차단과 OFF 보조 영역 차단도 단위 테스트에서 확인했다.
 - 내용 요약의 STANDARD 구조 보조 수정도 영역·레벨 단계는 통과하지만, 미구현 범위·동작 정책 때문에 검토 대상으로 남는다.
 - 남은 실패는 문법·내용의 범위 확장 사례 4개와 범위 행렬 4개다. 따라서 전체 테스트 명령은 아직 실패한다.
+
+### checkScope 구현 단계의 실행 결과
+
+대표 영역이 ADVANCED이고 `feedback_type=SUGGESTION`인 경우에만 위 범위 행렬을 확장했다. CORRECTION과 STANDARD의 기존 범위, 어휘의 단어·구 제한, 문법의 문장 묶음 금지는 유지한다. 문장 재구성은 허용된 문장 범위에서만 RESTRUCTURE를 사용할 수 있고, 문장 전체 교체를 일반 REPLACE 동작으로 신고하면 계속 검토 대상으로 분류한다.
+
+Java 21에서 v1.1 계약 테스트 689개와 라우팅 20개, HTTP 클라이언트 23개, 저장 61개를 실행했다. 총 793개 모두 통과했으며 실패·오류·건너뜀 0개다. `spotlessCheck`도 통과했다.
+
+- 앞 단계에서 남긴 정책 차이 8개가 모두 해결됐다. 기존 18개 정책 예제와 20개 범위 행렬의 기대값은 변경하지 않았다.
+- CORRECTION의 범위를 두 레벨 모두 유지하는 테스트 2개, STANDARD SUGGESTION의 범위를 확장하지 않는 테스트 2개, 허용된 범위라도 잘못된 동작을 거절하는 테스트 3개를 추가했다.
+- 원문·좌표·수정 동작의 일관성·GUIDANCE·개수·겹침 검증은 변경하지 않았다.
+- 프롬프트와 실제 AI 요청 횟수는 변경하지 않았으며, 프롬프트 정합성과 모델 품질 평가는 이후 단계다.

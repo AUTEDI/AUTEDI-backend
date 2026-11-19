@@ -33,7 +33,7 @@ public final class AiCorrectionResponseValidator {
         for (AiEditValidationResult edit : edits.validate(locations.validate(response, context.location()))) {
             Candidate candidate = new Candidate(edit);
             checkSettings(candidate, context.selectedAreas());
-            checkScope(candidate);
+            checkScope(candidate, context.selectedAreas());
             checkGuidance(candidate);
             candidates.add(candidate);
         }
@@ -103,7 +103,7 @@ public final class AiCorrectionResponseValidator {
         };
     }
 
-    private static void checkScope(Candidate candidate) {
+    private static void checkScope(Candidate candidate, Map<AiArea, AiCorrectionLevel> selected) {
         AiCorrectionItem item = candidate.original();
         if (item.action() != AiAction.REPLACE
                 || item.area() == null
@@ -122,18 +122,28 @@ public final class AiCorrectionResponseValidator {
                         > 1) {
             candidate.review(AiValidationCode.SCOPE_TEXT_MISMATCH, "revision_scope", "여러 단어의 원문 범위를 WORD로 신고할 수 없습니다.");
         }
-        if (item.area() != AiArea.SENTENCE_STRUCTURE
-                && scope != AiRevisionScope.WORD
-                && scope != AiRevisionScope.PHRASE) {
-            candidate.review(
-                    AiValidationCode.AREA_SCOPE_VIOLATION, "revision_scope", "이 영역의 원문 수정 범위는 WORD 또는 PHRASE여야 합니다.");
+        boolean scopeAllowed = scope == AiRevisionScope.WORD
+                || scope == AiRevisionScope.PHRASE
+                || item.area() == AiArea.SENTENCE_STRUCTURE;
+        boolean advancedSuggestion = item.feedbackType() == AiFeedbackType.SUGGESTION
+                && selected.get(item.area()) == AiCorrectionLevel.ADVANCED;
+        if (!scopeAllowed && advancedSuggestion) {
+            scopeAllowed = switch (item.area()) {
+                case GRAMMAR_SPELLING -> scope == AiRevisionScope.CLAUSE || scope == AiRevisionScope.SENTENCE;
+                case CONTENT_SUMMARY -> sentence;
+                case VOCABULARY_EXPRESSION, SENTENCE_STRUCTURE -> false;
+            };
         }
-        if (operation == AiEditOperation.RESTRUCTURE && (item.area() != AiArea.SENTENCE_STRUCTURE || !sentence)
+        if (!scopeAllowed) {
+            candidate.review(
+                    AiValidationCode.AREA_SCOPE_VIOLATION, "revision_scope", "선택한 영역·레벨·피드백 유형에서 허용하지 않는 수정 범위입니다.");
+        }
+        if (operation == AiEditOperation.RESTRUCTURE && (!scopeAllowed || !sentence)
                 || operation == AiEditOperation.REPLACE && sentence) {
             candidate.review(
                     AiValidationCode.SCOPE_OPERATION_MISMATCH,
                     "edit.operation",
-                    "문장 재구성은 SENTENCE_STRUCTURE의 SENTENCE 또는 SENTENCE_GROUP이어야 하며 문장 전체 교체는 RESTRUCTURE로 표현합니다.");
+                    "문장 전체 교체는 해당 영역·레벨·피드백 유형에서 허용된 SENTENCE 또는 SENTENCE_GROUP과 RESTRUCTURE로 표현해야 합니다.");
         }
     }
 
