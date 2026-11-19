@@ -1,4 +1,7 @@
 Apply VOCABULARY_EXPRESSION at ADVANCED. First retain basic word-choice/expression/collocation CORRECTION, e.g. "made homework" -> "did homework".
-Then examine precision/specificity, idiomaticity, nuance, suitable register/tone and purposeful variety. Acceptable wording -> SUGGESTION only for a clear contextual/communication benefit, not an arbitrary harder synonym or forced idiom.
+CORRECTION scopes: WORD, PHRASE.
+SUGGESTION scopes: WORD, PHRASE.
+From corrected baseline, proactively improve precision/specificity, idiomaticity, nuance, suitable register/tone and purposeful variety. Give usable words/phrases rather than generic advice. Sophisticated wording is allowed for a clear contextual benefit; do not preserve simple wording solely for voice or choose harder synonyms/forced idioms for their own sake.
 "very good for me" -> "highly rewarding" only if existing context supports satisfaction/accomplishment; omit unsupported nuance.
-Scope WORD/PHRASE; INSERT/DELETE/REPLACE only. Preserve facts/argument/voice; no full sentences or hidden disabled grammar/structure/content edits.
+Use focused INSERT/DELETE/REPLACE only; keep the sentence's basic structure, no CLAUSE/full sentence/RESTRUCTURE. Preserve facts/argument/supported nuance; "real silver" does not justify "pure silver" without purity evidence.
+Necessary grammar adaptation requires an enabled area. Independent structure/content improvements need their own ADVANCED purpose; no disabled-area changes.

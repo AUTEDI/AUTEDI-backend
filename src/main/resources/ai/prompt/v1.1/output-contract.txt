@@ -3,6 +3,7 @@ The top-level object contains only items, an array. Every item includes all twel
 action, feedback_type, area, issue_kinds, anchors, replacement, guidance, reason, location_uncertain, target_boxes, revision_scope, edit.
 Use explicit null for inapplicable nullable values and [] for empty arrays. Do not omit keys or emit Markdown or an API envelope.
 Use anchors and target_boxes; do not return the legacy anchor or boxes fields.
+Use the existing area field for the primary purpose. Do not add primary_area, supporting_edits, corrected_baseline, dependency IDs or any other fields.
 
 REPLACE: feedback_type is CORRECTION or SUGGESTION as permitted by the selected level; area is enabled; anchors is nonempty.
 replacement is the exact string to substitute for the complete selected source range, not null. Deletion uses replacement="".
@@ -19,14 +20,16 @@ grammar, spelling, punctuation -> GRAMMAR_SPELLING; vocabulary -> VOCABULARY_EXP
 sentence_structure -> SENTENCE_STRUCTURE; content -> CONTENT_SUMMARY.
 For REVIEW, use only ocr_mismatch, illegible, unclear_intent or image_problem. Do not mix ordinary and review kinds.
 The representative area must correspond to an included ordinary kind. Include no kind or hidden modification from a disabled area.
+For SUGGESTION, the primary area must be ADVANCED; other included kinds may belong to enabled STANDARD areas only for necessary supporting edits under the common principles.
 
 revision_scope describes the linguistic scope of the selected source, not its number of physical lines:
 WORD, PHRASE, CLAUSE, SENTENCE or SENTENCE_GROUP. Do not label several words WORD or disguise a sentence rewrite as PHRASE.
-For GRAMMAR_SPELLING, VOCABULARY_EXPRESSION and existing CONTENT_SUMMARY replacements, allow WORD or PHRASE only.
-SENTENCE_STRUCTURE may use all five scopes; sentence or sentence-group replacement must use RESTRUCTURE.
+For CORRECTION in either level, GRAMMAR_SPELLING, VOCABULARY_EXPRESSION and existing CONTENT_SUMMARY replacements allow WORD or PHRASE only. SENTENCE_STRUCTURE may use all five scopes, with sentence-wide repair only when a smaller repair cannot resolve the error.
+For ADVANCED SUGGESTION, GRAMMAR_SPELLING allows WORD, PHRASE, CLAUSE or SENTENCE; VOCABULARY_EXPRESSION allows WORD or PHRASE; SENTENCE_STRUCTURE allows all five scopes; CONTENT_SUMMARY allows WORD, PHRASE, SENTENCE or SENTENCE_GROUP.
+Sentence or sentence-group replacement must use edit.operation=RESTRUCTURE, with action=REPLACE. A local clause replacement uses edit.operation=REPLACE. Do not use RESTRUCTURE for WORD, PHRASE or CLAUSE.
 
 reason is a respectful, specific Korean explanation in 1-2 sentences; prefer one concise sentence and avoid repeating source text unnecessarily.
-Explain the actual error for CORRECTION. For SUGGESTION, acknowledge that the original is acceptable and explain the optional benefit.
+Explain the actual error for CORRECTION. For SUGGESTION, explain its optional benefit over the corrected baseline; do not imply that any separately identified source errors were acceptable.
 For REVIEW, explain what the teacher should check. Do not include hidden analysis, scores or a second rewritten essay.
 Do not return color, category, annotation_id, tool types, correction or click coordinates, DB IDs, level, start/end, warnings or summary.
 The server and renderer create display metadata, validation results and layout; these are not AI response fields.

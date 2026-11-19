@@ -21,9 +21,15 @@ import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationCo
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationContext;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiValidationResult;
 import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptVariant;
+import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiAreaSummary;
+import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiItemDisposition;
+import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidatedItem;
+import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationIssue;
 import com.ceos24.autedi.domain.generation.entity.GenerationClientMode;
 import com.ceos24.autedi.domain.generation.entity.GenerationResultStatus;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
+import com.ceos24.autedi.domain.generation.entity.WorksheetGenerationResult;
+import com.ceos24.autedi.domain.generation.entity.WorksheetTranscription;
 import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
 import com.ceos24.autedi.domain.generation.persistence.StoredGenerationResult;
 import com.ceos24.autedi.domain.generation.persistence.StoredTranscription;
@@ -60,6 +66,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -584,6 +591,69 @@ class GenerationResultStorageTest {
                 JSON.writeValueAsString(validation),
                 oldId);
         assertEquals(validation, storage.restoreResult(academyId, oldId).validationResult());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"policy-grammar-sentence-suggestion, REVIEW", "policy-structure-standard-grammar-support, EXCLUDED"})
+    void restoresHistoricalV11DecisionsWithoutApplyingTheRelaxedPolicy(
+            String fixtureId, AiItemDisposition oldDisposition) throws Exception {
+        var input = v11Case(fixtureId);
+        assertEquals(1, input.validation().cards().size(), "같은 응답도 새 정책에서는 정상 카드가 됩니다.");
+        var current = input.validation().candidates().getFirst();
+        var oldIssues = new ArrayList<AiValidationIssue>();
+        if (oldDisposition == AiItemDisposition.REVIEW) {
+            oldIssues.add(new AiValidationIssue(
+                    com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationCode.AREA_SCOPE_VIOLATION,
+                    "revision_scope",
+                    "이 영역의 원문 수정 범위는 WORD 또는 PHRASE여야 합니다."));
+            oldIssues.add(new AiValidationIssue(
+                    com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationCode
+                            .SCOPE_OPERATION_MISMATCH,
+                    "edit.operation",
+                    "문장 재구성은 SENTENCE_STRUCTURE에만 허용됩니다."));
+        } else {
+            oldIssues.add(new AiValidationIssue(
+                    com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationCode.STANDARD_SUGGESTION,
+                    "feedback_type",
+                    "Standard 영역에는 선택적 개선 제안을 포함할 수 없습니다."));
+        }
+        var oldCandidate = new AiValidatedItem(current.editValidation(), oldDisposition, oldIssues);
+        var oldSummary = input.validation().summary().stream()
+                .map(summary -> new AiAreaSummary(
+                        summary.area(),
+                        summary.level(),
+                        summary.maximumCount(),
+                        0,
+                        0,
+                        summary.area() == current.original().area() ? 1 : 0))
+                .toList();
+        var oldValidation = new com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationResult(
+                input.validation().originalResponse(), input.validation().context(), List.of(oldCandidate), oldSummary);
+        var oldMetadata = new GenerationResultMetadata(
+                "gpt-6.1-terra", "AUTEDI-AI-CONTRACT-v1.1", "AUTEDI-CORRECTION-PROMPT-v1.1", "AUTEDI-VALIDATION-v1.1");
+        // 과거에 저장된 행을 합성한다. 현재의 재검증 저장 경로로 과거 결과를 다시 만들지 않는다.
+        Long resultId = tx.execute(status -> {
+            var row = WorksheetGenerationResult.validatedV11(
+                    entityManager.find(WorksheetGeneration.class, input.generationId()),
+                    entityManager.find(WorksheetTranscription.class, input.transcriptionId()),
+                    oldMetadata,
+                    input.raw(),
+                    oldValidation,
+                    List.of());
+            entityManager.persist(row);
+            entityManager.flush();
+            return row.getId();
+        });
+        var restored = storage.restoreResult(academyId, resultId);
+        assertEquals(oldMetadata, restored.metadata());
+        assertEquals(input.raw(), restored.rawResponse());
+        assertEquals(oldValidation, restored.validationResultV11());
+        assertTrue(restored.validationResultV11().cards().isEmpty());
+        assertEquals(
+                oldDisposition,
+                restored.validationResultV11().candidates().getFirst().disposition());
+        assertTrue(restored.correctionLinks().isEmpty());
+        assertEquals(0, count("corrections"));
     }
 
     @Test

@@ -1,6 +1,6 @@
 # ADVANCED 정책 변경의 기대 결과
 
-이 문서는 합의한 정책과 합성 JSON 응답의 기대 처리를 고정하고 단계별 구현 결과를 기록한다. AI 응답 형식은 `AUTEDI-AI-CONTRACT-v1.1`의 기존 12개 필드를 유지한다. 현재는 `checkSettings()`의 영역·레벨 검증과 `checkScope()`의 수정 범위·동작 조합을 구현했으며 프롬프트·API·DB는 유지한다.
+이 문서는 합의한 정책과 합성 JSON 응답의 기대 처리를 고정하고 단계별 구현 결과를 기록한다. AI 응답 형식은 `AUTEDI-AI-CONTRACT-v1.1`의 기존 12개 필드를 유지한다. 현재는 `checkSettings()`의 영역·레벨 검증과 `checkScope()`의 수정 범위·동작 조합을 구현했으며 DEFAULT/COMPACT 프롬프트도 같은 정책으로 정리했다. API·DB·실제 AI 요청 횟수는 유지한다.
 
 `cases.json`의 `ADVANCED_POLICY_TARGET` 태그가 붙은 18개 사례를 기존 테스트 경로에 연결했다. 이 자료는 실제 모델 출력이나 첨삭 품질의 정답지가 아니다. 설명용 좌표를 사용하며, 서버의 허용·검토·제외 정책을 검증한다.
 
@@ -115,3 +115,30 @@ Java 21에서 v1.1 계약 테스트 689개와 라우팅 20개, HTTP 클라이언
 - CORRECTION의 범위를 두 레벨 모두 유지하는 테스트 2개, STANDARD SUGGESTION의 범위를 확장하지 않는 테스트 2개, 허용된 범위라도 잘못된 동작을 거절하는 테스트 3개를 추가했다.
 - 원문·좌표·수정 동작의 일관성·GUIDANCE·개수·겹침 검증은 변경하지 않았다.
 - 프롬프트와 실제 AI 요청 횟수는 변경하지 않았으며, 프롬프트 정합성과 모델 품질 평가는 이후 단계다.
+
+### 프롬프트 정합성 반영 단계의 실행 결과
+
+`ai/prompt/v1.1`과 `ai/prompt/v1.1-compact`의 공통 원칙·출력 계약·수정 동작·앵커 지침과 ADVANCED 전용 4개 파일을 함께 수정했다. STANDARD 전용 8개 파일은 내용 변경 없이 유지했고, 응답 Schema·DTO·계약 ID·프로필 버전 상수·운영 Java 코드는 변경하지 않았다.
+
+- 한 번의 응답 안에서 기본 오류 후보를 먼저 찾고 허용된 교정을 가상 적용한 baseline에서 추가 개선을 검토하도록 명시했다. baseline이나 분석 과정은 응답하지 않으며 모든 앵커는 실제 학생 원문을 사용한다.
+- 대표 ADVANCED 영역의 개선을 완성하는 데 필요한 다른 선택된 STANDARD 영역의 보조 수정을 허용한다. 독립적으로 가치 있는 다른 영역의 선택적 개선은 그 영역도 ADVANCED여야 하며, OFF 영역은 계속 차단한다.
+- CORRECTION은 기존 범위와 필요한 최소 수정을 유지한다. ADVANCED SUGGESTION의 범위와 RESTRUCTURE 조건은 구현된 검증기에 맞췄다.
+- STANDARD와 기본 교정에서는 학생의 표현·문체 보존을 유지한다. ADVANCED SUGGESTION에서는 표현·문장 형태·문체를 바꿀 수 있으나 사실·핵심 의미·의도·근거 있는 관계는 보존한다.
+- 교정 구간의 추가 SUGGESTION을 일괄 금지하던 지침을 제거했다. 교정 카드와 의미 있는 추가 개선 카드는 같은 원문에 연결할 수 있고, 겹침 경고는 서버가 처리한다.
+- 완성된 개선 표현을 제공하고, 문맥 없는 어려운 동의어·강도 변화·인과관계·동시성·새로운 사건은 추가하지 않도록 구체화했다.
+- 새 `primary_area`, `supporting_edits`, `corrected_baseline` 필드 없이 기존 12개 필드로 반환한다. 최대 7개와 CORRECTION 우선, GUIDANCE의 영어 10단어 제한은 유지한다.
+
+두 프롬프트의 CORRECTION/SUGGESTION 범위 선언을 실제 검증기와 대조하고, 퇴역한 전역 금지 지침이 남아 있지 않은지 검사하는 테스트를 추가했다. 기존 81개 설정 조합 검사도 유지한다.
+
+Java 21에서 v1.1 계약 테스트 693개와 라우팅·클라이언트·저장 회귀 테스트 104개, 총 797개가 모두 통과했다. 실패·오류·건너뜀 0개이며 `spotlessCheck`도 통과했다. 실제 모델은 호출하지 않았다.
+
+프롬프트 조립 테스트는 다음 검토용 전문도 생성한다.
+
+- `build/ai-prompt-preview/v1.1/default/all-advanced.txt`
+- `build/ai-prompt-preview/v1.1/default/all-standard.txt`
+- `build/ai-prompt-preview/v1.1/compact/all-advanced.txt`
+- `build/ai-prompt-preview/v1.1/compact/all-standard.txt`
+
+### 배포 전 버전·기존 작업 호환성 점검
+
+[별도 점검 결과](../../../../../../docs/ai_test_docs/AI-ADVANCED-배포전-버전-호환성-점검.md)에 버전 식별자 재사용과 기존 작업의 호환 범위를 기록했다. 전체 1,347개 테스트와 포맷 검사는 통과했으나, 배포 전 신규 동작 리비전 기록과 구·신 프로필·검증 버전의 호환 처리가 필요하다. 점검에서 운영 버전 상수나 배포 로직을 임의로 변경하지 않았다.

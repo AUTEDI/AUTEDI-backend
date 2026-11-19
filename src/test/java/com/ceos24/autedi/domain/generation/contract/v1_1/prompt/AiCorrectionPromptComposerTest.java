@@ -2,9 +2,18 @@ package com.ceos24.autedi.domain.generation.contract.v1_1.prompt;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiAction;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiAnchor;
 import com.ceos24.autedi.domain.generation.contract.v1_1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1_1.AiCorrectionContract;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiCorrectionItem;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiCorrectionResponse;
 import com.ceos24.autedi.domain.generation.contract.v1_1.AiCorrectionResponseParser;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiEdit;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiEditOperation;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiFeedbackType;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiIssueKind;
+import com.ceos24.autedi.domain.generation.contract.v1_1.AiRevisionScope;
 import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiCorrectionLevel;
 import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiCorrectionResponseValidator;
 import com.ceos24.autedi.domain.generation.contract.v1_1.validation.AiValidationContext;
@@ -19,6 +28,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -146,6 +157,63 @@ class AiCorrectionPromptComposerTest {
             assertEquals(AiCorrectionLevel.STANDARD, standard.selectedAreas().get(changed));
             assertEquals(standard.inputText(), advanced.inputText());
             assertEquals(standard.responseSchema(), advanced.responseSchema());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void declaredCorrectionAndSuggestionScopesMatchTheValidator(AiCorrectionPromptVariant variant) {
+        Map<AiArea, AiCorrectionLevel> settings = new EnumMap<>(AiArea.class);
+        for (AiArea area : AiArea.values()) settings.put(area, AiCorrectionLevel.ADVANCED);
+        AiCorrectionPrompt prompt = composer.compose(AiValidationContext.fromText(1, "go", settings), variant);
+        for (AiArea area : AiArea.values()) {
+            for (AiFeedbackType type : AiFeedbackType.values()) {
+                String prefix = type.name() + " scopes: ";
+                String declaration = areaSection(prompt, area)
+                        .lines()
+                        .filter(line -> line.startsWith(prefix))
+                        .findFirst()
+                        .orElseThrow(() -> new AssertionError(area + ": missing " + prefix));
+                assertTrue(declaration.endsWith("."), declaration);
+                Set<AiRevisionScope> declared = Arrays.stream(declaration
+                                .substring(prefix.length(), declaration.length() - 1)
+                                .split(", "))
+                        .map(AiRevisionScope::valueOf)
+                        .collect(Collectors.toSet());
+                for (AiRevisionScope scope : AiRevisionScope.values()) {
+                    AiCorrectionItem item = scopeProbe(area, type, scope);
+                    AiValidationContext context = AiValidationContext.fromText(
+                            1, item.anchors().getFirst().original(), settings);
+                    var checked = new AiCorrectionResponseValidator()
+                            .validate(new AiCorrectionResponse(List.of(item)), context);
+                    assertEquals(
+                            declared.contains(scope),
+                            checked.cards().size() == 1,
+                            variant + ": " + area + "/" + type + "/" + scope);
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void removesObsoleteBlanketRulesThatConflictWithAdvancedPolicy(AiCorrectionPromptVariant variant) {
+        Map<AiArea, AiCorrectionLevel> settings = new EnumMap<>(AiArea.class);
+        for (AiArea area : AiArea.values()) settings.put(area, AiCorrectionLevel.ADVANCED);
+        String instructions = composer.compose(AiValidationContext.fromText(1, "go", settings), variant)
+                .instructions();
+        for (String obsolete : List.of(
+                "A mixed SUGGESTION must concern only enabled ADVANCED areas.",
+                "mixed SUGGESTION requires every affected area to be ADVANCED",
+                "Do not create a competing SUGGESTION for a span already corrected.",
+                "create competing suggestions for corrected spans",
+                "Sentence-wide and clause-wide restructuring belong to an enabled SENTENCE_STRUCTURE area.",
+                "Clause/sentence restructuring requires enabled SENTENCE_STRUCTURE.",
+                "RESTRUCTURE: SENTENCE_STRUCTURE only",
+                "Preserve the student's facts, core meaning, intent and voice.",
+                "Preserve facts, the argument and voice.",
+                "or replace the student's voice.")) {
+            assertFalse(instructions.contains(obsolete), variant + ": " + obsolete);
         }
     }
 
@@ -294,6 +362,51 @@ class AiCorrectionPromptComposerTest {
         assertEquals(prompt.instructions(), saved.at("/prompt/instructions").asString());
         assertEquals(prompt.promptVersion(), saved.at("/prompt/promptVersion").asString());
         assertEquals(variant.name(), saved.at("/prompt/variant").asString());
+        for (AiCorrectionLevel level : AiCorrectionLevel.values()) {
+            Map<AiArea, AiCorrectionLevel> settings = new EnumMap<>(AiArea.class);
+            for (AiArea area : AiArea.values()) settings.put(area, level);
+            AiCorrectionPrompt allAreas =
+                    composer.compose(AiValidationContext.fromText(1, "He go home. Then he rested.", settings), variant);
+            Path output = directory.resolve("all-" + level.name().toLowerCase(Locale.ROOT) + ".txt");
+            Files.writeString(output, allAreas.instructions(), StandardCharsets.UTF_8);
+            assertEquals(allAreas.instructions(), Files.readString(output, StandardCharsets.UTF_8));
+        }
+    }
+
+    /** 정책 선언과 검증기를 대조하는 합성 입력이며 실제 AI 출력 품질 예시는 아니다. */
+    private static AiCorrectionItem scopeProbe(AiArea area, AiFeedbackType type, AiRevisionScope scope) {
+        String source =
+                switch (scope) {
+                    case WORD -> "go";
+                    case PHRASE -> "go home";
+                    case CLAUSE -> "I go home";
+                    case SENTENCE -> "I go home.";
+                    case SENTENCE_GROUP -> "I go home. I sleep.";
+                };
+        String replacement = source.replace("go", "went");
+        AiIssueKind kind =
+                switch (area) {
+                    case GRAMMAR_SPELLING -> AiIssueKind.GRAMMAR;
+                    case VOCABULARY_EXPRESSION -> AiIssueKind.VOCABULARY;
+                    case SENTENCE_STRUCTURE -> AiIssueKind.SENTENCE_STRUCTURE;
+                    case CONTENT_SUMMARY -> AiIssueKind.CONTENT;
+                };
+        AiEditOperation operation = scope == AiRevisionScope.SENTENCE || scope == AiRevisionScope.SENTENCE_GROUP
+                ? AiEditOperation.RESTRUCTURE
+                : AiEditOperation.REPLACE;
+        return new AiCorrectionItem(
+                AiAction.REPLACE,
+                type,
+                area,
+                List.of(kind),
+                List.of(new AiAnchor(1, source, 1)),
+                replacement,
+                null,
+                "프롬프트의 선언 범위를 검증하는 합성 제안입니다.",
+                false,
+                List.of(List.of(0.1, 0.2, 0.8, 0.3)),
+                scope,
+                new AiEdit(operation, replacement, null));
     }
 
     private static AiValidationContext mixedContext() {

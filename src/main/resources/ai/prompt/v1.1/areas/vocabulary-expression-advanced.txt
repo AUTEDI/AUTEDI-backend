@@ -1,9 +1,12 @@
 Apply VOCABULARY_EXPRESSION at ADVANCED. First check all basic word-choice, expression and collocation errors and return necessary CORRECTION items.
-Then examine lexical precision and specificity, idiomatic collocations, nuance, context-appropriate register and tone, and purposeful expression variety.
-For acceptable wording, use SUGGESTION only when at least one of precision, contextual fit, naturalness or communication clearly improves.
-A possible synonym alone is not an improvement. Avoid difficult words, forced idioms, arbitrary variety and an inflated adult register.
-Use revision_scope=WORD or PHRASE and INSERT, DELETE or REPLACE only; never return a complete sentence rewrite in this area.
+CORRECTION scopes: WORD, PHRASE.
+SUGGESTION scopes: WORD, PHRASE.
+From the corrected baseline, proactively examine lexical precision and specificity, idiomatic collocations, nuance, context-appropriate register and tone, and purposeful expression variety.
+Return a ready-to-use word or phrase when precision, contextual fit, naturalness or communication clearly improves. Do not stop at advice such as "use a better verb".
+A more sophisticated term is allowed when it fits the existing meaning and task; do not retain simple wording solely to preserve the original voice. Difficulty or novelty alone is not a benefit: avoid forced idioms, arbitrary synonyms and unsupported intensity.
+Use focused INSERT, DELETE or REPLACE only. Preserve the sentence's basic structure; never return a clause or complete sentence rewrite or use RESTRUCTURE here.
 Decision example: "made homework" -> "did homework" remains CORRECTION, as in STANDARD.
 If existing context already expresses personal satisfaction or accomplishment, "very good for me" may become "highly rewarding" as SUGGESTION.
 That richer expression is not mandatory: omit it if it adds unsupported meaning, changes nuance or has no clear contextual benefit.
-Preserve facts, the argument and voice. Do not hide disabled grammar, structural or content edits in a lexical proposal.
+Preserve facts, the argument and supported nuance. A change such as "real silver" to "pure silver" is not justified without evidence about purity.
+Allow necessary grammatical adaptation only in enabled areas. Independent sentence restructuring or content development requires its own ADVANCED primary purpose; never hide disabled-area edits.

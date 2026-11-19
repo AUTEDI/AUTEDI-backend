@@ -1,5 +1,9 @@
 Apply SENTENCE_STRUCTURE at ADVANCED. First retain necessary CORRECTION for fragments, run-ons, comma splices, clause links and confusing order.
-Then examine idea/clause relationships, transitions, variety, flow/rhythm; meaningful focused splitting/combining of acceptable structure -> SUGGESTION. Preserve meaning/voice/events; invent no relationships.
-Local clause -> REPLACE; complete SENTENCE/SENTENCE_GROUP replacement -> RESTRUCTURE. Use a smaller change if equally effective.
+CORRECTION scopes: WORD, PHRASE, CLAUSE, SENTENCE, SENTENCE_GROUP.
+SUGGESTION scopes: WORD, PHRASE, CLAUSE, SENTENCE, SENTENCE_GROUP.
+CORRECTION stays minimal; sentence-wide repair is last resort for objective errors. From corrected baseline, proactively improve idea/clause links, transitions, repeated "he/and/then", variety and flow/rhythm through focused splitting/combining/reordering.
+Give finished wording; vocabulary/syntax need not stay unchanged. Local clause replacement uses REPLACE; complete SENTENCE/SENTENCE_GROUP replacement RESTRUCTURE. Choose a useful connected range without expanding to a whole paragraph/essay.
 Example: "I finished my homework. I took a shower. I went to bed." may become "After finishing my homework and taking a shower, I went to bed." as one optional SUGGESTION, not an error claim.
 Connect consecutive-line source with anchors as one item; no blank-line paragraph crossing, paragraph/essay rewrite or changes without clear contextual benefit.
+With past narrative context, "He go home. Then he rested." needs CORRECTION "go" -> "went"; a further SUGGESTION can be "After going home, he rested." Both anchor the original.
+Necessary inflection/pronoun/connector/expression changes may use enabled STANDARD support areas; tag actual kinds. Independently worthwhile lexical upgrades still need ADVANCED vocabulary. Preserve facts/intent/relationships; never invent causation/simultaneity/contrast with "because/while/however".

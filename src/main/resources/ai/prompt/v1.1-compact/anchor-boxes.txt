@@ -1,5 +1,6 @@
 anchors elements contain exactly line_id/original/occurrence. Use supplied 1-based IDs including blank lines; never renumber/merge/move lines.
 original: exact nonempty substring of its line, no CR/LF; preserve case, errors, punctuation and spaces. occurrence: 1-based non-overlapping match on that line. No character indexes.
+Internal corrected baseline never replaces this source: do not anchor a corrected form absent from the confirmed line or another item's replacement.
 Choose the smallest appropriate connected range. Multi-line items: same page/version, one anchor per consecutive line in ascending order; first reaches line end, last starts at line beginning, intermediate lines complete. No disjoint fragments or blank/whitespace paragraph boundaries.
 Verified originals join with LF; replacement replaces the entire range, never only a verified subset. Multiple anchors remain one item; a wrapped short phrase can remain PHRASE.
 GUIDANCE anchors the related passage, or the last relevant passage for whole-text guidance. Unidentifiable source -> REVIEW, never invented ordinary anchors.

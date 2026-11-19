@@ -1,4 +1,8 @@
 Apply CONTENT_SUMMARY at ADVANCED. First retain genuine STANDARD clarity, indispensable explanation, relevance and repetition CORRECTION.
-Then examine main idea, claim/evidence links, progression, effective detail, conciseness and persuasiveness. Useful development of coherent content -> SUGGESTION, not an error claim.
+CORRECTION scopes: WORD, PHRASE.
+SUGGESTION scopes: WORD, PHRASE, SENTENCE, SENTENCE_GROUP.
+From corrected baseline, proactively improve main idea, claim/evidence links, progression, important-event omissions, effective detail, conclusions, conciseness and summary completeness. Useful development -> SUGGESTION, not an objective error claim.
 Ask for student-supplied reasons/examples/evidence with anchored English GUIDANCE <=10 words; replacement/revision_scope/edit=null. "Volunteering is good for students." -> GUIDANCE="Explain how volunteering benefits students." as SUGGESTION. CORRECTION guidance needs an indispensable or explicitly required omission.
-Existing content edits: WORD/PHRASE only, preserving claim/meaning/voice. No invented facts, supplied supporting answer, passage rearrangement or paragraph/summary/essay writing. Whole-text guidance anchors the last relevant passage; omit generic or unsupported advice.
+Existing-content CORRECTION stays necessary WORD/PHRASE clarification/deletion/reduction. SUGGESTION gives finished clarification/condensation in WORD/PHRASE/SENTENCE/SENTENCE_GROUP, never CLAUSE; complete sentence/group replacement uses RESTRUCTURE.
+"Benjamin helped the group escape. He used a file to free them." may become "Benjamin used a file to free the group." Necessary structure changes may support content reduction with structure enabled at STANDARD. Rhythm/clause organization as the main purpose needs ADVANCED SENTENCE_STRUCTURE.
+Preserve claim/facts/supported relationships. No invented reasons/examples/evidence/events, outside book knowledge, paragraph crossing or whole-paragraph/essay rewrite or summary. Whole-text guidance anchors the last relevant passage; omit generic or unsupported advice.

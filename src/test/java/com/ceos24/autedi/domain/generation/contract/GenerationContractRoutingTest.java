@@ -165,6 +165,33 @@ class GenerationContractRoutingTest {
                                 .build()));
     }
 
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void persistedV11ProfileIdentifiersStillWorkAfterTheConfiguredVariantChanges(AiCorrectionPromptVariant variant) {
+        // 현재 상수로 기대값을 만들지 않아 배포 전 저장된 실제 식별자의 호환성을 검사한다.
+        String oldPrompt = variant == AiCorrectionPromptVariant.DEFAULT
+                ? "AUTEDI-CORRECTION-PROMPT-v1.1"
+                : "AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT";
+        var persisted = new GenerationAiProfile(
+                GenerationContractVersion.V1_1,
+                variant,
+                new GenerationResultMetadata(
+                        "gpt-6.1-terra", "AUTEDI-AI-CONTRACT-v1.1", oldPrompt, "AUTEDI-VALIDATION-v1.1"));
+        AiCorrectionPromptVariant next = variant == AiCorrectionPromptVariant.DEFAULT
+                ? AiCorrectionPromptVariant.COMPACT
+                : AiCorrectionPromptVariant.DEFAULT;
+        var selector = new GenerationContractSelector(new GenerationContractProperties("v1.1", next.name()));
+        var job = WorksheetGeneration.builder()
+                .clientMode(GenerationClientMode.TERRA)
+                .requestAiProfile(persisted)
+                .build();
+        assertEquals(persisted, selector.forGeneration(GenerationClientMode.TERRA, job));
+        assertEquals(
+                persisted,
+                router.compose(persisted, input("Text.", AiArea.GRAMMAR_SPELLING, AiCorrectionLevel.STANDARD))
+                        .profile());
+    }
+
     @Test
     void unknownModelOrPromptFingerprintIsRejectedInsteadOfReinterpreted() {
         var known = profile(GenerationContractVersion.V1, AiCorrectionPromptVariant.DEFAULT);

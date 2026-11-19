@@ -15,7 +15,7 @@
 
 총 48개다: 기존 30개와 ADVANCED 정책 변경의 기대 결과를 고정한 `policy-*` 18개다. 분류는 정상 19개, 경계·개수 처리 7개, 서버 검증 위반 18개, 파서 거절 대상 4개다.
 
-**`policy-*`는 ADVANCED 정책의 기대 처리 결과다.** 현재 `checkSettings()`의 STANDARD 보조 영역 허용과 `checkScope()`의 수정 범위·동작 조합 확장을 반영했으며, 모든 정책 예제와 범위 행렬 테스트가 통과한다. 프롬프트 개선과 실제 모델의 첨삭 품질 평가는 별도 단계다. 구체적인 범위·예제·실행 결과는 [ADVANCED 정책 기대 결과](advanced-policy-targets.md)를 따른다.
+**`policy-*`는 ADVANCED 정책의 기대 처리 결과다.** 현재 `checkSettings()`의 STANDARD 보조 영역 허용과 `checkScope()`의 수정 범위·동작 조합 확장을 반영했으며, DEFAULT/COMPACT 프롬프트도 같은 정책으로 정리했다. 모든 정책 예제와 범위 행렬 테스트가 통과한다. 실제 모델의 첨삭 품질 평가는 별도 단계다. 구체적인 범위·예제·실행 결과는 [ADVANCED 정책 기대 결과](advanced-policy-targets.md)를 따른다.
 
 `cases.json`은 테스트 자료의 묶음이며 **AI 응답 형식이 아니다**. AI 응답은 각 `response_file`의 내용이다. 계약 버전·설정·기대 결과를 AI 응답에 합쳐 보내지 않는다.
 
