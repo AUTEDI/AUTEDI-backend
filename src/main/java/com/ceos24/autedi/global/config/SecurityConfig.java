@@ -1,5 +1,6 @@
 package com.ceos24.autedi.global.config;
 
+import com.ceos24.autedi.global.logging.RequestIdFilter;
 import com.ceos24.autedi.global.security.CustomAccessDeniedHandler;
 import com.ceos24.autedi.global.security.CustomAuthenticationEntryPoint;
 import com.ceos24.autedi.global.security.JwtAuthenticationFilter;
@@ -74,7 +75,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.AUTHORIZATION, HttpHeaders.LOCATION));
+        configuration.setExposedHeaders(List.of(
+                HttpHeaders.ETAG, HttpHeaders.AUTHORIZATION, HttpHeaders.LOCATION, RequestIdFilter.REQUEST_ID_HEADER));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
