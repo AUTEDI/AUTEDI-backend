@@ -138,11 +138,7 @@ public class WorksheetService {
             pages.add(page);
         }
 
-        log.info(
-                "학습지 다중 페이지 업로드 완료: worksheetId={}, originalFilename={}, pageCount={}",
-                savedWorksheet.getId(),
-                savedWorksheet.getOriginalFilename(),
-                pages.size());
+        log.info("학습지 다중 페이지 업로드 완료: worksheetId={}, pageCount={}", savedWorksheet.getId(), pages.size());
 
         if (qr != null) {
             eventPublisher.publishEvent(new WorksheetCreated(userId, qr.getSessionId(), savedWorksheet.getId()));
@@ -249,7 +245,7 @@ public class WorksheetService {
         // 기존 첨삭 설정은 유지
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
 
-        log.info("학습지 파일 교체 완료: worksheetId={}, newFilename={}", worksheet.getId(), worksheet.getOriginalFilename());
+        log.info("학습지 파일 교체 완료: worksheetId={}", worksheet.getId());
 
         if (qr != null) {
             eventPublisher.publishEvent(
