@@ -80,7 +80,9 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException e, HttpServletResponse response) {
-        log.debug("클라이언트가 먼저 연결을 끊어 비동기 응답을 쓸 수 없습니다: {}", e.getMessage());
+        log.debug(
+                "[api] 클라이언트가 먼저 연결을 끊어 비동기 응답을 쓸 수 없음: errorType={}",
+                e.getClass().getSimpleName());
     }
 
     @ExceptionHandler(Exception.class)

@@ -184,7 +184,7 @@ public class CorrectionService {
                 regions,
                 request.isApplied());
         correctionRepository.flush();
-        log.info("첨삭 내용 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
+        log.info("[feedback] 첨삭 내용 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
         return response(correction);
     }
@@ -239,13 +239,13 @@ public class CorrectionService {
         validateIfMatch(ifMatch, correction.getEtag());
 
         if (correction.getStatus() == CorrectionStatus.DELETED) {
-            log.info("이미 삭제된 첨삭 항목 (204 처리): correctionId={}", correctionId);
+            log.info("[feedback] 이미 삭제된 첨삭 항목 (204 처리): correctionId={}", correctionId);
             return correction.getEtag();
         }
 
         correction.delete();
         correctionRepository.flush();
-        log.info("첨삭 항목 논리 삭제 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
+        log.info("[feedback] 첨삭 항목 논리 삭제 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
         return correction.getEtag();
     }
@@ -259,13 +259,13 @@ public class CorrectionService {
         validateIfMatch(ifMatch, correction.getEtag());
 
         if (correction.getStatus() == CorrectionStatus.ACTIVE) {
-            log.info("이미 활성 상태인 첨삭 항목 (200 처리): correctionId={}", correctionId);
+            log.info("[feedback] 이미 활성 상태인 첨삭 항목 (200 처리): correctionId={}", correctionId);
             return response(correction);
         }
 
         correction.restore();
         correctionRepository.flush();
-        log.info("첨삭 항목 복원 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
+        log.info("[feedback] 첨삭 항목 복원 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
         return response(correction);
     }

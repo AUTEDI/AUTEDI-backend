@@ -43,7 +43,7 @@ public class AsyncConfig {
         executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.setRejectedExecutionHandler((task, pool) -> log.warn(
-                "SSE executor 포화로 전송 작업을 버립니다. queue={}", pool.getQueue().size()));
+                "[sse] executor 포화로 전송 작업을 버림: queue={}", pool.getQueue().size()));
         return executor;
     }
 }

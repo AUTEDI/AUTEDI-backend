@@ -47,7 +47,7 @@ class JwtTokenProviderLogTest {
         assertThat(logs.list).hasSize(1);
         ILoggingEvent event = logs.list.get(0);
         assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-        assertThat(event.getFormattedMessage()).isEqualTo("유효하지 않은 JWT 토큰: errorType=MalformedJwtException");
+        assertThat(event.getFormattedMessage()).isEqualTo("[auth] 유효하지 않은 JWT 토큰: errorType=MalformedJwtException");
         assertThat(event.getFormattedMessage()).doesNotContain(garbage);
         assertThat(event.getThrowableProxy()).isNull();
     }

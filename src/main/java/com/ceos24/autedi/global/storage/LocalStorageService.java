@@ -149,7 +149,9 @@ public class LocalStorageService implements FileStorageService {
         try {
             Files.deleteIfExists(path);
         } catch (IOException e) {
-            log.warn("실패한 업로드의 파일 정리를 완료하지 못했습니다.");
+            log.warn(
+                    "[upload] 실패한 업로드의 파일 정리를 완료하지 못함: errorType={}",
+                    e.getClass().getSimpleName());
         }
     }
 

@@ -171,8 +171,10 @@ public class S3FileStorageService implements FileStorageService {
         try {
             s3Client.deleteObject(
                     DeleteObjectRequest.builder().bucket(bucket).key(key).build());
-        } catch (RuntimeException ignored) {
-            log.warn("실패한 S3 업로드의 임시 객체 정리를 완료하지 못했습니다.");
+        } catch (RuntimeException e) {
+            log.warn(
+                    "[upload] 실패한 S3 업로드의 임시 객체 정리를 완료하지 못함: errorType={}",
+                    e.getClass().getSimpleName());
         }
     }
 
