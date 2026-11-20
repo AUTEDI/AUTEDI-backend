@@ -1,6 +1,7 @@
 Each anchors element has exactly line_id, original and occurrence.
 line_id is the supplied 1-based transcription line ID, including blank lines; do not renumber, merge or move lines.
 original is an exact, nonempty substring of that line with no CR or LF. Preserve case, spelling, punctuation and spaces.
+Use the confirmed original even when internally planning from a corrected baseline. Never anchor a corrected form that is absent from the supplied line.
 occurrence is the 1-based non-overlapping occurrence of that exact string on that line. Do not return character indexes.
 Use the smallest connected source range appropriate for the permitted edit. Do not anchor an unrelated phrase or the whole essay.
 

@@ -50,9 +50,26 @@ public final class GenerationClientProfiles {
                         com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionPromptComposer.MODEL,
                         version.contractId(),
                         variant.promptVersion(),
-                        GenerationResultMetadata.VALIDATION_VERSION_V1_1));
+                        GenerationResultMetadata.VALIDATION_VERSION_V1_2));
     }
 
+    /** 명시적으로 지원하는 과거 v1.1 프로필만 같은 계약·모델·후보의 v1.2 실행 프로필로 전환한다. */
+    public static GenerationAiProfile forExecution(GenerationClientMode mode, GenerationAiProfile saved) {
+        java.util.Objects.requireNonNull(saved, "saved");
+        GenerationAiProfile current = profile(mode, saved.version(), saved.promptVariant());
+        if (current.equals(saved)) return saved;
+        var legacyMetadata = new GenerationResultMetadata(
+                current.metadata().model(),
+                current.metadata().contractVersion(),
+                saved.promptVariant().legacyPromptVersion(),
+                GenerationResultMetadata.VALIDATION_VERSION_V1_1);
+        if (saved.version() == GenerationContractVersion.V1_1 && legacyMetadata.equals(saved.metadata())) {
+            return current;
+        }
+        throw new IllegalArgumentException("저장된 AI 실행 프로필을 현재 코드에서 정확히 실행할 수 없습니다.");
+    }
+
+    /** 실제 프롬프트·검증기 호출에는 현재 실행 프로필만 허용한다. */
     public static void requireKnown(GenerationClientMode mode, GenerationAiProfile profile) {
         java.util.Objects.requireNonNull(profile, "profile");
         if (!profile(mode, profile.version(), profile.promptVariant()).equals(profile)) {

@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "CONTENT_SUMMARY",
+      "issue_kinds": [
+        "content"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "The trip was fun fun.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "The trip was fun.",
+      "guidance": null,
+      "reason": "원문의 의미를 유지하며 해당 영역을 선택적으로 개선합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.25
+        ]
+      ],
+      "revision_scope": "SENTENCE",
+      "edit": {
+        "operation": "RESTRUCTURE",
+        "text": "The trip was fun.",
+        "position": null
+      }
+    }
+  ]
+}

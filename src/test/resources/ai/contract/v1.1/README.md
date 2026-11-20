@@ -13,7 +13,9 @@
 | `responses/*.json` | 이후 v1.1 파서에 문자열 그대로 전달할 독립적인 AI 응답 |
 | [malformed-json.txt](responses/malformed-json.txt) | 의도적으로 닫히지 않은 JSON. 응답 전체 해석 실패 예제 |
 
-총 30개다: 정상 12개, 경계·개수 처리 5개, 서버 검증 위반 9개, 파서 거절 대상 4개.
+총 48개다: 기존 30개와 ADVANCED 정책 변경의 기대 결과를 고정한 `policy-*` 18개다. 분류는 정상 19개, 경계·개수 처리 7개, 서버 검증 위반 18개, 파서 거절 대상 4개다.
+
+**`policy-*`는 ADVANCED 정책의 기대 처리 결과다.** 현재 `checkSettings()`의 STANDARD 보조 영역 허용과 `checkScope()`의 수정 범위·동작 조합 확장을 반영했으며, DEFAULT/COMPACT 프롬프트도 같은 정책으로 정리했다. 모든 정책 예제와 범위 행렬 테스트가 통과한다. 실제 모델의 첨삭 품질 평가는 별도 단계다. 구체적인 범위·예제·실행 결과는 [ADVANCED 정책 기대 결과](advanced-policy-targets.md)를 따른다.
 
 `cases.json`은 테스트 자료의 묶음이며 **AI 응답 형식이 아니다**. AI 응답은 각 `response_file`의 내용이다. 계약 버전·설정·기대 결과를 AI 응답에 합쳐 보내지 않는다.
 
@@ -48,6 +50,7 @@
 - `auto_place`는 이 예제에서 자동 이미지 배치가 가능한지 나타내는 기대값이다. 실제 API 필드를 추가하는 정의는 아니다.
 - `GUIDANCE`는 안내 카드만 남고 `annotation=null`, `auto_place=false`다.
 - 일부 박스만 잘못됐다면 유효 박스를 유지한다. 위치 자체가 불확실하면 카드·경고는 남고 `auto_place=false`다.
+- `stage_expectations.location/edit`가 있으면 원문·좌표 및 수정 동작 단계의 `requires_review`, `auto_place` 기대값이다. 없으면 기존 카드 필드를 사용한다. 후속 겹침 경고가 생겨도 앞선 단계의 검사가 실패한 것으로 취급하지 않는다. 이 필드도 AI 응답이 아닌 테스트 메타데이터다.
 - `summary`에는 비활성 영역도 `level=null`, `maximum_count=0`으로 포함한다. 원래 `REVIEW` 항목은 일반 카드 한도와 `omitted_count`에서 제외한다.
 - 최초 상태이므로 `validated_count=displayed_count`다. 향후 교사 삭제·편집은 별도 서비스 테스트에서 검증한다.
 - `issue_tags`, `parse_issue_tag`는 **의미를 표현하는 예제용 태그**다. 실제 진단 코드·개수와 동일한 형식을 강제하지 않는다. 정책 검증기 테스트에서는 대응되는 진단 코드의 존재를 확인한다.
@@ -118,7 +121,7 @@ Java 21 환경에서 프로젝트 루트를 기준으로 실행한다.
 
 현재 테스트는 예제 ID·파일 참조·입력 문맥·후보 인덱스의 완전한 분류·기대 UTF-16 범위·유효 박스·개수 집계·레벨 비교 쌍의 자료 무결성을 검사한다. Spring·DB·외부 네트워크를 사용하지 않는다.
 
-위 `AiCorrectionFixtureResourcesTest`는 자료 무결성만 검사한다. 별도로 [v1.1 파서](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-파서.md)와 `AiCorrectionResponseParserTest`를 추가해 30개 응답의 실제 파싱 결과를 `parse_result`와 비교한다.
+위 `AiCorrectionFixtureResourcesTest`는 자료 무결성만 검사한다. [v1.1 파서](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-파서.md)와 `AiCorrectionResponseParserTest`는 48개 응답의 실제 파싱 결과를 `parse_result`와 비교한다.
 
 ```powershell
 .\gradlew.bat --offline test --tests "*domain.generation.contract.v1_1.*AiCorrectionResponseParserTest"
@@ -127,9 +130,9 @@ Java 21 환경에서 프로젝트 루트를 기준으로 실행한다.
 **파싱 성공은 정상 카드 판정이나 AI 품질 검증을 뜻하지 않는다.** 현재 검사 연결과 다음 단계:
 
 1. 추가된 [v1.1 DTO·Schema](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-DTO-Schema.md)와 파서를 사용한다.
-2. [원문·좌표 검사](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-원문-좌표-검증.md)에서 페이지·전사 문맥과 파싱된 후보를 비교한다. `AiLocationValidatorTest`는 읽을 수 있는 26개 응답을 대상으로 기대 원문·UTF-16·좌표·위치 경고를 확인한다.
-3. [수정 동작 검사](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-수정-동작-검증.md)에서 action별 필드 조합과 edit·replacement의 일관성을 비교한다. `AiEditValidatorTest`는 같은 26개 응답을 앞 단계 결과와 연결하고 동작 위반 예제의 진단을 확인한다.
-4. [영역·레벨·개수 검사](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-영역-레벨-개수-검증.md)의 `AiCorrectionResponseValidatorTest`는 같은 26개 응답의 정상·확인·제외 분류, 원문·위치·경고·자동 배치·집계·표시 순서를 `expected`와 비교한다. annotation 생성은 포함하지 않는다.
+2. [원문·좌표 검사](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-원문-좌표-검증.md)에서 페이지·전사 문맥과 파싱된 후보를 비교한다. `AiLocationValidatorTest`는 읽을 수 있는 44개 응답을 대상으로 기대 원문·UTF-16·좌표·위치 경고를 확인한다.
+3. [수정 동작 검사](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-수정-동작-검증.md)에서 action별 필드 조합과 edit·replacement의 일관성을 비교한다. `AiEditValidatorTest`는 같은 44개 응답을 앞 단계 결과와 연결하고 동작 위반 예제의 진단을 확인한다.
+4. [영역·레벨·개수 검사](../../../../../../docs/ai_test_docs/AI-공통-응답-계약-v1.1-영역-레벨-개수-검증.md)의 `AiCorrectionResponseValidatorTest`는 같은 44개 응답의 정상·확인·제외 분류, 원문·위치·경고·자동 배치·집계·표시 순서를 `expected`와 비교한다. 새 정책 예제와 범위 행렬을 포함해 모두 통과한다. annotation 생성은 포함하지 않는다.
 5. 저장·조회·표시 테스트에서는 `expected.cards`를 기준으로 서비스 DTO와 렌더링을 검증한다.
 
 박스는 모두 설명용 좌표이며 실제 이미지 파일을 동봉하지 않는다. 따라서 이 자료만으로 손글씨 위치 정확도·표현 개선 품질·실제 클릭 배치를 평가할 수는 없다.

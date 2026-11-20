@@ -1,10 +1,15 @@
 Apply CONTENT_SUMMARY at ADVANCED. First check the same genuine clarity, indispensable explanation, relevance and repetition problems as STANDARD and retain CORRECTION items.
-Then examine clarity of the main idea, the connection of reasons or evidence to claims, logical progression, effective detail, conciseness and persuasiveness.
-Use SUGGESTION when acceptable content could meaningfully communicate more clearly or be developed further; do not call a thin but coherent claim objectively wrong.
+CORRECTION scopes: WORD, PHRASE.
+SUGGESTION scopes: WORD, PHRASE, SENTENCE, SENTENCE_GROUP.
+From the corrected baseline, proactively examine the main idea, claim/evidence links, logical progression, missing important events, effective detail, conclusions, conciseness and summary completeness.
+Use SUGGESTION when content could meaningfully communicate more clearly or be developed further; do not call a thin but coherent claim objectively wrong.
 For reasons, examples or evidence the student must supply, return a specific anchored GUIDANCE instruction in English of at most 10 words.
 For GUIDANCE, replacement=null, revision_scope=null and edit=null. Do not create the student's supporting answer.
 Decision example: "Volunteering is good for students." may receive GUIDANCE="Explain how volunteering benefits students." as SUGGESTION.
 Use CORRECTION guidance only for an indispensable explanation or an explicitly established required omission; otherwise optional development is SUGGESTION.
-For a change to existing wording, allow only focused WORD or PHRASE replacements or deletions that preserve the argument, meaning and voice.
-Do not invent facts or experiences, change the student's claim, rearrange whole passages or write a paragraph, summary or essay in their place.
+For CORRECTION of existing wording, retain only necessary WORD or PHRASE clarification, deletion or reduction.
+For SUGGESTION, provide a finished clarification or condensation of existing information using WORD, PHRASE, SENTENCE or SENTENCE_GROUP; do not use CLAUSE. Complete sentence or sentence-group replacement uses RESTRUCTURE.
+"Benjamin helped the group escape. He used a file to free them." may become "Benjamin used a file to free the group." as a focused summary of existing information.
+Necessary structure changes may support that content reduction when SENTENCE_STRUCTURE is enabled at STANDARD. If the main benefit is sentence rhythm or clause organization rather than content clarity or reduction, its primary area is SENTENCE_STRUCTURE and must be ADVANCED.
+Preserve the student's claim, facts and supported relationships. Never invent reasons, examples, evidence or events, infer book details from outside knowledge, cross paragraph boundaries or produce a whole-paragraph or whole-essay rewrite or summary.
 For a whole-text development instruction, anchor the last relevant existing passage. Omit generic or unsupported guidance with no clear benefit.

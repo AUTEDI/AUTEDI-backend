@@ -26,6 +26,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -133,7 +134,7 @@ class AiCorrectionResponseValidatorTest {
     }
 
     @Test
-    void appliesLevelsIndependentlyAndPreventsMixedIssueBypass() {
+    void appliesPrimaryLevelsAndPreventsDisabledSupportingEdits() {
         Map<AiArea, AiCorrectionLevel> selected = Map.of(
                 AiArea.GRAMMAR_SPELLING,
                 AiCorrectionLevel.STANDARD,
@@ -147,10 +148,22 @@ class AiCorrectionResponseValidatorTest {
                 List.of(1),
                 result.cards().stream().map(AiValidatedItem::candidateIndex).toList());
         AiCorrectionItem mixed = withIssues(vocabulary, List.of(AiIssueKind.VOCABULARY, AiIssueKind.GRAMMAR));
-        AiValidatedItem standardBypass = check(List.of(mixed), List.of("go", "good"), selected)
+        AiValidatedItem standardSupport = check(List.of(mixed), List.of("go", "good"), selected)
                 .candidates()
                 .getFirst();
-        assertDisposition(standardBypass, AiItemDisposition.EXCLUDED, AiValidationCode.STANDARD_SUGGESTION);
+        assertEquals(AiItemDisposition.CARD, standardSupport.disposition());
+        assertTrue(standardSupport.issues().isEmpty());
+        AiValidatedItem standardPrimary = check(
+                        List.of(mixed),
+                        List.of("go", "good"),
+                        Map.of(
+                                AiArea.GRAMMAR_SPELLING,
+                                AiCorrectionLevel.ADVANCED,
+                                AiArea.VOCABULARY_EXPRESSION,
+                                AiCorrectionLevel.STANDARD))
+                .candidates()
+                .getFirst();
+        assertDisposition(standardPrimary, AiItemDisposition.EXCLUDED, AiValidationCode.STANDARD_SUGGESTION);
         AiValidatedItem disabledBypass = check(
                         List.of(mixed),
                         List.of("go", "good"),
@@ -275,6 +288,114 @@ class AiCorrectionResponseValidatorTest {
                     AiValidationCode.SCOPE_OPERATION_MISMATCH));
         }
         return cases.stream();
+    }
+
+    /** 새 정책의 기대 행렬이다. CORRECTION 행렬은 위 scopeCases()에서 기존대로 유지한다. */
+    @ParameterizedTest(name = "ADVANCED SUGGESTION {0} / {1} -> {2}")
+    @CsvSource({
+        "GRAMMAR_SPELLING, WORD, CARD",
+        "GRAMMAR_SPELLING, PHRASE, CARD",
+        "GRAMMAR_SPELLING, CLAUSE, CARD",
+        "GRAMMAR_SPELLING, SENTENCE, CARD",
+        "GRAMMAR_SPELLING, SENTENCE_GROUP, REVIEW",
+        "VOCABULARY_EXPRESSION, WORD, CARD",
+        "VOCABULARY_EXPRESSION, PHRASE, CARD",
+        "VOCABULARY_EXPRESSION, CLAUSE, REVIEW",
+        "VOCABULARY_EXPRESSION, SENTENCE, REVIEW",
+        "VOCABULARY_EXPRESSION, SENTENCE_GROUP, REVIEW",
+        "SENTENCE_STRUCTURE, WORD, CARD",
+        "SENTENCE_STRUCTURE, PHRASE, CARD",
+        "SENTENCE_STRUCTURE, CLAUSE, CARD",
+        "SENTENCE_STRUCTURE, SENTENCE, CARD",
+        "SENTENCE_STRUCTURE, SENTENCE_GROUP, CARD",
+        "CONTENT_SUMMARY, WORD, CARD",
+        "CONTENT_SUMMARY, PHRASE, CARD",
+        "CONTENT_SUMMARY, CLAUSE, REVIEW",
+        "CONTENT_SUMMARY, SENTENCE, CARD",
+        "CONTENT_SUMMARY, SENTENCE_GROUP, CARD"
+    })
+    void appliesAdvancedSuggestionScopeTargets(
+            AiArea area, AiRevisionScope scope, AiItemDisposition expectedDisposition) {
+        // 수정 범위 조합만 검사하는 합성 입력이다. 교육적 품질 예시는 policy-* 응답에서 별도로 제공한다.
+        String source =
+                switch (scope) {
+                    case WORD -> "go";
+                    case PHRASE -> "go home";
+                    case CLAUSE -> "I go home";
+                    case SENTENCE -> "I go home.";
+                    case SENTENCE_GROUP -> "I go home. I sleep.";
+                };
+        AiEditOperation operation = scope == AiRevisionScope.SENTENCE || scope == AiRevisionScope.SENTENCE_GROUP
+                ? AiEditOperation.RESTRUCTURE
+                : AiEditOperation.REPLACE;
+        AiCorrectionItem item = withScope(
+                replacement(1, source, source.replace("go", "went"), area, AiFeedbackType.SUGGESTION),
+                scope,
+                operation);
+        AiValidatedItem result = check(List.of(item), List.of(source), Map.of(area, AiCorrectionLevel.ADVANCED))
+                .candidates()
+                .getFirst();
+        assertEquals(expectedDisposition, result.disposition(), result.issues().toString());
+        if (expectedDisposition == AiItemDisposition.CARD) {
+            assertTrue(result.issues().isEmpty(), result.issues().toString());
+            assertTrue(result.canAutoPlace());
+        } else {
+            assertHasCode(result, AiValidationCode.AREA_SCOPE_VIOLATION);
+            assertFalse(result.canAutoPlace());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionLevel.class)
+    void keepsNonStructureSentenceCorrectionsInReviewAtBothLevels(AiCorrectionLevel level) {
+        for (AiArea area : List.of(AiArea.GRAMMAR_SPELLING, AiArea.VOCABULARY_EXPRESSION, AiArea.CONTENT_SUMMARY)) {
+            AiCorrectionItem item = withScope(
+                    replacement(1, "I go home.", "I went home.", area, AiFeedbackType.CORRECTION),
+                    AiRevisionScope.SENTENCE,
+                    AiEditOperation.RESTRUCTURE);
+            AiValidatedItem result = check(List.of(item), List.of("I go home."), Map.of(area, level))
+                    .candidates()
+                    .getFirst();
+            assertDisposition(result, AiItemDisposition.REVIEW, AiValidationCode.AREA_SCOPE_VIOLATION);
+            assertHasCode(result, AiValidationCode.SCOPE_OPERATION_MISMATCH);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AiArea.class,
+            names = {"GRAMMAR_SPELLING", "CONTENT_SUMMARY"})
+    void doesNotExpandSentenceScopeForStandardSuggestions(AiArea area) {
+        AiCorrectionItem item = withScope(
+                replacement(1, "I go home.", "I went home.", area, AiFeedbackType.SUGGESTION),
+                AiRevisionScope.SENTENCE,
+                AiEditOperation.RESTRUCTURE);
+        AiValidatedItem result = check(List.of(item), List.of("I go home."), Map.of(area, AiCorrectionLevel.STANDARD))
+                .candidates()
+                .getFirst();
+        assertDisposition(result, AiItemDisposition.EXCLUDED, AiValidationCode.STANDARD_SUGGESTION);
+        assertHasCode(result, AiValidationCode.AREA_SCOPE_VIOLATION);
+        assertHasCode(result, AiValidationCode.SCOPE_OPERATION_MISMATCH);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "policy-grammar-clause-suggestion, RESTRUCTURE",
+        "policy-grammar-sentence-suggestion, REPLACE",
+        "policy-content-summary-suggestion, REPLACE"
+    })
+    void rejectsWrongOperationsEvenWhenTheAdvancedSuggestionScopeIsAllowed(String fixtureId, AiEditOperation operation)
+            throws IOException {
+        JsonNode fixture = fixtureCase(fixtureId);
+        ObjectNode response =
+                (ObjectNode) JSON.readTree(resource(fixture.get("response_file").asString()));
+        ((ObjectNode) response.at("/items/0/edit")).put("operation", operation.name());
+        AiValidatedItem result = validator
+                .validate(parser.parse(response.toString()), context(fixture))
+                .candidates()
+                .getFirst();
+        assertDisposition(result, AiItemDisposition.REVIEW, AiValidationCode.SCOPE_OPERATION_MISMATCH);
+        assertFalse(result.issues().stream().anyMatch(issue -> issue.code() == AiValidationCode.AREA_SCOPE_VIOLATION));
     }
 
     @Test

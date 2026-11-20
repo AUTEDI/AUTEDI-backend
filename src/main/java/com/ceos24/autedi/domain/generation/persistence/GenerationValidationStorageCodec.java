@@ -21,10 +21,15 @@ public final class GenerationValidationStorageCodec {
         Objects.requireNonNull(metadata, "metadata");
         for (var version : GenerationContractVersion.values()) {
             if (!version.contractId().equals(metadata.contractVersion())) continue;
-            String expected = version == GenerationContractVersion.V1
-                    ? GenerationResultMetadata.VALIDATION_VERSION
-                    : GenerationResultMetadata.VALIDATION_VERSION_V1_1;
-            if (!expected.equals(metadata.validationVersion())) {
+            boolean supported =
+                    switch (version) {
+                        case V1 -> GenerationResultMetadata.VALIDATION_VERSION.equals(metadata.validationVersion());
+                        case V1_1 -> GenerationResultMetadata.VALIDATION_VERSION_V1_1.equals(
+                                        metadata.validationVersion())
+                                || GenerationResultMetadata.VALIDATION_VERSION_V1_2.equals(
+                                        metadata.validationVersion());
+                    };
+            if (!supported) {
                 throw new IllegalArgumentException("저장된 계약과 검증 버전을 지원하지 않습니다.");
             }
             return version;

@@ -153,6 +153,13 @@ class GenerationContractRoutingTest {
         var selector = new GenerationContractSelector(new GenerationContractProperties("v1.1", variant.name()));
         var selected = selector.configuredProfile(GenerationClientMode.TERRA);
         assertEquals(GenerationContractVersion.V1_1, selected.version());
+        assertEquals("AUTEDI-AI-CONTRACT-v1.1", selected.metadata().contractVersion());
+        assertEquals(
+                variant == AiCorrectionPromptVariant.DEFAULT
+                        ? "AUTEDI-CORRECTION-PROMPT-v1.2"
+                        : "AUTEDI-CORRECTION-PROMPT-v1.2-COMPACT",
+                selected.metadata().promptVersion());
+        assertEquals("AUTEDI-VALIDATION-v1.2", selected.metadata().validationVersion());
         assertEquals(selected, selector.forGeneration(GenerationClientMode.TERRA, null));
         var changed = new GenerationContractSelector(new GenerationContractProperties("v1", "DEFAULT"));
         assertEquals(
@@ -162,6 +169,69 @@ class GenerationContractRoutingTest {
                         WorksheetGeneration.builder()
                                 .clientMode(GenerationClientMode.TERRA)
                                 .requestAiProfile(selected)
+                                .build()));
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
+    void persistedV11ProfilesUpgradeForRetryWithoutChangingTheirContractVariantOrHistory(
+            AiCorrectionPromptVariant variant) {
+        // 현재 상수로 기대값을 만들지 않아 배포 전 저장된 실제 식별자의 호환성을 검사한다.
+        String oldPrompt = variant == AiCorrectionPromptVariant.DEFAULT
+                ? "AUTEDI-CORRECTION-PROMPT-v1.1"
+                : "AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT";
+        var persisted = new GenerationAiProfile(
+                GenerationContractVersion.V1_1,
+                variant,
+                new GenerationResultMetadata(
+                        "gpt-6.1-terra", "AUTEDI-AI-CONTRACT-v1.1", oldPrompt, "AUTEDI-VALIDATION-v1.1"));
+        AiCorrectionPromptVariant next = variant == AiCorrectionPromptVariant.DEFAULT
+                ? AiCorrectionPromptVariant.COMPACT
+                : AiCorrectionPromptVariant.DEFAULT;
+        var selector = new GenerationContractSelector(new GenerationContractProperties("v1.1", next.name()));
+        var job = WorksheetGeneration.builder()
+                .clientMode(GenerationClientMode.TERRA)
+                .requestAiProfile(persisted)
+                .build();
+        var current = profile(GenerationContractVersion.V1_1, variant);
+        assertEquals(current, selector.forGeneration(GenerationClientMode.TERRA, job));
+        assertEquals(current, GenerationContractSelector.executionProfile(job));
+        assertEquals(persisted, GenerationContractSelector.snapshot(job));
+        assertEquals(persisted, job.getRequestAiProfile());
+        assertEquals(
+                current,
+                router.compose(current, input("Text.", AiArea.GRAMMAR_SPELLING, AiCorrectionLevel.STANDARD))
+                        .profile());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> router.compose(persisted, input("Text.", AiArea.GRAMMAR_SPELLING, AiCorrectionLevel.STANDARD)));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v1.2",
+        "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.2,AUTEDI-VALIDATION-v1.1",
+        "COMPACT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v1.1",
+        "DEFAULT,unknown-model,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v1.1",
+        "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v9"
+    })
+    void rejectsUnknownOrMixedRevisionsInsteadOfUpgradingThem(
+            AiCorrectionPromptVariant variant, String model, String prompt, String validation) {
+        var saved = new GenerationAiProfile(
+                GenerationContractVersion.V1_1,
+                variant,
+                new GenerationResultMetadata(model, "AUTEDI-AI-CONTRACT-v1.1", prompt, validation));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> GenerationClientProfiles.forExecution(GenerationClientMode.TERRA, saved));
+        var selector = new GenerationContractSelector(new GenerationContractProperties("v1.1", "DEFAULT"));
+        assertThrows(
+                CustomException.class,
+                () -> selector.forGeneration(
+                        GenerationClientMode.TERRA,
+                        WorksheetGeneration.builder()
+                                .clientMode(GenerationClientMode.TERRA)
+                                .requestAiProfile(saved)
                                 .build()));
     }
 
@@ -191,7 +261,7 @@ class GenerationContractRoutingTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "v2", "v1.10", " v1", "AUTEDI-AI-CONTRACT-v1"})
+    @ValueSource(strings = {"", "v2", "v1.2", "v1.10", " v1", "AUTEDI-AI-CONTRACT-v1"})
     void rejectsUnknownConfigurationVersions(String value) {
         assertThrows(IllegalArgumentException.class, () -> new GenerationContractProperties(value, "DEFAULT"));
     }

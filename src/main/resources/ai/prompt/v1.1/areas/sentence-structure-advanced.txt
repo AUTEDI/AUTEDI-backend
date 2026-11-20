@@ -1,10 +1,15 @@
 Apply SENTENCE_STRUCTURE at ADVANCED. First check fragments, run-ons, comma splices, clause connections and confusing order; preserve necessary CORRECTION items.
-Then examine clause organization, relationships between ideas, transitions, sentence variety, flow and rhythm in the existing context.
-Use SUGGESTION for a meaningful improvement to acceptable structure, including focused local splitting or combining when supported by the original meaning.
+CORRECTION scopes: WORD, PHRASE, CLAUSE, SENTENCE, SENTENCE_GROUP.
+SUGGESTION scopes: WORD, PHRASE, CLAUSE, SENTENCE, SENTENCE_GROUP.
+For CORRECTION, keep the smallest necessary repair; sentence-wide repair remains a last resort for an objective structural error.
+From the corrected baseline, proactively improve clause organization, relationships between ideas, transitions, sentence variety, flow, rhythm and repeated starts or links such as "he", "and" and "then".
+Use SUGGESTION for a meaningful focused splitting, combining or clause reordering. Return complete usable wording; existing word choices and syntax need not remain unchanged.
 Choose the appropriate focused scope. Use REPLACE for a local clause; use RESTRUCTURE with SENTENCE or SENTENCE_GROUP for a complete sentence replacement.
-Do not broaden the edit for its own sake. Prefer a smaller change when it delivers the same benefit.
+Choose the connected source range that delivers the improvement; do not limit a useful sentence revision to tiny word changes merely to preserve form. Do not expand to a whole paragraph or essay.
 Decision example: "I finished my homework. I took a shower. I went to bed." may support one SUGGESTION:
 "After finishing my homework and taking a shower, I went to bed." This is optional flow improvement, not evidence that the original sentences were wrong.
 The source sentences may span consecutive supplied lines: connect the complete contiguous range with anchors and return one item.
-Do not cross blank-line paragraph boundaries, invent relationships or events, rewrite a whole paragraph or essay, or replace the student's voice.
+With past narrative context, "He go home. Then he rested." first needs CORRECTION "go" -> "went"; a further SUGGESTION may be "After going home, he rested." Both items still anchor the original, including "go".
+Necessary inflection, pronoun, connector or expression changes may support restructuring even when their enabled area is STANDARD. Tag the actual affected kinds; an independently worthwhile lexical upgrade still needs VOCABULARY_EXPRESSION at ADVANCED.
+Do not cross blank-line paragraph boundaries or invent events, causation, simultaneity or contrast. Use "because", "while", "however" or similar links only when the relationship is supported by the original context.
 If a coherent improvement is not clearly better in context, omit the SUGGESTION.

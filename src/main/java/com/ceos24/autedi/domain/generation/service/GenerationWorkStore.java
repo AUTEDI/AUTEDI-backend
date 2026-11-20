@@ -71,8 +71,9 @@ public class GenerationWorkStore {
             job.fail("STALE_JOB", "현재 학습지의 실행 대상이 아닌 작업입니다.", false);
             return null;
         }
-        GenerationAiProfile profile = GenerationContractSelector.snapshot(job);
+        GenerationAiProfile profile;
         try {
+            profile = GenerationContractSelector.executionProfile(job);
             GenerationContractSelector.requireServiceReady(job.getClientMode(), profile);
         } catch (IllegalArgumentException e) {
             failJob(job, "AI_CONTRACT_NOT_READY", "저장된 AI 실행 프로필의 서비스 연결을 확인해 주세요.", false);

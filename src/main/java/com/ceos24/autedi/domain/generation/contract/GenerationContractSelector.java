@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class GenerationContractSelector {
     private final GenerationContractProperties properties;
 
-    /** 새 작업의 프로필을 선택한다. 재시도와 실행은 저장된 프로필을 사용한다. */
+    /** 새 작업의 프로필을 선택한다. 재시도는 기존 계약·모델·후보를 유지하고 지원하는 개선판을 사용한다. */
     public GenerationAiProfile configuredProfile(GenerationClientMode mode) {
         return GenerationClientProfiles.profile(mode, properties.version(), properties.variant());
     }
@@ -22,6 +22,7 @@ public class GenerationContractSelector {
     public GenerationAiProfile forGeneration(GenerationClientMode mode, WorksheetGeneration previous) {
         try {
             GenerationAiProfile selected = previous == null ? configuredProfile(mode) : snapshot(mode, previous);
+            selected = GenerationClientProfiles.forExecution(mode, selected);
             requireServiceReady(mode, selected);
             return selected;
         } catch (IllegalArgumentException e) {
@@ -32,6 +33,11 @@ public class GenerationContractSelector {
     /** 프로필 없는 기존 작업만 v1로 해석한다. 현재 서버 선택 설정으로 재해석하지 않는다. */
     public static GenerationAiProfile snapshot(WorksheetGeneration job) {
         return snapshot(job.getClientMode(), job);
+    }
+
+    /** 기존 요청 스냅샷은 변경하지 않고 실제 실행·결과 기록에 사용할 프로필을 구한다. */
+    public static GenerationAiProfile executionProfile(WorksheetGeneration job) {
+        return GenerationClientProfiles.forExecution(job.getClientMode(), snapshot(job));
     }
 
     private static GenerationAiProfile snapshot(GenerationClientMode mode, WorksheetGeneration job) {

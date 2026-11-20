@@ -4,7 +4,7 @@ import com.ceos24.autedi.domain.generation.contract.v1_1.prompt.AiCorrectionProm
 import com.ceos24.autedi.domain.generation.persistence.GenerationResultMetadata;
 import java.util.Objects;
 
-/** 접수 당시의 불변 실행 프로필. 결과 보존·복원용 메타데이터와 같은 버전을 사용한다. */
+/** 접수·실행 프로필. 과거 요청은 불변 보존하고, 지원하는 개선판으로 실행한 결과에는 실제 실행 버전을 기록한다. */
 public record GenerationAiProfile(
         GenerationContractVersion version, AiCorrectionPromptVariant promptVariant, GenerationResultMetadata metadata) {
     public GenerationAiProfile {

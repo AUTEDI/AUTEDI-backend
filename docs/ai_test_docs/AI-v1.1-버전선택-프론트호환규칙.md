@@ -1,5 +1,6 @@
 # AI 계약 버전 선택과 프론트 호환 규칙
 
+- 2026-11-19 갱신: 응답 계약은 v1.1을 유지하고 프롬프트·검증 동작 버전은 v1.2를 사용한다. [v1.2 기록·호환 정책](../../docs-mine/llm-v1.1/AI-첨삭-동작버전-v1.2.md)을 함께 따른다.
 - 확정일: 2026-11-13, 한국 시간
 - 범위: 남은 작업의 **10. 버전 선택 경로 추가 + 프론트 호환 규칙 확정**
 - 원칙: AI↔백엔드 계약은 v1/v1.1로 구분하고, 백엔드↔프론트의 기존 `/api/v1` 응답은 유지하며 필요한 필드만 추가한다.
@@ -15,8 +16,8 @@
 | [GenerationClientProfiles](../../src/main/java/com/ceos24/autedi/domain/generation/client/GenerationClientProfiles.java) | 공급자 모드와 계약 버전으로 지원하는 프로필 생성·대조 |
 | [GenerationContractSelector](../../src/main/java/com/ceos24/autedi/domain/generation/contract/GenerationContractSelector.java) | 신규 선택·재시도 상속·기존 작업 해석·서비스 연결 상태 확인 |
 | [GenerationContractRouter](../../src/main/java/com/ceos24/autedi/domain/generation/contract/GenerationContractRouter.java) | 버전별 프롬프트·Schema·파서·전체 검증기 실행. HTTP·DB·프론트 변환은 하지 않음 |
-| [WorksheetGenerationService](../../src/main/java/com/ceos24/autedi/domain/generation/service/WorksheetGenerationService.java) | 접수 시 프로필을 저장하고 재시도에서는 최초 프로필 상속 |
-| [GenerationWorkStore](../../src/main/java/com/ceos24/autedi/domain/generation/service/GenerationWorkStore.java) | 저장된 프로필로 claim·모델·결과 메타데이터 처리 |
+| [WorksheetGenerationService](../../src/main/java/com/ceos24/autedi/domain/generation/service/WorksheetGenerationService.java) | 접수 시 프로필 저장, 재시도에서 기존 계약·후보와 지원하는 동작 개선판 선택 |
+| [GenerationWorkStore](../../src/main/java/com/ceos24/autedi/domain/generation/service/GenerationWorkStore.java) | 요청 프로필에서 실행 프로필 결정, claim·모델·실제 결과 메타데이터 처리 |
 
 `app.ai.client=TERRA/FIXED/LEGACY_MOCK`는 공급자/실행 모드다. 새 계약 설정과 별개이며 프론트 요청에 버전 선택 필드를 추가하지 않는다.
 
@@ -58,11 +59,11 @@ Worker/서비스 HTTP 클라이언트는 저장된 프로필로 v1/v1.1을 선�
 
 - 신규 작업은 현재 서버 설정으로 한 번 선택한다. FIXED/LEGACY_MOCK의 v1 메타데이터는 기존 fixed-response 값을 사용한다.
 - 같은 멱등키의 재전송은 기존 작업을 반환하고 프로필을 다시 선택하지 않는다.
-- 재시도는 기존 공급자 모드와 저장된 프로필을 상속한다. 서버 선택이 바뀌어도 재시도 계약을 바꾸지 않는다.
+- 재시도는 기존 공급자 모드·계약·후보를 유지한다. 등록된 과거 v1.1 프롬프트·검증 조합은 v1.2로 전환해 새 재시도 작업에 기록하며, 원래 작업의 요청 스냅샷은 변경하지 않는다.
 - 프로필이 NULL인 과거 작업만 기존 모드의 v1/DEFAULT로 해석한다. 저장된 알 수 없는 프로필을 NULL과 같이 취급하지 않는다.
-- 현재 코드에서 실행할 수 없는 모델·프롬프트·검증 버전은 거절한다. 과거 스냅샷을 현재 버전명으로 덮어쓰지 않는다. 프롬프트 식별자는 내용이 바뀌면 새로 부여하고, 계속 실행할 과거 버전은 명시적으로 등록해야 한다.
+- 등록된 과거 v1.1 대기 작업은 같은 계약·모델·후보의 v1.2로 실행하고, 결과 메타데이터에 실제 실행 버전을 기록한다. 과거 요청 스냅샷을 현재 버전명으로 덮어쓰지 않는다. 미등록 모델·프롬프트·검증 조합은 거절한다.
 - Worker가 미지원 프로필의 PENDING 작업을 발견하면 AI 호출 전 `AI_CONTRACT_NOT_READY`로 실패 처리한다. 자동 재시도하지 않는다.
-- 기존 결과 기록 API도 작업에 프로필이 있으면 결과 메타데이터와 정확히 일치하는지 검사한다.
+- 결과 기록 시에는 요청 스냅샷에서 결정한 실행 프로필과 결과 메타데이터의 정확한 일치를 검사한다. 알려진 v1.1→v1.2 전환 외의 임의 버전 변경은 허용하지 않는다.
 
 프로필 값은 내부 작업 정보다. 10단계에서는 외부 DTO를 바꾸지 않았다. 이후 12단계에서 CorrectionResponse의 선택적 조회 필드와 확인 목록 매핑을 추가했으며, GenerationResponse와 기존 편집 요청 형식은 유지한다.
 

@@ -1,10 +1,13 @@
 Apply GRAMMAR_SPELLING at ADVANCED. First perform all basic STANDARD grammar, spelling, capitalization and punctuation checks.
 Retain necessary local error repairs as CORRECTION; do not drop or enlarge them merely because ADVANCED is selected.
-Then inspect tense consistency across context, complex verb and modal forms, modifier placement and scope, and pronoun reference.
-Examine whether punctuation accurately expresses clause relationships and intended meaning, including appropriate semicolons and colons.
-Use SUGGESTION for a clearly useful grammatical or mechanics refinement only when the original remains acceptable and intent is supported by context.
-Do not invent an ambiguous referent or change certainty, permission, obligation or time merely to make the text sound more sophisticated.
-Use revision_scope=WORD or PHRASE and INSERT, DELETE or REPLACE only. Sentence-wide and clause-wide restructuring belong to an enabled SENTENCE_STRUCTURE area.
-Do not impose a regional punctuation preference, replace commas with complex punctuation without a reason or hide vocabulary enrichment here.
+CORRECTION scopes: WORD, PHRASE.
+SUGGESTION scopes: WORD, PHRASE, CLAUSE, SENTENCE.
+From the corrected baseline, proactively examine contextual tense and aspect, complex verbs and modals, modifier scope, pronoun reference, voice choice, reducible relative or adverbial clauses, parallel verb phrases and punctuation's meaning or emphasis.
+Use SUGGESTION for a clear grammatical or mechanics benefit supported by context, including active/passive choice or clause reduction. Return the finished revision, not generic advice to improve grammar.
+When the context benefits from emphasizing Nate, "The mystery was solved by Nate." may become "Nate solved the mystery." as SUGGESTION with revision_scope=SENTENCE and edit.operation=RESTRUCTURE.
+"The tortoise that was sitting by the door was lost." may support a CLAUSE replacement of "that was sitting by the door" with "sitting by the door".
+Use focused INSERT, DELETE or REPLACE for local edits; a complete sentence replacement uses RESTRUCTURE. SENTENCE_GROUP is not allowed here; splitting or combining sentences for flow belongs to an enabled ADVANCED SENTENCE_STRUCTURE area.
+Allow only necessary supporting edits in other enabled areas. Do not hide an independent vocabulary upgrade or structural flow improvement when its own area is STANDARD or disabled.
+Never invent a referent or change certainty, permission, obligation, time or event relationships for sophistication. Do not impose regional punctuation preferences or unjustified complex punctuation.
 Decision example: "She go to school every day." still requires only "go" -> "goes" as CORRECTION, as in STANDARD.
 The additional depth is contextual analysis and warranted optional refinements; no SUGGESTION is required when none is meaningful.
