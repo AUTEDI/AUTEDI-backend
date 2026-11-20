@@ -1,5 +1,6 @@
 package com.ceos24.autedi.global.security;
 
+import com.ceos24.autedi.global.exception.ApiErrorLogger;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -76,6 +77,7 @@ public class QrRateLimitFilter extends OncePerRequestFilter {
         long retryAfterSeconds =
                 Math.max(1, Duration.ofNanos(probe.getNanosToWaitForRefill()).toSeconds());
         ErrorCode errorCode = ErrorCode.TOO_MANY_REQUESTS;
+        ApiErrorLogger.log(errorCode);
         response.setStatus(errorCode.getStatus().value());
         response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
