@@ -1,11 +1,13 @@
 package com.ceos24.autedi.global.security;
 
+import com.ceos24.autedi.global.logging.MdcKeys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
             Authentication authentication = jwtTokenProvider.getAuthentication(token);
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            putUserInfoToMdc(authentication);
         }
 
         filterChain.doFilter(request, response);
@@ -40,5 +43,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return bearerToken.substring(BEARER_PREFIX.length());
         }
         return null;
+    }
+
+    private void putUserInfoToMdc(Authentication authentication) {
+        if (authentication.getPrincipal() instanceof CustomUserPrincipal principal) {
+            MDC.put(MdcKeys.USER_ID, String.valueOf(principal.userId()));
+            if (principal.academyId() != null) {
+                MDC.put(MdcKeys.ACADEMY_ID, String.valueOf(principal.academyId()));
+            }
+        }
     }
 }
