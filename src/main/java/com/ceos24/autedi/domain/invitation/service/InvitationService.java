@@ -71,7 +71,7 @@ public class InvitationService {
         userInvitationRepository.save(invitation);
 
         // 이메일 비동기 발송
-        emailService.sendInvitationEmail(request.email(), academy.getName(), rawToken);
+        emailService.sendInvitationEmail(invitation.getId(), request.email(), academy.getName(), rawToken);
 
         return InvitationResponse.from(invitation);
     }
