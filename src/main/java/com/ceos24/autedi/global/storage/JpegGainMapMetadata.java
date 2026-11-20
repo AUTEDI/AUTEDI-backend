@@ -64,16 +64,16 @@ final class JpegGainMapMetadata {
             }
             pos += 2 + length;
         }
-        throw new IllegalArgumentException("HDR 보조 이미지의 위치를 찾을 수 없습니다.");
+        throw new ImageRejectedException(ImageRejectReason.HDR_AUX_LOCATION_NOT_FOUND);
     }
 
     private static int mpfSecondImageOffset(byte[] b, int tiff, int end) {
-        if (tiff + 8 > end) throw new IllegalArgumentException("손상된 MPF 헤더입니다.");
+        if (tiff + 8 > end) throw new ImageRejectedException(ImageRejectReason.MPF_HEADER_CORRUPT);
         boolean little = b[tiff] == 'I' && b[tiff + 1] == 'I';
         if (!little && !(b[tiff] == 'M' && b[tiff + 1] == 'M'))
-            throw new IllegalArgumentException("지원하지 않는 MPF 바이트 순서입니다.");
+            throw new ImageRejectedException(ImageRejectReason.MPF_BYTE_ORDER_UNSUPPORTED);
         long ifd = u32(b, tiff + 4, little);
-        if (ifd < 8 || tiff + ifd + 2 > end) throw new IllegalArgumentException("손상된 MPF 위치입니다.");
+        if (ifd < 8 || tiff + ifd + 2 > end) throw new ImageRejectedException(ImageRejectReason.MPF_OFFSET_CORRUPT);
         int count = u16(b, (int) (tiff + ifd), little);
         for (int i = 0; i < count; i++) {
             int entry = (int) (tiff + ifd + 2 + 12L * i);
@@ -82,18 +82,19 @@ final class JpegGainMapMetadata {
             long table = u32(b, entry + 8, little);
             long second = tiff + table + 16; // MP Entry 한 개가 16바이트이며 두 번째가 보조 이미지다.
             if (u32(b, entry + 4, little) < 32 || second + 12 > end)
-                throw new IllegalArgumentException("HDR 보조 이미지 정보가 올바르지 않습니다.");
+                throw new ImageRejectedException(ImageRejectReason.HDR_AUX_INFO_INVALID);
             long offset = u32(b, (int) (second + 8), little);
             long start = tiff + offset;
-            if (offset == 0 || start + 4 > b.length) throw new IllegalArgumentException("HDR 보조 이미지 위치가 올바르지 않습니다.");
+            if (offset == 0 || start + 4 > b.length)
+                throw new ImageRejectedException(ImageRejectReason.HDR_AUX_OFFSET_INVALID);
             return (int) start;
         }
-        throw new IllegalArgumentException("HDR 보조 이미지 정보를 찾을 수 없습니다.");
+        throw new ImageRejectedException(ImageRejectReason.HDR_AUX_INFO_NOT_FOUND);
     }
 
     private static List<byte[]> app1Segments(byte[] bytes, int start) {
         if ((bytes[start] & 255) != 0xff || (bytes[start + 1] & 255) != 0xd8)
-            throw new IllegalArgumentException("HDR 보조 이미지가 JPEG가 아닙니다.");
+            throw new ImageRejectedException(ImageRejectReason.HDR_AUX_NOT_JPEG);
         List<byte[]> result = new ArrayList<>();
         int pos = start + 2;
         while (pos + 4 <= bytes.length && (bytes[pos] & 255) == 0xff) {
@@ -156,7 +157,7 @@ final class JpegGainMapMetadata {
                 builder.setErrorHandler(new DefaultHandler());
                 result.add(builder.parse(new ByteArrayInputStream(data, XMP_HEADER.length, end - XMP_HEADER.length)));
             } catch (SAXException e) {
-                throw new IllegalArgumentException("HDR 보조 이미지의 XMP 정보를 읽을 수 없습니다.");
+                throw new ImageRejectedException(ImageRejectReason.HDR_XMP_UNREADABLE);
             } catch (ParserConfigurationException e) {
                 throw new IOException("HDR 메타데이터 파서를 준비할 수 없습니다.", e);
             }
@@ -177,7 +178,7 @@ final class JpegGainMapMetadata {
                 candidate = element.getAttributeNS(namespace, name).trim();
             if (candidate == null) continue;
             if (value != null && !value.equals(candidate))
-                throw new IllegalArgumentException("HDR 보조 이미지의 XMP 정보가 서로 다릅니다.");
+                throw new ImageRejectedException(ImageRejectReason.HDR_XMP_MISMATCH);
             value = candidate;
         }
         return value;

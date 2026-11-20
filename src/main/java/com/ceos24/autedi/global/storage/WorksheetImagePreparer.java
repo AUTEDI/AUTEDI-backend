@@ -18,18 +18,18 @@ public final class WorksheetImagePreparer {
     private static final byte[] PNG_SIGNATURE = {(byte) 137, 80, 78, 71, 13, 10, 26, 10};
 
     public PreparedImage prepare(byte[] bytes, FileType type) throws IOException {
-        if (bytes.length == 0) throw new IllegalArgumentException("빈 이미지입니다.");
+        if (bytes.length == 0) throw new ImageRejectedException(ImageRejectReason.EMPTY_IMAGE);
         if (bytes.length > MAX_BYTES) throw new ImageLimitException("이미지는 20MB 이하여야 합니다.");
         boolean jpeg =
                 bytes.length >= 3 && (bytes[0] & 255) == 255 && (bytes[1] & 255) == 216 && (bytes[2] & 255) == 255;
         boolean png = isPng(bytes);
         if (!(jpeg && (type == FileType.JPG || type == FileType.JPEG) || png && type == FileType.PNG)) {
-            throw new IllegalArgumentException("확장자와 실제 JPG/JPEG·PNG 형식이 일치해야 합니다.");
+            throw new ImageRejectedException(ImageRejectReason.FORMAT_MISMATCH);
         }
         BufferedImage raw;
         try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
             var readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) throw new IllegalArgumentException("이미지를 읽을 수 없습니다.");
+            if (!readers.hasNext()) throw new ImageRejectedException(ImageRejectReason.NO_IMAGE_READER);
             ImageReader reader = readers.next();
             try {
                 reader.setInput(input);
@@ -38,13 +38,13 @@ public final class WorksheetImagePreparer {
                     throw new ImageLimitException("이미지 해상도 제한은 4천만 픽셀입니다.");
                 int imageCount = reader.getNumImages(true);
                 if (imageCount != 1 && !(jpeg && JpegGainMapMetadata.isSupported(reader, imageCount, bytes)))
-                    throw new IllegalArgumentException("한 장의 정지 이미지 또는 HDR 보조 이미지가 포함된 사진만 지원합니다.");
+                    throw new ImageRejectedException(ImageRejectReason.UNSUPPORTED_IMAGE_COUNT);
                 raw = reader.read(0);
             } finally {
                 reader.dispose();
             }
         }
-        if (raw == null) throw new IllegalArgumentException("이미지를 읽을 수 없습니다.");
+        if (raw == null) throw new ImageRejectedException(ImageRejectReason.DECODE_FAILED);
         int orientation = orientation(bytes, jpeg);
         BufferedImage upright = orient(raw, orientation);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -97,24 +97,25 @@ public final class WorksheetImagePreparer {
     }
 
     private static int tiffOrientation(byte[] bytes, int offset, int length) {
-        if (length < 8) throw new IllegalArgumentException("손상된 EXIF 헤더입니다.");
+        if (length < 8) throw new ImageRejectedException(ImageRejectReason.EXIF_HEADER_CORRUPT);
         ByteBuffer tiff = ByteBuffer.wrap(bytes, offset, length).slice();
         if (tiff.get(0) == 'I' && tiff.get(1) == 'I') tiff.order(ByteOrder.LITTLE_ENDIAN);
         else if (tiff.get(0) == 'M' && tiff.get(1) == 'M') tiff.order(ByteOrder.BIG_ENDIAN);
-        else throw new IllegalArgumentException("지원하지 않는 EXIF 바이트 순서입니다.");
-        if (tiff.getShort(2) != 42) throw new IllegalArgumentException("손상된 TIFF 헤더입니다.");
+        else throw new ImageRejectedException(ImageRejectReason.EXIF_BYTE_ORDER_UNSUPPORTED);
+        if (tiff.getShort(2) != 42) throw new ImageRejectedException(ImageRejectReason.TIFF_HEADER_CORRUPT);
         int ifd = tiff.getInt(4);
-        if (ifd < 0 || ifd + 2L > length) throw new IllegalArgumentException("손상된 EXIF 위치입니다.");
+        if (ifd < 0 || ifd + 2L > length) throw new ImageRejectedException(ImageRejectReason.EXIF_OFFSET_CORRUPT);
         int count = Short.toUnsignedInt(tiff.getShort(ifd));
         for (int i = 0; i < count; i++) {
             long entry = ifd + 2L + i * 12L;
-            if (entry + 12 > length) throw new IllegalArgumentException("손상된 EXIF 항목입니다.");
+            if (entry + 12 > length) throw new ImageRejectedException(ImageRejectReason.EXIF_ENTRY_CORRUPT);
             int p = (int) entry;
             if (Short.toUnsignedInt(tiff.getShort(p)) == 274) {
                 if (tiff.getShort(p + 2) != 3 || tiff.getInt(p + 4) != 1)
-                    throw new IllegalArgumentException("지원하지 않는 EXIF 방향 형식입니다.");
+                    throw new ImageRejectedException(ImageRejectReason.EXIF_ORIENTATION_FORMAT_UNSUPPORTED);
                 int value = Short.toUnsignedInt(tiff.getShort(p + 8));
-                if (value < 1 || value > 8) throw new IllegalArgumentException("잘못된 EXIF 방향입니다.");
+                if (value < 1 || value > 8)
+                    throw new ImageRejectedException(ImageRejectReason.EXIF_ORIENTATION_INVALID);
                 return value;
             }
         }
@@ -122,7 +123,7 @@ public final class WorksheetImagePreparer {
     }
 
     public static BufferedImage orient(BufferedImage raw, int orientation) {
-        if (orientation < 1 || orientation > 8) throw new IllegalArgumentException("잘못된 방향입니다.");
+        if (orientation < 1 || orientation > 8) throw new ImageRejectedException(ImageRejectReason.ORIENTATION_INVALID);
         int w = raw.getWidth(), h = raw.getHeight();
         BufferedImage result =
                 new BufferedImage(orientation >= 5 ? h : w, orientation >= 5 ? w : h, BufferedImage.TYPE_INT_ARGB);
