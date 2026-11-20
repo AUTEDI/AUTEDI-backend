@@ -28,7 +28,7 @@ public class DevDataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (userRepository.count() == 0) {
-            log.info("Initializing default Academy and Director account for development...");
+            log.info("[startup] 개발용 시드 데이터 생성 시작");
 
             Academy academy = academyRepository.save(Academy.builder()
                     .name("에이플러스 학원")
