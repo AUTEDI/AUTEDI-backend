@@ -25,7 +25,7 @@ public class QrSessionCleanupScheduler {
     public void cleanup() {
         int deleted = qrSessionService.deleteStaleSessions(LocalDateTime.now().minusHours(RETENTION_HOURS));
         if (deleted > 0) {
-            log.info("만료된 QR 세션 {}건 삭제", deleted);
+            log.info("[qr] 만료된 세션 삭제: deletedCount={}", deleted);
         }
     }
 }

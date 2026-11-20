@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.generation.controller;
 
+import com.ceos24.autedi.global.exception.ApiErrorLogger;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import com.ceos24.autedi.global.response.ApiResponse;
 import java.util.Locale;
@@ -29,6 +30,7 @@ public class GenerationRequestConflictHandler {
                 break;
             }
         }
+        ApiErrorLogger.log(code, exception);
         return ResponseEntity.status(code.getStatus()).body(ApiResponse.onFailure(code, null));
     }
 }

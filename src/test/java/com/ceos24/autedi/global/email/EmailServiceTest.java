@@ -33,10 +33,11 @@ class EmailServiceTest {
     void sendInvitationEmail_callsEmailSenderWithSanitizedLink() {
         ReflectionTestUtils.setField(emailService, "frontendUrl", "https://autedi-frontend.vercel.app/");
 
-        assertDoesNotThrow(() -> emailService.sendInvitationEmail("teacher@test.com", "에이플러스 학원", "raw-token-123"));
+        assertDoesNotThrow(() -> emailService.sendInvitationEmail(5L, "teacher@test.com", "에이플러스 학원", "raw-token-123"));
 
         verify(emailSender, times(1))
                 .send(
+                        eq(5L),
                         eq("teacher@test.com"),
                         eq("noreply@autedi.com"),
                         eq("AUTEDI"),

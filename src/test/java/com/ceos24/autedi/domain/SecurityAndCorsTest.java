@@ -75,7 +75,9 @@ class SecurityAndCorsTest {
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000"))
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "ETag, Authorization, Location"));
+                .andExpect(header().string(
+                                HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                                "ETag, Authorization, Location, X-Request-Id"));
 
         // 설정에 명시된 운영 프런트 origin은 허용
         mockMvc.perform(options("/api/v1/auth/login")

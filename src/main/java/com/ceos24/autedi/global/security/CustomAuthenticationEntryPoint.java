@@ -1,5 +1,6 @@
 package com.ceos24.autedi.global.security;
 
+import com.ceos24.autedi.global.exception.ApiErrorLogger;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,6 +19,7 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
             HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {
         ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
+        ApiErrorLogger.log(errorCode);
         response.setStatus(errorCode.getStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

@@ -33,7 +33,7 @@ public class S3Config {
     @Bean(destroyMethod = "close")
     @ConditionalOnProperty(name = "app.storage.type", havingValue = "s3")
     public S3Client s3Client() {
-        log.info("AWS S3Client 초기화: region={}", region);
+        log.info("[startup] S3 클라이언트 초기화: region={}", region);
         S3ClientBuilder builder = S3Client.builder().region(Region.of(region));
 
         String cleanAccessKey =
@@ -42,16 +42,16 @@ public class S3Config {
                 secretKey != null ? secretKey.trim().replace("\"", "").replace("'", "") : "";
 
         if (StringUtils.hasText(cleanAccessKey) && StringUtils.hasText(cleanSecretKey)) {
-            log.info("AWS S3Client: StaticCredentialsProvider (AccessKey 주입) 사용");
+            log.info("[startup] S3 자격 증명 방식: provider=static");
             builder.credentialsProvider(
                     StaticCredentialsProvider.create(AwsBasicCredentials.create(cleanAccessKey, cleanSecretKey)));
         } else {
-            log.info("AWS S3Client: DefaultCredentialsProvider (IAM Role / 환경변수) 사용");
+            log.info("[startup] S3 자격 증명 방식: provider=default");
             builder.credentialsProvider(DefaultCredentialsProvider.create());
         }
 
         if (StringUtils.hasText(endpoint)) {
-            log.info("AWS S3Client: Custom Endpoint 적용 ({})", endpoint);
+            log.info("[startup] S3 커스텀 엔드포인트 적용: endpoint={}", endpoint);
             builder.endpointOverride(URI.create(endpoint.trim())).forcePathStyle(true);
         }
 
