@@ -54,9 +54,9 @@ public class DevDataInitializer implements CommandLineRunner {
                     .status(UserStatus.ACTIVE)
                     .build());
 
-            log.info("Initialized Academy: id={}, name={}", academy.getId(), academy.getName());
-            log.info("Initialized Director User: id={}, email={}", director.getId(), director.getEmail());
-            log.info("Initialized Teacher User: id={}, email={}", teacher.getId(), teacher.getEmail());
+            log.info("[startup] 개발용 시드 학원 생성: academyId={}", academy.getId());
+            log.info("[startup] 개발용 시드 계정 생성: userId={}, role={}", director.getId(), director.getRole());
+            log.info("[startup] 개발용 시드 계정 생성: userId={}, role={}", teacher.getId(), teacher.getRole());
         }
     }
 }
