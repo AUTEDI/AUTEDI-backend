@@ -354,7 +354,7 @@ public class WorksheetService {
                     LocalStorageService.sha256(png),
                     png);
         } catch (IOException e) {
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, e);
         }
     }
 
