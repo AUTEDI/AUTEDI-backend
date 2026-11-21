@@ -114,7 +114,7 @@ public class S3FileStorageService implements FileStorageService {
                 "[upload-timing] s3 upload: originalKB={}, preparedKB={}, read={}ms, prepare={}ms, putOriginal={}ms,"
                         + " putPrepared={}ms, sha256={}ms, total={}ms",
                 original.length / 1024,
-                prepared.png().length / 1024,
+                prepared.pngSize() / 1024,
                 (readDoneNs - startNs) / 1_000_000L,
                 (prepareDoneNs - readDoneNs) / 1_000_000L,
                 (putOriginalDoneNs - prepareDoneNs) / 1_000_000L,

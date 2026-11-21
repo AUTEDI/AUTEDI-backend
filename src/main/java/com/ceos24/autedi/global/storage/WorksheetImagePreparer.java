@@ -70,6 +70,7 @@ public final class WorksheetImagePreparer {
         long gcDecodeMs = gcMillis();
         int orientation = orientation(bytes, jpeg);
         BufferedImage upright = orient(raw, orientation);
+        raw = null; // 방향 보정이 끝난 디코딩 결과는 더 쓰지 않으므로 PNG 인코딩 중 GC가 회수할 수 있게 한다.
         long orientDoneNs = System.nanoTime();
         long gcOrientMs = gcMillis();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
