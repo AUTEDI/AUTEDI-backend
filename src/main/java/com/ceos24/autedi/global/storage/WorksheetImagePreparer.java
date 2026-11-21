@@ -2,6 +2,10 @@ package com.ceos24.autedi.global.storage;
 
 import com.ceos24.autedi.domain.worksheet.entity.FileType;
 import java.awt.image.BufferedImage;
+import java.awt.image.ComponentSampleModel;
+import java.awt.image.DataBufferByte;
+import java.awt.image.DataBufferInt;
+import java.awt.image.WritableRaster;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -154,6 +158,91 @@ public final class WorksheetImagePreparer {
     }
 
     public static BufferedImage orient(BufferedImage raw, int orientation) {
+        if (orientation < 1 || orientation > 8) throw new IllegalArgumentException("잘못된 방향입니다.");
+        return isPlainBgr(raw) ? orientBgr(raw, orientation) : orientGeneric(raw, orientation);
+    }
+
+    /** 일반 컬러 JPEG가 읽히는 형태(한 픽셀 3바이트, 한 줄 가로x3바이트, 시작 위치 0)일 때만 true. 아니면 기존 경로를 쓴다. */
+    private static boolean isPlainBgr(BufferedImage image) {
+        if (image.getType() != BufferedImage.TYPE_3BYTE_BGR) return false;
+        WritableRaster raster = image.getRaster();
+        return raster.getDataBuffer() instanceof DataBufferByte buffer
+                && buffer.getOffset() == 0
+                && raster.getSampleModelTranslateX() == 0
+                && raster.getSampleModelTranslateY() == 0
+                && raster.getSampleModel() instanceof ComponentSampleModel model
+                && model.getPixelStride() == 3
+                && model.getScanlineStride() == image.getWidth() * 3
+                && buffer.getData().length == image.getWidth() * image.getHeight() * 3;
+    }
+
+    /** 배열을 직접 읽고 써서 기존 orientGeneric과 같은 결과(알파 255의 ARGB)를 낸다. 새 번호 = start + 열 * stepX + 행 * stepY. */
+    private static BufferedImage orientBgr(BufferedImage raw, int orientation) {
+        int w = raw.getWidth(), h = raw.getHeight();
+        byte[] src = ((DataBufferByte) raw.getRaster().getDataBuffer()).getData();
+        BufferedImage result =
+                new BufferedImage(orientation >= 5 ? h : w, orientation >= 5 ? w : h, BufferedImage.TYPE_INT_ARGB);
+        int[] dst = ((DataBufferInt) result.getRaster().getDataBuffer()).getData();
+
+        int start;
+        int stepX;
+        int stepY;
+        switch (orientation) {
+            case 1 -> {
+                start = 0;
+                stepX = 1;
+                stepY = w;
+            }
+            case 2 -> {
+                start = w - 1;
+                stepX = -1;
+                stepY = w;
+            }
+            case 3 -> {
+                start = w * h - 1;
+                stepX = -1;
+                stepY = -w;
+            }
+            case 4 -> {
+                start = (h - 1) * w;
+                stepX = 1;
+                stepY = -w;
+            }
+            case 5 -> {
+                start = 0;
+                stepX = h;
+                stepY = 1;
+            }
+            case 6 -> {
+                start = h - 1;
+                stepX = h;
+                stepY = -1;
+            }
+            case 7 -> {
+                start = w * h - 1;
+                stepX = -h;
+                stepY = -1;
+            }
+            default -> {
+                start = (w - 1) * h;
+                stepX = -h;
+                stepY = 1;
+            }
+        }
+
+        int s = 0; // 원본에서 지금 읽는 바이트 위치(파랑, 초록, 빨강 순서)
+        for (int y = 0; y < h; y++) {
+            int d = start + y * stepY; // 이 행의 첫 픽셀이 가는 새 번호
+            for (int x = 0; x < w; x++) {
+                dst[d] = 0xFF000000 | (src[s + 2] & 0xFF) << 16 | (src[s + 1] & 0xFF) << 8 | (src[s] & 0xFF);
+                s += 3;
+                d += stepX;
+            }
+        }
+        return result;
+    }
+
+    private static BufferedImage orientGeneric(BufferedImage raw, int orientation) {
         if (orientation < 1 || orientation > 8) throw new IllegalArgumentException("잘못된 방향입니다.");
         int w = raw.getWidth(), h = raw.getHeight();
         BufferedImage result =
