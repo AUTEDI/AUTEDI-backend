@@ -17,6 +17,7 @@ import java.util.Arrays;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.MemoryCacheImageInputStream;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import lombok.extern.slf4j.Slf4j;
 
 /** 기존 OcrTestImage의 EXIF/eXIf·8방향 변환을 서비스 입력에 재사용한다. 원본 바이트는 바꾸지 않는다. */
@@ -74,7 +75,10 @@ public final class WorksheetImagePreparer {
         long orientDoneNs = System.nanoTime();
         long gcOrientMs = gcMillis();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        if (!ImageIO.write(upright, "png", out)) throw new IOException("PNG 인코더가 없습니다.");
+        // 결과를 바이트 배열로 받으므로 ImageIO 기본값(디스크 임시 파일 캐시) 대신 메모리 캐시를 쓴다. PNG 바이트는 같다.
+        try (var imageOut = new MemoryCacheImageOutputStream(out)) {
+            if (!ImageIO.write(upright, "png", imageOut)) throw new IOException("PNG 인코더가 없습니다.");
+        }
         long encodeDoneNs = System.nanoTime();
         long gcEncodeMs = gcMillis();
         if (out.size() > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
