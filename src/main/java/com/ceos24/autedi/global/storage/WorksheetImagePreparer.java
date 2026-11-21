@@ -10,14 +10,17 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
+import lombok.extern.slf4j.Slf4j;
 
 /** 기존 OcrTestImage의 EXIF/eXIf·8방향 변환을 서비스 입력에 재사용한다. 원본 바이트는 바꾸지 않는다. */
+@Slf4j
 public final class WorksheetImagePreparer {
     public static final int MAX_BYTES = 20 * 1024 * 1024;
     public static final long MAX_PIXELS = 40_000_000L;
     private static final byte[] PNG_SIGNATURE = {(byte) 137, 80, 78, 71, 13, 10, 26, 10};
 
     public PreparedImage prepare(byte[] bytes, FileType type) throws IOException {
+        long startNs = System.nanoTime();
         if (bytes.length == 0) throw new IllegalArgumentException("빈 이미지입니다.");
         if (bytes.length > MAX_BYTES) throw new ImageLimitException("이미지는 20MB 이하여야 합니다.");
         boolean jpeg =
@@ -26,6 +29,9 @@ public final class WorksheetImagePreparer {
         if (!(jpeg && (type == FileType.JPG || type == FileType.JPEG) || png && type == FileType.PNG)) {
             throw new IllegalArgumentException("확장자와 실제 JPG/JPEG·PNG 형식이 일치해야 합니다.");
         }
+        long headerDoneNs = 0L;
+        long sizeDoneNs = 0L;
+        long countDoneNs = 0L;
         BufferedImage raw;
         try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
             var readers = ImageIO.getImageReaders(input);
@@ -34,23 +40,49 @@ public final class WorksheetImagePreparer {
             try {
                 reader.setInput(input);
                 int width = reader.getWidth(0), height = reader.getHeight(0);
+                sizeDoneNs = System.nanoTime();
                 if (width < 1 || height < 1 || (long) width * height > MAX_PIXELS)
                     throw new ImageLimitException("이미지 해상도 제한은 4천만 픽셀입니다.");
                 int imageCount = reader.getNumImages(true);
+                countDoneNs = System.nanoTime();
                 if (imageCount != 1 && !(jpeg && JpegGainMapMetadata.isSupported(reader, imageCount, bytes)))
                     throw new IllegalArgumentException("한 장의 정지 이미지 또는 HDR 보조 이미지가 포함된 사진만 지원합니다.");
+                headerDoneNs = System.nanoTime();
                 raw = reader.read(0);
             } finally {
                 reader.dispose();
             }
         }
         if (raw == null) throw new IllegalArgumentException("이미지를 읽을 수 없습니다.");
+        long decodeDoneNs = System.nanoTime();
         int orientation = orientation(bytes, jpeg);
         BufferedImage upright = orient(raw, orientation);
+        long orientDoneNs = System.nanoTime();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!ImageIO.write(upright, "png", out)) throw new IOException("PNG 인코더가 없습니다.");
+        long encodeDoneNs = System.nanoTime();
         if (out.size() > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
+        log.info(
+                "[upload-timing] prepare: in={}KB, pixels={}x{}, orientation={}, header={}ms(size={}, numImages={}, gainMapCheck={}), decode={}ms, orient={}ms,"
+                        + " pngEncode={}ms, pngOut={}KB, total={}ms",
+                bytes.length / 1024,
+                upright.getWidth(),
+                upright.getHeight(),
+                orientation,
+                ms(startNs, headerDoneNs),
+                ms(startNs, sizeDoneNs),
+                ms(sizeDoneNs, countDoneNs),
+                ms(countDoneNs, headerDoneNs),
+                ms(headerDoneNs, decodeDoneNs),
+                ms(decodeDoneNs, orientDoneNs),
+                ms(orientDoneNs, encodeDoneNs),
+                out.size() / 1024,
+                ms(startNs, encodeDoneNs));
         return new PreparedImage(out.toByteArray(), upright.getWidth(), upright.getHeight(), orientation);
+    }
+
+    private static long ms(long fromNs, long toNs) {
+        return (toNs - fromNs) / 1_000_000L;
     }
 
     public static boolean isPng(byte[] bytes) {

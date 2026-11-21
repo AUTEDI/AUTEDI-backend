@@ -66,6 +66,7 @@ public class WorksheetService {
     @Transactional
     public WorksheetDetailResponse uploadWorksheets(
             Long userId, Long academyId, String qrSessionId, List<MultipartFile> files) {
+        long startNs = System.nanoTime();
         QrSession qr = resolveQrTarget(qrSessionId, userId);
         if (qr != null && qr.getWorksheetId() != null) {
             // 기존 작업 교체용으로 만든 QR로는 새 작업을 만들 수 없다.
@@ -92,6 +93,7 @@ public class WorksheetService {
             throw new CustomException(ErrorCode.ACADEMY_SUBSCRIPTION_INACTIVE);
         }
 
+        long checkDoneNs = System.nanoTime();
         // 각 파일 저장 및 메타데이터 추출
         List<StoredFile> storedFiles = new java.util.ArrayList<>();
         long totalSize = 0L;
@@ -108,6 +110,7 @@ public class WorksheetService {
             throw new CustomException(ErrorCode.EMPTY_FILE);
         }
 
+        long storeDoneNs = System.nanoTime();
         StoredFile firstFile = storedFiles.get(0);
 
         // 학습지 마스터 레코드 생성 (초기 상태: DRAFT, pageCount: 업로드된 파일 개수)
@@ -138,6 +141,15 @@ public class WorksheetService {
             pages.add(page);
         }
 
+        long dbDoneNs = System.nanoTime();
+        log.info(
+                "[upload-timing] service: files={}, precheck(QR+user+academy)={}ms, storeImages={}ms, dbSave={}ms,"
+                        + " total(before commit)={}ms",
+                storedFiles.size(),
+                (checkDoneNs - startNs) / 1_000_000L,
+                (storeDoneNs - checkDoneNs) / 1_000_000L,
+                (dbDoneNs - storeDoneNs) / 1_000_000L,
+                (dbDoneNs - startNs) / 1_000_000L);
         log.info(
                 "학습지 다중 페이지 업로드 완료: worksheetId={}, originalFilename={}, pageCount={}",
                 savedWorksheet.getId(),
@@ -313,14 +325,24 @@ public class WorksheetService {
 
     /** 화면 API와 향후 두 AI 단계가 함께 사용하는 단일 저장 PNG 입력이다. AI 요청은 수행하지 않는다. */
     public PreparedWorksheetImage getPreparedImage(Long academyId, Long worksheetId, int pageNumber) {
+        long startNs = System.nanoTime();
         findOwnedWorksheet(academyId, worksheetId);
         WorksheetPage page = worksheetPageRepository
                 .findByWorksheetIdAndPageNumber(worksheetId, pageNumber)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAGE_NOT_FOUND));
         if (!page.getPreviewImageUrl().endsWith("-prepared.png"))
             throw new CustomException(ErrorCode.IMAGE_NOT_PREPARED);
+        long dbDoneNs = System.nanoTime();
         try (var input = fileStorageService.load(page.getPreviewImageUrl()).getInputStream()) {
             byte[] png = input.readNBytes(WorksheetImagePreparer.MAX_BYTES + 1);
+            long loadDoneNs = System.nanoTime();
+            log.info(
+                    "[upload-timing] display image: worksheetId={}, page={}, pngKB={}, db={}ms, storageLoad={}ms",
+                    worksheetId,
+                    pageNumber,
+                    png.length / 1024,
+                    (dbDoneNs - startNs) / 1_000_000L,
+                    (loadDoneNs - dbDoneNs) / 1_000_000L);
             if (png.length > WorksheetImagePreparer.MAX_BYTES
                     || png.length < 24
                     || !WorksheetImagePreparer.isPng(png)) {

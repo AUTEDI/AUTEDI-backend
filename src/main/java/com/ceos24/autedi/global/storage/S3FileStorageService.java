@@ -63,10 +63,13 @@ public class S3FileStorageService implements FileStorageService {
             throw new CustomException(ErrorCode.UNSUPPORTED_FILE_TYPE);
         }
         if (type == FileType.PDF) throw new CustomException(ErrorCode.UNSUPPORTED_FILE_TYPE);
+        long startNs = System.nanoTime();
         byte[] original;
         PreparedImage prepared;
+        long readDoneNs;
         try (var input = file.getInputStream()) {
             original = input.readNBytes(WorksheetImagePreparer.MAX_BYTES + 1);
+            readDoneNs = System.nanoTime();
             if (original.length > WorksheetImagePreparer.MAX_BYTES) throw new CustomException(ErrorCode.FILE_TOO_LARGE);
             prepared = preparer.prepare(original, type);
         } catch (WorksheetImagePreparer.ImageLimitException e) {
@@ -87,9 +90,14 @@ public class S3FileStorageService implements FileStorageService {
         String prefix = directory.isEmpty() ? "" : directory + "/";
         String originalKey = prefix + filename;
         String preparedKey = prefix + id + "-prepared.png";
+        long prepareDoneNs = System.nanoTime();
+        long putOriginalDoneNs;
+        long putPreparedDoneNs;
         try {
             put(originalKey, original, type == FileType.PNG ? "image/png" : "image/jpeg");
+            putOriginalDoneNs = System.nanoTime();
             put(preparedKey, prepared.png(), "image/png");
+            putPreparedDoneNs = System.nanoTime();
         } catch (RuntimeException e) {
             // 이번 요청이 선택한 UUID 객체만 정리한다. 이전 업로드나 다른 키는 삭제하지 않는다.
             cleanup(originalKey);
@@ -100,13 +108,26 @@ public class S3FileStorageService implements FileStorageService {
             }
             throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
         }
+        String hash = LocalStorageService.sha256(original);
+        long endNs = System.nanoTime();
+        log.info(
+                "[upload-timing] s3 upload: originalKB={}, preparedKB={}, read={}ms, prepare={}ms, putOriginal={}ms,"
+                        + " putPrepared={}ms, sha256={}ms, total={}ms",
+                original.length / 1024,
+                prepared.png().length / 1024,
+                (readDoneNs - startNs) / 1_000_000L,
+                (prepareDoneNs - readDoneNs) / 1_000_000L,
+                (putOriginalDoneNs - prepareDoneNs) / 1_000_000L,
+                (putPreparedDoneNs - putOriginalDoneNs) / 1_000_000L,
+                (endNs - putPreparedDoneNs) / 1_000_000L,
+                (endNs - startNs) / 1_000_000L);
         return new StoredFile(
                 name,
                 filename,
                 buildFileUrl(originalKey),
                 type,
                 (long) original.length,
-                LocalStorageService.sha256(original),
+                hash,
                 buildFileUrl(preparedKey),
                 prepared.width(),
                 prepared.height());
