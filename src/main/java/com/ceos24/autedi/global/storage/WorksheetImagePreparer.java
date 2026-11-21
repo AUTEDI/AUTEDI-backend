@@ -9,6 +9,8 @@ import java.awt.image.WritableRaster;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -36,6 +38,9 @@ public final class WorksheetImagePreparer {
         long headerDoneNs = 0L;
         long sizeDoneNs = 0L;
         long countDoneNs = 0L;
+        long gcStartMs = gcMillis();
+        long heapStartMb = usedHeapMb();
+        long gcHeaderMs = 0L;
         BufferedImage raw;
         try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
             var readers = ImageIO.getImageReaders(input);
@@ -52,6 +57,7 @@ public final class WorksheetImagePreparer {
                 if (imageCount != 1 && !(jpeg && JpegGainMapMetadata.isSupported(reader, imageCount, bytes)))
                     throw new IllegalArgumentException("한 장의 정지 이미지 또는 HDR 보조 이미지가 포함된 사진만 지원합니다.");
                 headerDoneNs = System.nanoTime();
+                gcHeaderMs = gcMillis();
                 raw = reader.read(0);
             } finally {
                 reader.dispose();
@@ -59,12 +65,15 @@ public final class WorksheetImagePreparer {
         }
         if (raw == null) throw new IllegalArgumentException("이미지를 읽을 수 없습니다.");
         long decodeDoneNs = System.nanoTime();
+        long gcDecodeMs = gcMillis();
         int orientation = orientation(bytes, jpeg);
         BufferedImage upright = orient(raw, orientation);
         long orientDoneNs = System.nanoTime();
+        long gcOrientMs = gcMillis();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (!ImageIO.write(upright, "png", out)) throw new IOException("PNG 인코더가 없습니다.");
         long encodeDoneNs = System.nanoTime();
+        long gcEncodeMs = gcMillis();
         if (out.size() > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
         log.info(
                 "[upload-timing] prepare: in={}KB, pixels={}x{}, orientation={}, header={}ms(size={}, numImages={}, gainMapCheck={}), decode={}ms, orient={}ms,"
@@ -82,11 +91,36 @@ public final class WorksheetImagePreparer {
                 ms(orientDoneNs, encodeDoneNs),
                 out.size() / 1024,
                 ms(startNs, encodeDoneNs));
+        log.info(
+                "[upload-timing] gc: header={}ms, decode={}ms, orient={}ms, pngEncode={}ms, total={}ms,"
+                        + " heapUsedStart={}MB, heapUsedEnd={}MB, heapMax={}MB",
+                gcHeaderMs - gcStartMs,
+                gcDecodeMs - gcHeaderMs,
+                gcOrientMs - gcDecodeMs,
+                gcEncodeMs - gcOrientMs,
+                gcEncodeMs - gcStartMs,
+                heapStartMb,
+                usedHeapMb(),
+                Runtime.getRuntime().maxMemory() / (1024 * 1024));
         return new PreparedImage(out.toByteArray(), upright.getWidth(), upright.getHeight(), orientation);
     }
 
     private static long ms(long fromNs, long toNs) {
         return (toNs - fromNs) / 1_000_000L;
+    }
+
+    /** 지금까지 GC에 쓴 누적 시간(ms). 구간 앞뒤의 차이로 그 구간의 GC 시간을 본다. */
+    private static long gcMillis() {
+        long total = 0L;
+        for (GarbageCollectorMXBean bean : ManagementFactory.getGarbageCollectorMXBeans()) {
+            total += Math.max(0L, bean.getCollectionTime());
+        }
+        return total;
+    }
+
+    private static long usedHeapMb() {
+        Runtime runtime = Runtime.getRuntime();
+        return (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
     }
 
     public static boolean isPng(byte[] bytes) {
@@ -180,9 +214,11 @@ public final class WorksheetImagePreparer {
     private static BufferedImage orientBgr(BufferedImage raw, int orientation) {
         int w = raw.getWidth(), h = raw.getHeight();
         byte[] src = ((DataBufferByte) raw.getRaster().getDataBuffer()).getData();
+        long allocStartNs = System.nanoTime();
         BufferedImage result =
                 new BufferedImage(orientation >= 5 ? h : w, orientation >= 5 ? w : h, BufferedImage.TYPE_INT_ARGB);
         int[] dst = ((DataBufferInt) result.getRaster().getDataBuffer()).getData();
+        long allocDoneNs = System.nanoTime();
 
         int start;
         int stepX;
@@ -239,6 +275,10 @@ public final class WorksheetImagePreparer {
                 d += stepX;
             }
         }
+        log.info(
+                "[upload-timing] orient: alloc={}ms, loop={}ms",
+                ms(allocStartNs, allocDoneNs),
+                ms(allocDoneNs, System.nanoTime()));
         return result;
     }
 
