@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "SUGGESTION",
+      "area": "SENTENCE_STRUCTURE",
+      "issue_kinds": [
+        "sentence_structure",
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "He went home. He was tired.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "He was tired when he went home.",
+      "guidance": null,
+      "reason": "기본 과거형 교정을 반영하고, 같은 시점의 상황이라는 의도 아래 두 문장을 연결하는 선택적 개선입니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.25
+        ]
+      ],
+      "revision_scope": "SENTENCE_GROUP",
+      "edit": {
+        "operation": "RESTRUCTURE",
+        "text": "He was tired when he went home.",
+        "position": null
+      }
+    }
+  ]
+}

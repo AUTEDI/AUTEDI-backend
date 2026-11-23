@@ -58,7 +58,7 @@ public class JwtTokenProvider {
             parseClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("Invalid JWT token: {}", e.getMessage());
+            log.debug("[auth] 유효하지 않은 JWT 토큰: errorType={}", e.getClass().getSimpleName());
             return false;
         }
     }

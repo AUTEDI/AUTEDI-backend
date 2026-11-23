@@ -80,7 +80,8 @@ services:
       - "8080"
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:+UseSerialGC -Duser.timezone=Asia/Seoul"
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx288m -XX:+UseSerialGC -Duser.timezone=Asia/Seoul"
+      MALLOC_ARENA_MAX: "2"
       APP_GENERATION_WORKERCOUNT: "2"
       APP_AI_CLIENT: "TERRA"
       OPENAI_API_KEY: "${OPENAI_API_KEY:?OPENAI_API_KEY is missing}"

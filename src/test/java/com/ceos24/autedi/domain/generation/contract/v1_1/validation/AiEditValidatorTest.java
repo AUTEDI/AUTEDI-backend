@@ -58,8 +58,10 @@ class AiEditValidatorTest {
                     results.get(expected.get("candidate_index").intValue());
             assertEquals(AiEditValidationStatus.CONSISTENT, result.status(), id);
             assertTrue(result.editIssues().isEmpty(), id);
-            assertEquals(expected.get("requires_review").asBoolean(), result.requiresReview(), id);
-            assertEquals(expected.get("auto_place").asBoolean(), result.canAutoPlace(), id);
+            // 원문 구간 겹침은 후속 정책 검증의 책임이며 수정 동작 자체의 오류가 아니다.
+            JsonNode stage = expected.has("stage_expectations") ? expected.at("/stage_expectations/edit") : expected;
+            assertEquals(stage.get("requires_review").asBoolean(), result.requiresReview(), id);
+            assertEquals(stage.get("auto_place").asBoolean(), result.canAutoPlace(), id);
         }
         switch (id) {
             case "edit-replacement-mismatch-review" -> assertInvalid(

@@ -26,7 +26,7 @@ public class StorageConfig {
             @Value("${aws.s3.custom-domain:}") String customDomain,
             @Value("${app.storage.upload-dir:uploads}") String uploadDir,
             @Value("${app.backend-url:${app.frontend-url:http://localhost:8080}}") String backendUrl) {
-        log.info("스토리지 빈 활성화: S3FileStorageService (bucket={}, region={})", bucket, region);
+        log.info("[startup] 파일 저장소 설정: type=s3, bucket={}, region={}", bucket, region);
         LocalStorageService fallbackService = new LocalStorageService(uploadDir, backendUrl);
         return new S3FileStorageService(s3Client, bucket, region, customDomain, fallbackService);
     }
@@ -36,7 +36,7 @@ public class StorageConfig {
     public FileStorageService localStorageService(
             @Value("${app.storage.upload-dir:uploads}") String uploadDir,
             @Value("${app.backend-url:http://localhost:8080}") String backendUrl) {
-        log.info("스토리지 빈 활성화: LocalStorageService (폴백 스토리지 사용, uploadDir={})", uploadDir);
+        log.info("[startup] 파일 저장소 설정: type=local, uploadDir={}", uploadDir);
         return new LocalStorageService(uploadDir, backendUrl);
     }
 }

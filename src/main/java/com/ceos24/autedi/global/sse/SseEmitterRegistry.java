@@ -68,7 +68,7 @@ public class SseEmitterRegistry {
         try {
             connection.emitter().complete();
         } catch (RuntimeException e) {
-            log.debug("SSE emitter 종료 중 예외 무시: {}", e.getClass().getSimpleName());
+            log.debug("[sse] emitter 종료 중 예외 무시: errorType={}", e.getClass().getSimpleName());
         }
     }
 

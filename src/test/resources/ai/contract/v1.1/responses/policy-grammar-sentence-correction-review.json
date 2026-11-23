@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "action": "REPLACE",
+      "feedback_type": "CORRECTION",
+      "area": "GRAMMAR_SPELLING",
+      "issue_kinds": [
+        "grammar"
+      ],
+      "anchors": [
+        {
+          "line_id": 1,
+          "original": "He go home.",
+          "occurrence": 1
+        }
+      ],
+      "replacement": "He went home.",
+      "guidance": null,
+      "reason": "원문의 의미를 유지하며 해당 영역을 선택적으로 개선합니다.",
+      "location_uncertain": false,
+      "target_boxes": [
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.25
+        ]
+      ],
+      "revision_scope": "SENTENCE",
+      "edit": {
+        "operation": "RESTRUCTURE",
+        "text": "He went home.",
+        "position": null
+      }
+    }
+  ]
+}

@@ -19,7 +19,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
         String location = "file:" + uploadPath.toString() + "/";
-        log.info("정적 파일 리소스 핸들러 등록: /files/** -> {}", location);
+        log.info("[startup] 정적 파일 경로 등록: path=/files/**, location={}", location);
         registry.addResourceHandler("/files/**").addResourceLocations(location);
     }
 }

@@ -1,5 +1,6 @@
 package com.ceos24.autedi.global.config;
 
+import com.ceos24.autedi.global.logging.MdcTaskDecorator;
 import com.ceos24.autedi.global.sse.SseProperties;
 import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(5);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("mail-exec-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         executor.initialize();
@@ -38,9 +40,10 @@ public class AsyncConfig {
         executor.setMaxPoolSize(conf.maxSize());
         executor.setQueueCapacity(conf.queueCapacity());
         executor.setThreadNamePrefix("sse-exec-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.setRejectedExecutionHandler((task, pool) -> log.warn(
-                "SSE executor 포화로 전송 작업을 버립니다. queue={}", pool.getQueue().size()));
+                "[sse] executor 포화로 전송 작업을 버림: queue={}", pool.getQueue().size()));
         return executor;
     }
 }

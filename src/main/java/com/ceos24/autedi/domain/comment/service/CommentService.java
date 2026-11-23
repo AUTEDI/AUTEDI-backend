@@ -85,7 +85,11 @@ public class CommentService {
         // @Version이 미리 채워져 있어 save()가 merge로 동작하므로, 반드시 반환된 영속 엔티티를 사용한다.
         Comment comment = commentRepository.save(newComment);
 
-        log.info("교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}", comment.getId(), worksheetId, page.getId());
+        log.info(
+                "[feedback] 교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}",
+                comment.getId(),
+                worksheetId,
+                page.getId());
 
         return CommentResponse.from(comment);
     }
@@ -100,7 +104,7 @@ public class CommentService {
         validateIfMatch(ifMatch, comment.getEtag());
 
         comment.updateContent(request.content().trim(), request.color());
-        log.info("교사 코멘트 내용/색상 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
+        log.info("[feedback] 교사 코멘트 내용/색상 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
 
         String nextEtag = "\"com_" + comment.getId() + "-v" + (comment.getVersion() + 1) + "\"";
         return CommentResponse.of(comment, nextEtag);
@@ -115,7 +119,7 @@ public class CommentService {
         validateIfMatch(ifMatch, comment.getEtag());
 
         comment.delete();
-        log.info("교사 코멘트 삭제 완료: commentId={}, worksheetId={}", commentId, worksheetId);
+        log.info("[feedback] 교사 코멘트 삭제 완료: commentId={}, worksheetId={}", commentId, worksheetId);
     }
 
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {

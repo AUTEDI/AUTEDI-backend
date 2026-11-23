@@ -6,6 +6,7 @@ import com.ceos24.autedi.domain.correction.entity.CorrectionV11Details;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.generation.contract.GenerationContractRouter;
+import com.ceos24.autedi.domain.generation.contract.GenerationContractSelector;
 import com.ceos24.autedi.domain.generation.contract.GenerationContractVersion;
 import com.ceos24.autedi.domain.generation.contract.v1.AiArea;
 import com.ceos24.autedi.domain.generation.contract.v1.validation.AiCorrectionLevel;
@@ -239,6 +240,7 @@ public class GenerationResultStorageService {
     private static void checkBinding(
             WorksheetGeneration generation, WorksheetTranscription transcription, GenerationResultMetadata metadata) {
         var version = GenerationValidationStorageCodec.version(metadata);
+        // 과거 요청도 결과에는 실제 실행한 동작 버전을 기록해야 한다. 임의의 버전 조합은 허용하지 않는다.
         if (!generation
                         .getWorksheet()
                         .getId()
@@ -246,7 +248,9 @@ public class GenerationResultStorageService {
                 || !generation.getRequestFileHash().equals(transcription.getSourceFileHash())
                 || !metadata.model().equals(transcription.getModel())
                 || generation.getRequestAiProfile() != null
-                        && !generation.getRequestAiProfile().metadata().equals(metadata)
+                        && !GenerationContractSelector.executionProfile(generation)
+                                .metadata()
+                                .equals(metadata)
                 || version == GenerationContractVersion.V1_1 && generation.getRequestAiProfile() == null) {
             throw new IllegalArgumentException("생성 작업·전사·파일·모델·계약 버전 연결이 올바르지 않습니다.");
         }

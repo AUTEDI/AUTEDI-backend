@@ -38,7 +38,7 @@ public class SseEventPublisher {
         try {
             data = toJson(eventId, payload);
         } catch (JacksonException e) {
-            log.warn("SSE 이벤트 직렬화 실패: event={}", eventName);
+            log.warn("[sse] 이벤트 직렬화 실패: event={}", eventName);
             return;
         }
         for (SseEmitterRegistry.Connection connection : targets) {
@@ -62,7 +62,7 @@ public class SseEventPublisher {
         } catch (IOException | RuntimeException e) {
             // 클라이언트가 먼저 끊긴 정상적인 상황이다. 연결만 정리하고 전파하지 않는다.
             // completeWithError는 같은 예외를 서버의 에러 처리 경로로 다시 보내 ERROR 로그를 남기므로 complete로 정상 종료한다.
-            log.debug("SSE 전송 실패로 연결 정리: {}", e.getClass().getSimpleName());
+            log.debug("[sse] 전송 실패로 연결 정리: errorType={}", e.getClass().getSimpleName());
             registry.remove(userId, connection);
             try {
                 connection.emitter().complete();

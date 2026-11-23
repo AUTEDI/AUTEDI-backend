@@ -14,17 +14,19 @@ Source "apples", AFTER "." -> replacement="apples.", edit={"operation":"INSERT",
 DELETE: anchor only the existing material to remove. Use replacement="" and edit={"operation":"DELETE","text":"","position":null}.
 An empty replacement means deletion; replacement=null does not mean deletion. Do not provide new display wording for a deletion.
 
-REPLACE: select the word, phrase or permitted structural clause to change. replacement must be nonempty and different from the source.
+REPLACE: select the word, phrase or permitted clause to change. replacement must be nonempty and different from the source.
 Use operation=REPLACE, text equal to the exact replacement string and position=null inside edit.
 Example: source "go" -> replacement="goes", edit={"operation":"REPLACE","text":"goes","position":null}.
 Do not repeat a complete sentence when a local repair suffices or the area's allowed scope is only WORD or PHRASE.
 
-RESTRUCTURE: use only in SENTENCE_STRUCTURE with revision_scope=SENTENCE or SENTENCE_GROUP.
+RESTRUCTURE: use revision_scope=SENTENCE or SENTENCE_GROUP only, within the primary area's permitted feedback type and level.
+SENTENCE_STRUCTURE permits both scopes: CORRECTION only when a smaller repair cannot resolve the structural error, or ADVANCED SUGGESTION for a meaningful structural benefit.
+GRAMMAR_SPELLING permits SENTENCE only for ADVANCED SUGGESTION. CONTENT_SUMMARY permits SENTENCE or SENTENCE_GROUP only for ADVANCED SUGGESTION. VOCABULARY_EXPRESSION never permits RESTRUCTURE.
 Select the complete connected sentence or local sentence group. replacement is the finished revised sentence or sentences.
 Use operation=RESTRUCTURE, text equal to the exact replacement string and position=null inside edit; the result must differ from the source.
-Preserve meaning, facts and voice. Do not rewrite a whole paragraph or essay or add new reasons, evidence or events.
-STANDARD permits this only as a last resort for a genuine structural error that a smaller repair cannot resolve clearly.
-ADVANCED permits a meaningful optional structural improvement when a smaller change cannot deliver the same benefit.
+Preserve facts, core meaning, intent and supported relationships. For CORRECTION, preserve the student's voice and make only necessary repairs. ADVANCED SUGGESTION may change wording and syntax within its primary purpose.
+Do not rewrite a whole paragraph or essay or add new reasons, evidence or events. A focused CONTENT_SUMMARY suggestion may condense existing information across connected sentences.
+For SUGGESTION, include permitted baseline repairs in the final replacement but keep every anchor on the confirmed original; do not treat another card as its input.
 
 Do not create a MOVE operation: express a necessary move using the smallest contiguous source and a permitted replacement.
 For GUIDANCE or REVIEW, edit=null and revision_scope=null. Do not invent rendering tools, arrows, colors or layout fields.
