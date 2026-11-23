@@ -2,6 +2,10 @@ package com.ceos24.autedi.global.storage;
 
 import com.ceos24.autedi.domain.worksheet.entity.FileType;
 import java.awt.image.BufferedImage;
+import java.awt.image.ComponentSampleModel;
+import java.awt.image.DataBufferByte;
+import java.awt.image.DataBufferInt;
+import java.awt.image.WritableRaster;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -10,6 +14,8 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 
 /** 기존 OcrTestImage의 EXIF/eXIf·8방향 변환을 서비스 입력에 재사용한다. 원본 바이트는 바꾸지 않는다. */
 public final class WorksheetImagePreparer {
@@ -27,7 +33,8 @@ public final class WorksheetImagePreparer {
             throw new ImageRejectedException(ImageRejectReason.FORMAT_MISMATCH);
         }
         BufferedImage raw;
-        try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+        // 이미 메모리에 있는 바이트라 디스크 임시 파일 캐시(ImageIO 기본값) 대신 메모리 캐시를 쓴다.
+        try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
             var readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) throw new ImageRejectedException(ImageRejectReason.NO_IMAGE_READER);
             ImageReader reader = readers.next();
@@ -46,11 +53,23 @@ public final class WorksheetImagePreparer {
         }
         if (raw == null) throw new ImageRejectedException(ImageRejectReason.DECODE_FAILED);
         int orientation = orientation(bytes, jpeg);
+        boolean opaque = isPlainBgr(raw); // 컬러 JPEG처럼 알파가 없는 이미지면 결과도 항상 불투명하다.
         BufferedImage upright = orient(raw, orientation);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        if (!ImageIO.write(upright, "png", out)) throw new IOException("PNG 인코더가 없습니다.");
-        if (out.size() > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
-        return new PreparedImage(out.toByteArray(), upright.getWidth(), upright.getHeight(), orientation);
+        raw = null; // 방향 보정이 끝난 디코딩 결과는 더 쓰지 않으므로 PNG 인코딩 중 GC가 회수할 수 있게 한다.
+        byte[] pngBytes;
+        if (opaque && PngRgbEncoder.supports(upright)) {
+            // 항상 불투명한 이미지는 RGB PNG로 직접 인코딩한다(JDK 인코더보다 할당이 훨씬 적다).
+            pngBytes = PngRgbEncoder.encode(upright);
+        } else {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            // 결과를 바이트 배열로 받으므로 ImageIO 기본값(디스크 임시 파일 캐시) 대신 메모리 캐시를 쓴다. PNG 바이트는 같다.
+            try (var imageOut = new MemoryCacheImageOutputStream(out)) {
+                if (!ImageIO.write(upright, "png", imageOut)) throw new IOException("PNG 인코더가 없습니다.");
+            }
+            pngBytes = out.toByteArray();
+        }
+        if (pngBytes.length > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
+        return new PreparedImage(pngBytes, upright.getWidth(), upright.getHeight(), orientation);
     }
 
     public static boolean isPng(byte[] bytes) {
@@ -124,6 +143,10 @@ public final class WorksheetImagePreparer {
 
     public static BufferedImage orient(BufferedImage raw, int orientation) {
         if (orientation < 1 || orientation > 8) throw new ImageRejectedException(ImageRejectReason.ORIENTATION_INVALID);
+        return isPlainBgr(raw) ? orientBgr(raw, orientation) : orientGeneric(raw, orientation);
+    }
+
+    private static BufferedImage orientGeneric(BufferedImage raw, int orientation) {
         int w = raw.getWidth(), h = raw.getHeight();
         BufferedImage result =
                 new BufferedImage(orientation >= 5 ? h : w, orientation >= 5 ? w : h, BufferedImage.TYPE_INT_ARGB);
@@ -144,6 +167,86 @@ public final class WorksheetImagePreparer {
                             default -> y;
                         };
                 result.setRGB(dx, dy, raw.getRGB(x, y));
+            }
+        }
+        return result;
+    }
+
+    /** 일반 컬러 JPEG가 읽히는 형태(한 픽셀 3바이트, 한 줄 가로x3바이트, 시작 위치 0)일 때만 true. 아니면 기존 경로를 쓴다. */
+    private static boolean isPlainBgr(BufferedImage image) {
+        if (image.getType() != BufferedImage.TYPE_3BYTE_BGR) return false;
+        WritableRaster raster = image.getRaster();
+        return raster.getDataBuffer() instanceof DataBufferByte buffer
+                && buffer.getOffset() == 0
+                && raster.getSampleModelTranslateX() == 0
+                && raster.getSampleModelTranslateY() == 0
+                && raster.getSampleModel() instanceof ComponentSampleModel model
+                && model.getPixelStride() == 3
+                && model.getScanlineStride() == image.getWidth() * 3
+                && buffer.getData().length == image.getWidth() * image.getHeight() * 3;
+    }
+
+    /** 배열을 직접 읽고 써서 기존 방식과 같은 결과(알파 255의 ARGB)를 낸다. 새 번호 = start + 열 * stepX + 행 * stepY. */
+    private static BufferedImage orientBgr(BufferedImage raw, int orientation) {
+        int w = raw.getWidth(), h = raw.getHeight();
+        byte[] src = ((DataBufferByte) raw.getRaster().getDataBuffer()).getData();
+        BufferedImage result =
+                new BufferedImage(orientation >= 5 ? h : w, orientation >= 5 ? w : h, BufferedImage.TYPE_INT_ARGB);
+        int[] dst = ((DataBufferInt) result.getRaster().getDataBuffer()).getData();
+
+        int start;
+        int stepX;
+        int stepY;
+        switch (orientation) {
+            case 1 -> {
+                start = 0;
+                stepX = 1;
+                stepY = w;
+            }
+            case 2 -> {
+                start = w - 1;
+                stepX = -1;
+                stepY = w;
+            }
+            case 3 -> {
+                start = w * h - 1;
+                stepX = -1;
+                stepY = -w;
+            }
+            case 4 -> {
+                start = (h - 1) * w;
+                stepX = 1;
+                stepY = -w;
+            }
+            case 5 -> {
+                start = 0;
+                stepX = h;
+                stepY = 1;
+            }
+            case 6 -> {
+                start = h - 1;
+                stepX = h;
+                stepY = -1;
+            }
+            case 7 -> {
+                start = w * h - 1;
+                stepX = -h;
+                stepY = -1;
+            }
+            default -> {
+                start = (w - 1) * h;
+                stepX = -h;
+                stepY = 1;
+            }
+        }
+
+        int s = 0; // 원본에서 지금 읽는 바이트 위치(파랑, 초록, 빨강 순서)
+        for (int y = 0; y < h; y++) {
+            int d = start + y * stepY; // 이 행의 첫 픽셀이 가는 새 번호
+            for (int x = 0; x < w; x++) {
+                dst[d] = 0xFF000000 | (src[s + 2] & 0xFF) << 16 | (src[s + 1] & 0xFF) << 8 | (src[s] & 0xFF);
+                s += 3;
+                d += stepX;
             }
         }
         return result;
