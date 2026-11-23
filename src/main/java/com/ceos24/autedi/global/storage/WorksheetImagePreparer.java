@@ -14,6 +14,7 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 
 /** 기존 OcrTestImage의 EXIF/eXIf·8방향 변환을 서비스 입력에 재사용한다. 원본 바이트는 바꾸지 않는다. */
 public final class WorksheetImagePreparer {
@@ -31,7 +32,8 @@ public final class WorksheetImagePreparer {
             throw new ImageRejectedException(ImageRejectReason.FORMAT_MISMATCH);
         }
         BufferedImage raw;
-        try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+        // 이미 메모리에 있는 바이트라 디스크 임시 파일 캐시(ImageIO 기본값) 대신 메모리 캐시를 쓴다.
+        try (var input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
             var readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) throw new ImageRejectedException(ImageRejectReason.NO_IMAGE_READER);
             ImageReader reader = readers.next();

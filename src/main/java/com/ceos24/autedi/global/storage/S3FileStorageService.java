@@ -3,6 +3,7 @@ package com.ceos24.autedi.global.storage;
 import com.ceos24.autedi.domain.worksheet.entity.FileType;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -15,6 +16,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.ContentStreamProvider;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -93,7 +95,7 @@ public class S3FileStorageService implements FileStorageService {
         String preparedKey = prefix + id + "-prepared.png";
         try {
             put(originalKey, original, type == FileType.PNG ? "image/png" : "image/jpeg");
-            put(preparedKey, prepared.png(), "image/png");
+            put(preparedKey, prepared::pngStream, prepared.pngSize(), "image/png");
         } catch (RuntimeException e) {
             // 이번 요청이 선택한 UUID 객체만 정리한다. 이전 업로드나 다른 키는 삭제하지 않는다.
             cleanup(originalKey);
@@ -119,14 +121,19 @@ public class S3FileStorageService implements FileStorageService {
     }
 
     private void put(String key, byte[] bytes, String contentType) {
+        put(key, () -> new ByteArrayInputStream(bytes), bytes.length, contentType);
+    }
+
+    /** 배열을 복사하지 않고 읽는다. RequestBody.fromBytes는 배열 전체를 한 번 더 복사한다. */
+    private void put(String key, ContentStreamProvider content, long contentLength, String contentType) {
         s3Client.putObject(
                 PutObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
                         .contentType(contentType)
-                        .contentLength((long) bytes.length)
+                        .contentLength(contentLength)
                         .build(),
-                RequestBody.fromBytes(bytes));
+                RequestBody.fromContentProvider(content, contentLength, contentType));
     }
 
     @Override
