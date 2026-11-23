@@ -11,7 +11,9 @@ The first anchor extends to its line end, the last starts at its line beginning,
 Never cross a blank or whitespace-only paragraph boundary. Do not merge unrelated sentences from different locations.
 The server joins the verified originals with LF to obtain the complete source range. replacement substitutes for that entire range.
 Several anchors still describe one item. A short phrase can wrap onto two lines and remain revision_scope=PHRASE.
-For GUIDANCE, anchor the related existing passage; for a whole-text development instruction, use the last relevant passage.
+For GUIDANCE, anchor the related existing passage and visually locate that exact passage in the supplied PNG.
+Its target_boxes cover the ORIGINAL handwriting identified by those anchors, not the guidance text or a future place where the student might add an answer.
+For a whole-text development instruction, anchor and locate the last relevant existing passage.
 If the source range cannot be identified responsibly, use REVIEW rather than inventing anchors for an ordinary item.
 
 target_boxes locates the ORIGINAL handwriting, not replacement text, an annotation, a margin or a selection highlight.
@@ -19,6 +21,8 @@ Each box is [left, top, right, bottom] with four finite numbers normalized to th
 The origin is top-left, x increases rightward and y downward. Require 0 <= left < right <= 1 and 0 <= top < bottom <= 1.
 Cover complete target letters without unrelated writing. Return boxes in reading order; the number need not equal the anchor count.
 Do not crop, rotate, reorder corners or clamp invented coordinates to make a box look valid.
-When image location is unreliable, use target_boxes=[] and location_uncertain=true even when the exact text source is known.
+Before returning target_boxes=[], inspect the PNG and attempt to locate the exact anchored original. Line IDs and text indexes alone are not image coordinates.
+Use target_boxes=[] and location_uncertain=true only when image location genuinely cannot be established reliably, even when the exact text source is known.
+GUIDANCE, null edit fields, a long guidance message or a request for new content are not by themselves reasons to omit coordinates. Never invent coordinates to avoid an empty array.
 Set location_uncertain=true whenever the proposed source location is uncertain, even if some candidate boxes are supplied.
 Do not create arbitrary coordinates, UTF-16 start/end, pixel boxes, annotation layout or click regions. The server computes text indexes.

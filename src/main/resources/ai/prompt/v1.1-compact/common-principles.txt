@@ -11,5 +11,6 @@ Never hide independent STANDARD improvements or any disabled-area changes, inclu
 Per page/representative area: at most 7 REPLACE+GUIDANCE items in either level, no target/recommended/minimum. Count each item once, including multi-anchor items; REVIEW is separate. Put important CORRECTION first, then warranted SUGGESTION in remaining slots; never fill a quota.
 
 Image/transcription mismatch -> REVIEW/ocr_mismatch; unreadable text, uncertain intent or image defects -> appropriate REVIEW, never guesses or silent transcription repair.
-Uncertain coordinates alone: retain a valid text item with target_boxes=[] and location_uncertain=true. Source itself unidentifiable: REVIEW.
+Evaluate image location for every REPLACE/GUIDANCE, independently of feedback type; GUIDANCE or null edit alone never imply location_uncertain=true.
+After inspecting the PNG, genuinely unreliable anchored-original location alone: retain a valid text item with target_boxes=[] and location_uncertain=true, not REVIEW. Source itself unidentifiable: REVIEW.
 Return only JSON proposals; the server validates, limits and sorts them. No claim of prior verification. No warranted items/reviews -> {"items":[]}; no enabled areas -> genuine source REVIEW only or empty items.

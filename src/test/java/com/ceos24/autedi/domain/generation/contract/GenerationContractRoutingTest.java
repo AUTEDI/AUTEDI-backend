@@ -156,8 +156,8 @@ class GenerationContractRoutingTest {
         assertEquals("AUTEDI-AI-CONTRACT-v1.1", selected.metadata().contractVersion());
         assertEquals(
                 variant == AiCorrectionPromptVariant.DEFAULT
-                        ? "AUTEDI-CORRECTION-PROMPT-v1.2"
-                        : "AUTEDI-CORRECTION-PROMPT-v1.2-COMPACT",
+                        ? "AUTEDI-CORRECTION-PROMPT-v1.2.1"
+                        : "AUTEDI-CORRECTION-PROMPT-v1.2.1-COMPACT",
                 selected.metadata().promptVersion());
         assertEquals("AUTEDI-VALIDATION-v1.2", selected.metadata().validationVersion());
         assertEquals(selected, selector.forGeneration(GenerationClientMode.TERRA, null));
@@ -173,18 +173,17 @@ class GenerationContractRoutingTest {
     }
 
     @ParameterizedTest
-    @EnumSource(AiCorrectionPromptVariant.class)
-    void persistedV11ProfilesUpgradeForRetryWithoutChangingTheirContractVariantOrHistory(
-            AiCorrectionPromptVariant variant) {
+    @CsvSource({"DEFAULT,v1.1", "COMPACT,v1.1", "DEFAULT,v1.2", "COMPACT,v1.2"})
+    void persistedProfilesUpgradeForRetryWithoutChangingTheirContractVariantOrHistory(
+            AiCorrectionPromptVariant variant, String revision) {
         // 현재 상수로 기대값을 만들지 않아 배포 전 저장된 실제 식별자의 호환성을 검사한다.
-        String oldPrompt = variant == AiCorrectionPromptVariant.DEFAULT
-                ? "AUTEDI-CORRECTION-PROMPT-v1.1"
-                : "AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT";
+        String oldPrompt = "AUTEDI-CORRECTION-PROMPT-" + revision
+                + (variant == AiCorrectionPromptVariant.COMPACT ? "-COMPACT" : "");
         var persisted = new GenerationAiProfile(
                 GenerationContractVersion.V1_1,
                 variant,
                 new GenerationResultMetadata(
-                        "gpt-6.1-terra", "AUTEDI-AI-CONTRACT-v1.1", oldPrompt, "AUTEDI-VALIDATION-v1.1"));
+                        "gpt-6.1-terra", "AUTEDI-AI-CONTRACT-v1.1", oldPrompt, "AUTEDI-VALIDATION-" + revision));
         AiCorrectionPromptVariant next = variant == AiCorrectionPromptVariant.DEFAULT
                 ? AiCorrectionPromptVariant.COMPACT
                 : AiCorrectionPromptVariant.DEFAULT;
@@ -211,6 +210,9 @@ class GenerationContractRoutingTest {
     @CsvSource({
         "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v1.2",
         "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.2,AUTEDI-VALIDATION-v1.1",
+        "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.2.1,AUTEDI-VALIDATION-v1.1",
+        "COMPACT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.2,AUTEDI-VALIDATION-v1.2",
+        "DEFAULT,unknown-model,AUTEDI-CORRECTION-PROMPT-v1.2,AUTEDI-VALIDATION-v1.2",
         "COMPACT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v1.1",
         "DEFAULT,unknown-model,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v1.1",
         "DEFAULT,gpt-6.1-terra,AUTEDI-CORRECTION-PROMPT-v1.1,AUTEDI-VALIDATION-v9"
@@ -261,7 +263,7 @@ class GenerationContractRoutingTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "v2", "v1.2", "v1.10", " v1", "AUTEDI-AI-CONTRACT-v1"})
+    @ValueSource(strings = {"", "v2", "v1.2", "v1.2.1", "v1.10", " v1", "AUTEDI-AI-CONTRACT-v1"})
     void rejectsUnknownConfigurationVersions(String value) {
         assertThrows(IllegalArgumentException.class, () -> new GenerationContractProperties(value, "DEFAULT"));
     }

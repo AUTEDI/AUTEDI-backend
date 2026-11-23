@@ -240,7 +240,7 @@ public class GenerationResultStorageService {
     private static void checkBinding(
             WorksheetGeneration generation, WorksheetTranscription transcription, GenerationResultMetadata metadata) {
         var version = GenerationValidationStorageCodec.version(metadata);
-        // 과거 v1.1 요청도 결과에는 실제 실행한 v1.2를 기록해야 한다. 임의의 버전 조합은 허용하지 않는다.
+        // 과거 요청도 결과에는 실제 실행한 동작 버전을 기록해야 한다. 임의의 버전 조합은 허용하지 않는다.
         if (!generation
                         .getWorksheet()
                         .getId()
