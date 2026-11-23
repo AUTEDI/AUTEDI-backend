@@ -677,6 +677,36 @@ class GenerationResultStorageTest {
 
     @ParameterizedTest
     @EnumSource(AiCorrectionPromptVariant.class)
+    void restoresPreviousV12PromptMetadataWithoutRelabelingTheArchivedResult(AiCorrectionPromptVariant variant)
+            throws Exception {
+        var previous = new GenerationAiProfile(
+                GenerationContractVersion.V1_1,
+                variant,
+                new GenerationResultMetadata(
+                        "gpt-6.1-terra",
+                        "AUTEDI-AI-CONTRACT-v1.1",
+                        variant == AiCorrectionPromptVariant.DEFAULT
+                                ? "AUTEDI-CORRECTION-PROMPT-v1.2"
+                                : "AUTEDI-CORRECTION-PROMPT-v1.2-COMPACT",
+                        "AUTEDI-VALIDATION-v1.2"));
+        var input = v11Case("standard-grammar-replace", previous);
+        long id = saveV11(input);
+        // 같은 검증 규칙으로 이전 프롬프트가 생성한 과거 아카이브를 합성한다.
+        jdbc.update(
+                "update worksheet_generation_results set prompt_version=? where id=?",
+                previous.metadata().promptVersion(),
+                id);
+        var restored = storage.restoreResult(academyId, id);
+        assertEquals(previous.metadata(), restored.metadata());
+        assertEquals(input.raw(), restored.rawResponse());
+        assertEquals(input.validation(), restored.validationResultV11());
+        assertEquals(
+                previous,
+                generations.findById(input.generationId()).orElseThrow().getRequestAiProfile());
+    }
+
+    @ParameterizedTest
+    @EnumSource(AiCorrectionPromptVariant.class)
     void legacyRequestsCannotLabelNewExecutionResultsWithOldVersions(AiCorrectionPromptVariant variant)
             throws Exception {
         var legacy = legacyV11Profile(variant);

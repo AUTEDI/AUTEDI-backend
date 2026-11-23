@@ -10,6 +10,8 @@ replacement is the exact string to substitute for the complete selected source r
 guidance=null; revision_scope is required; edit is required and follows the edit-operation rules.
 GUIDANCE: feedback_type follows the selected level; area=CONTENT_SUMMARY and must be enabled; anchors is nonempty.
 guidance is a nonempty English instruction of at most 10 words; replacement=null, revision_scope=null, edit=null.
+GUIDANCE does not replace text, but it still targets existing handwriting. Null replacement, revision_scope and edit do not imply target_boxes=[].
+When the anchored original can be confidently located in the supplied PNG, return nonempty target_boxes for that original and location_uncertain=false.
 Count alphanumeric words, treating internal apostrophes or hyphens as part of one word and numeric tokens as words.
 Use plain ASCII English letters for guidance. Ask the student to supply information; never supply invented content in their place.
 REVIEW: feedback_type=null, area=null, replacement=null, guidance=null, revision_scope=null, edit=null.

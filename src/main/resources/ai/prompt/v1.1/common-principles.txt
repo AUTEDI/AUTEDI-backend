@@ -34,7 +34,9 @@ Never invent an error or improvement to fill the limit. ADVANCED need not produc
 
 If image and transcription disagree, use REVIEW with ocr_mismatch; do not blame the student or silently repair the transcription.
 Use REVIEW for illegible text, unclear intent or an image problem when a responsible proposal cannot be made. State the concrete reason; do not guess.
-Uncertain image coordinates alone do not require REVIEW: keep an otherwise valid text proposal with target_boxes=[] and location_uncertain=true.
+Evaluate image location for every REPLACE and GUIDANCE item independently of its feedback type.
+Do not mark location_uncertain=true merely because an item is GUIDANCE or has no edit.
+Uncertain image coordinates alone do not require REVIEW: if the anchored original genuinely cannot be located reliably after inspecting the PNG, keep an otherwise valid text proposal with target_boxes=[] and location_uncertain=true.
 Return JSON only. The server validates, limits and sorts proposals; never claim the output has already passed validation.
 These are proposals for teacher review. Do not draw on or apply changes to the original image or transcription.
 If no enabled area has a warranted item and no source-review issue exists, return {"items":[]}.

@@ -53,7 +53,7 @@ public final class GenerationClientProfiles {
                         GenerationResultMetadata.VALIDATION_VERSION_V1_2));
     }
 
-    /** 명시적으로 지원하는 과거 v1.1 프로필만 같은 계약·모델·후보의 v1.2 실행 프로필로 전환한다. */
+    /** 등록된 v1.1/v1.2 프로필만 같은 계약·모델·후보의 현재 프롬프트로 전환한다. */
     public static GenerationAiProfile forExecution(GenerationClientMode mode, GenerationAiProfile saved) {
         java.util.Objects.requireNonNull(saved, "saved");
         GenerationAiProfile current = profile(mode, saved.version(), saved.promptVariant());
@@ -63,7 +63,13 @@ public final class GenerationClientProfiles {
                 current.metadata().contractVersion(),
                 saved.promptVariant().legacyPromptVersion(),
                 GenerationResultMetadata.VALIDATION_VERSION_V1_1);
-        if (saved.version() == GenerationContractVersion.V1_1 && legacyMetadata.equals(saved.metadata())) {
+        var previousMetadata = new GenerationResultMetadata(
+                current.metadata().model(),
+                current.metadata().contractVersion(),
+                saved.promptVariant().previousPromptVersion(),
+                GenerationResultMetadata.VALIDATION_VERSION_V1_2);
+        if (saved.version() == GenerationContractVersion.V1_1
+                && (legacyMetadata.equals(saved.metadata()) || previousMetadata.equals(saved.metadata()))) {
             return current;
         }
         throw new IllegalArgumentException("저장된 AI 실행 프로필을 현재 코드에서 정확히 실행할 수 없습니다.");

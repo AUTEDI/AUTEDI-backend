@@ -60,6 +60,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -1553,12 +1554,12 @@ class FixedResponseReviewApiTest {
     }
 
     @ParameterizedTest
-    @EnumSource(AiCorrectionPromptVariant.class)
-    void pendingLegacyV11JobsRunWithV12AndPreserveTheirOriginalRequest(AiCorrectionPromptVariant variant)
-            throws Exception {
+    @CsvSource({"DEFAULT,v1.1", "COMPACT,v1.1", "DEFAULT,v1.2", "COMPACT,v1.2"})
+    void pendingPreviousPromptJobsRunWithCurrentPromptAndPreserveTheirOriginalRequest(
+            AiCorrectionPromptVariant variant, String revision) throws Exception {
         try (var upstream = new FakeResponsesServer()) {
             useTerra(upstream);
-            var legacy = legacyV11Profile(variant);
+            var legacy = previousPromptProfile(variant, revision);
             long id = persistedPending("legacy-v11-pending", GenerationClientMode.TERRA, legacy);
             upstream.enqueue(200, FakeResponsesServer.transcription("She go to school every day."));
             upstream.enqueue(
@@ -1590,12 +1591,12 @@ class FixedResponseReviewApiTest {
     }
 
     @ParameterizedTest
-    @EnumSource(AiCorrectionPromptVariant.class)
-    void retryOfLegacyV11JobRecordsV12AndKeepsTheOriginalProviderAndVariant(AiCorrectionPromptVariant variant)
-            throws Exception {
+    @CsvSource({"DEFAULT,v1.1", "COMPACT,v1.1", "DEFAULT,v1.2", "COMPACT,v1.2"})
+    void retryOfPreviousPromptJobRecordsCurrentPromptAndKeepsTheOriginalProviderAndVariant(
+            AiCorrectionPromptVariant variant, String revision) throws Exception {
         try (var upstream = new FakeResponsesServer()) {
             useTerra(upstream);
-            var legacy = legacyV11Profile(variant);
+            var legacy = previousPromptProfile(variant, revision);
             long first = persistedPending("legacy-v11-failed", GenerationClientMode.TERRA, legacy);
             workStore.fail(first, "TERRA_HTTP_ERROR", "과거 작업 실패", true);
             ReflectionTestUtils.setField(generationService, "configuredClient", GenerationClientMode.FIXED);
@@ -1628,17 +1629,16 @@ class FixedResponseReviewApiTest {
                 .metadata();
     }
 
-    private static GenerationAiProfile legacyV11Profile(AiCorrectionPromptVariant variant) {
+    private static GenerationAiProfile previousPromptProfile(AiCorrectionPromptVariant variant, String revision) {
         return new GenerationAiProfile(
                 GenerationContractVersion.V1_1,
                 variant,
                 new GenerationResultMetadata(
                         "gpt-6.1-terra",
                         "AUTEDI-AI-CONTRACT-v1.1",
-                        variant == AiCorrectionPromptVariant.DEFAULT
-                                ? "AUTEDI-CORRECTION-PROMPT-v1.1"
-                                : "AUTEDI-CORRECTION-PROMPT-v1.1-COMPACT",
-                        "AUTEDI-VALIDATION-v1.1"));
+                        "AUTEDI-CORRECTION-PROMPT-" + revision
+                                + (variant == AiCorrectionPromptVariant.COMPACT ? "-COMPACT" : ""),
+                        "AUTEDI-VALIDATION-" + revision));
     }
 
     @ParameterizedTest(name = "v1.1 서비스 생성·조회: {0}")

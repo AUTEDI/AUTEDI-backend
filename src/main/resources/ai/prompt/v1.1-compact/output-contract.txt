@@ -5,6 +5,7 @@ Use explicit null for inapplicable nullable values, [] for empty arrays; never l
 Existing area is the primary purpose; no primary_area/supporting_edits/corrected_baseline/dependency fields.
 REPLACE: level-permitted feedback_type, enabled area, nonempty anchors, string replacement ("" for DELETE), guidance=null, required revision_scope and edit.
 GUIDANCE: level-permitted feedback_type, enabled CONTENT_SUMMARY, nonempty anchors and English guidance <=10 words; replacement/revision_scope/edit=null. Use ASCII English letters; internal apostrophes/hyphens join words, numeric tokens count as words. Request student-supplied information without writing their answer.
+GUIDANCE still targets existing handwriting; null replacement/revision_scope/edit do not imply target_boxes=[]. Confidently locate its anchored original in the PNG -> nonempty target_boxes, location_uncertain=false.
 REVIEW: feedback_type/area/replacement/guidance/revision_scope/edit=null; exact anchors when identifiable, otherwise anchors=[], target_boxes=[], location_uncertain=true.
 issue_kinds: >=1 unique kind. Ordinary mapping: grammar/spelling/punctuation -> GRAMMAR_SPELLING; vocabulary -> VOCABULARY_EXPRESSION; sentence_structure -> SENTENCE_STRUCTURE; content -> CONTENT_SUMMARY. Only REVIEW uses ocr_mismatch/illegible/unclear_intent/image_problem; never mix families or include disabled-area changes.
 SUGGESTION primary area must be ADVANCED; included STANDARD kinds are permitted only for necessary supporting edits under the common principles.
