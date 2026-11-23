@@ -18,7 +18,7 @@ public class MockCorrectionAiClient implements CorrectionAiClient {
     @Override
     public List<CorrectionDraft> generate(
             Worksheet worksheet, List<WorksheetPage> pages, List<WorksheetSetting> settings) {
-        log.info("[MockCorrectionAiClient] AI 첨삭 모의 생성 실행: worksheetId={}", worksheet.getId());
+        log.info("[generation] AI 첨삭 모의 생성 실행: worksheetId={}", worksheet.getId());
 
         WorksheetPage defaultPage = pages.isEmpty() ? null : pages.get(0);
         Long pageId = defaultPage != null ? defaultPage.getId() : null;

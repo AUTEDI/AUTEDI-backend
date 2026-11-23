@@ -34,7 +34,8 @@ public class SseHeartbeatScheduler {
         try {
             sseExecutor.execute(this::runOnce);
         } catch (RuntimeException e) {
-            log.warn("SSE 하트비트 작업이 거부되어 이번 주기를 건너뜁니다.");
+            log.warn(
+                    "[sse] 하트비트 작업이 거부되어 이번 주기를 건너뜀: errorType={}", e.getClass().getSimpleName());
         }
     }
 
@@ -42,7 +43,7 @@ public class SseHeartbeatScheduler {
     public void runOnce() {
         int expired = registry.closeExpired(Instant.now());
         if (expired > 0) {
-            log.debug("토큰 만료로 SSE 연결 {}개 종료", expired);
+            log.debug("[sse] 토큰 만료로 연결 종료: closedCount={}", expired);
         }
         publisher.heartbeat(PING_COMMENT);
     }

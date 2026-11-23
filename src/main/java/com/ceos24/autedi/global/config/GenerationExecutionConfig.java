@@ -1,5 +1,6 @@
 package com.ceos24.autedi.global.config;
 
+import com.ceos24.autedi.global.logging.MdcTaskDecorator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,7 @@ public class GenerationExecutionConfig {
         executor.setMaxPoolSize(workers);
         executor.setQueueCapacity(capacity);
         executor.setThreadNamePrefix("generation-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.setAwaitTerminationSeconds(5);
         return executor;

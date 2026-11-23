@@ -65,7 +65,7 @@ public class GenerationWorker {
                 String code = e instanceof GenerationClientFailure failure ? failure.code() : "GENERATION_FAILED";
                 boolean retryable = !(e instanceof GenerationClientFailure failure) || failure.retryable();
                 store.fail(id, code, "생성 작업이 실패했습니다. 상태와 보존된 전사를 확인한 뒤 재시도해 주세요.", retryable);
-                log.warn("생성 작업 실패: generationId={}, code={}", id, code);
+                log.warn("[generation] 생성 작업 실패: generationId={}, errorCode={}", id, code);
             } finally {
                 if (interrupted) Thread.currentThread().interrupt();
             }

@@ -275,7 +275,7 @@ public class GenerationWorkStore {
         try {
             events.publishEvent(event);
         } catch (RuntimeException e) {
-            log.warn("생성 이벤트 발행 실패: event={}", event.getClass().getSimpleName());
+            log.warn("[generation] 생성 이벤트 발행 실패: event={}", event.getClass().getSimpleName());
         }
     }
 }

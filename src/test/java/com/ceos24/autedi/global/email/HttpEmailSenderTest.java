@@ -21,7 +21,8 @@ class HttpEmailSenderTest {
         HttpEmailSender sender =
                 new HttpEmailSender(restClient, "", "https://api.resend.com/emails", "onboarding@resend.dev");
 
-        assertDoesNotThrow(() -> sender.send("teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
+        assertDoesNotThrow(
+                () -> sender.send(5L, "teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
     }
 
     @Test
@@ -43,7 +44,8 @@ class HttpEmailSenderTest {
                 .andExpect(jsonPath("$.subject").value("초대장"))
                 .andRespond(withSuccess("{\"id\": \"msg_123\"}", MediaType.APPLICATION_JSON));
 
-        assertDoesNotThrow(() -> sender.send("teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
+        assertDoesNotThrow(
+                () -> sender.send(5L, "teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
 
         server.verify();
     }

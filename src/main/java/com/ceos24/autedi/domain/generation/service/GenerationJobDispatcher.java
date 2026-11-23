@@ -64,7 +64,7 @@ public class GenerationJobDispatcher {
             });
         } catch (TaskRejectedException e) {
             submitted.remove(id);
-            log.debug("워커 대기열이 가득 차 DB 대기 작업을 다음 배정에서 처리합니다: generationId={}", id);
+            log.debug("[generation] 워커 대기열이 가득 차 DB 대기 작업을 다음 배정에서 처리합니다: generationId={}", id);
         }
     }
 }

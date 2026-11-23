@@ -15,10 +15,20 @@ public class SmtpEmailSender implements EmailSender {
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
     @Override
-    public void send(String toEmail, String fromAddress, String fromName, String subject, String htmlContent) {
+    public void send(
+            Long invitationId,
+            String toEmail,
+            String fromAddress,
+            String fromName,
+            String subject,
+            String htmlContent) {
+        String toDomain = EmailLogSupport.domainOf(toEmail);
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender == null) {
-            log.warn("JavaMailSender가 설정되지 않아 메일 발송을 로깅으로 대체합니다. (To: {}, Subject: {})", toEmail, subject);
+            log.warn(
+                    "[email] 메일 설정이 없어 발송을 건너뜀: invitationId={}, toDomain={}, reason=MAIL_SENDER_MISSING",
+                    invitationId,
+                    toDomain);
             return;
         }
 
@@ -28,9 +38,9 @@ public class SmtpEmailSender implements EmailSender {
                     || mailSenderImpl.getUsername() == null
                     || mailSenderImpl.getUsername().trim().isEmpty()) {
                 log.warn(
-                        "메일 발송 호스트 또는 인증 계정(MAIL_USERNAME)이 설정되지 않아 메일 발송을 로깅으로 대체합니다. (To: {}, Subject: {})",
-                        toEmail,
-                        subject);
+                        "[email] 메일 설정이 없어 발송을 건너뜀: invitationId={}, toDomain={}, reason=MAIL_HOST_OR_USER_MISSING",
+                        invitationId,
+                        toDomain);
                 return;
             }
         }
@@ -51,9 +61,15 @@ public class SmtpEmailSender implements EmailSender {
             helper.setText(htmlContent, true);
 
             mailSender.send(mimeMessage);
-            log.info("SMTP 초대 이메일 발송 성공 (포트 587/465): to={}", toEmail);
+            log.info("[email] 초대 발송 완료: invitationId={}, toDomain={}, via=smtp", invitationId, toDomain);
         } catch (Exception e) {
-            log.error("SMTP 초대 이메일 발송 실패: to={}, error={}", toEmail, e.getMessage(), e);
+            // SMTP 예외 메시지에 수신자 주소가 들어갈 수 있어 메시지와 스택트레이스를 남기지 않고 종류만 남긴다.
+            log.error(
+                    "[email] 초대 발송 실패: invitationId={}, toDomain={}, via=smtp, errorType={}, causeType={}",
+                    invitationId,
+                    toDomain,
+                    e.getClass().getSimpleName(),
+                    EmailLogSupport.causeType(e));
         }
     }
 }

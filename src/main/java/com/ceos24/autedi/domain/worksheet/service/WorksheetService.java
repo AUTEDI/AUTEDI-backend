@@ -138,11 +138,7 @@ public class WorksheetService {
             pages.add(page);
         }
 
-        log.info(
-                "학습지 다중 페이지 업로드 완료: worksheetId={}, originalFilename={}, pageCount={}",
-                savedWorksheet.getId(),
-                savedWorksheet.getOriginalFilename(),
-                pages.size());
+        log.info("[upload] 학습지 다중 페이지 업로드 완료: worksheetId={}, pageCount={}", savedWorksheet.getId(), pages.size());
 
         if (qr != null) {
             eventPublisher.publishEvent(new WorksheetCreated(userId, qr.getSessionId(), savedWorksheet.getId()));
@@ -249,7 +245,7 @@ public class WorksheetService {
         // 기존 첨삭 설정은 유지
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
 
-        log.info("학습지 파일 교체 완료: worksheetId={}, newFilename={}", worksheet.getId(), worksheet.getOriginalFilename());
+        log.info("[upload] 학습지 파일 교체 완료: worksheetId={}", worksheet.getId());
 
         if (qr != null) {
             eventPublisher.publishEvent(
@@ -325,7 +321,7 @@ public class WorksheetService {
                     || png.length < 24
                     || !WorksheetImagePreparer.isPng(png)) {
                 log.warn(
-                        "보정 이미지 검증 실패: worksheetId={}, pageNumber={}, bytes={}, isPng={}",
+                        "[display] 이미지 조회 실패: worksheetId={}, pageNumber={}, reason=INVALID_PNG, bytes={}, isPng={}",
                         worksheetId,
                         pageNumber,
                         png.length,
@@ -335,7 +331,7 @@ public class WorksheetService {
             ByteBuffer header = ByteBuffer.wrap(png);
             if (header.getInt(16) != page.getWidth() || header.getInt(20) != page.getHeight()) {
                 log.warn(
-                        "보정 이미지 크기 불일치: worksheetId={}, pageNumber={}, png={}x{}, page={}x{}",
+                        "[display] 이미지 조회 실패: worksheetId={}, pageNumber={}, reason=SIZE_MISMATCH, png={}x{}, page={}x{}",
                         worksheetId,
                         pageNumber,
                         header.getInt(16),
@@ -354,7 +350,7 @@ public class WorksheetService {
                     LocalStorageService.sha256(png),
                     png);
         } catch (IOException e) {
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, e);
         }
     }
 
@@ -375,7 +371,9 @@ public class WorksheetService {
                         try {
                             fileStorageService.delete(url);
                         } catch (RuntimeException e) {
-                            log.warn("롤백된 업로드의 파일 정리를 완료하지 못했습니다.");
+                            log.warn(
+                                    "[upload] 롤백된 업로드의 파일 정리를 완료하지 못함: errorType={}",
+                                    e.getClass().getSimpleName());
                         }
                     }
                 }
@@ -427,7 +425,7 @@ public class WorksheetService {
                 .toList();
         worksheetSettingRepository.saveAll(newSettings);
 
-        log.info("학습지 첨삭 설정 교체 완료: worksheetId={}, areaCount={}", worksheetId, newSettings.size());
+        log.info("[generation] 학습지 첨삭 설정 교체 완료: worksheetId={}, areaCount={}", worksheetId, newSettings.size());
 
         String newSettingsEtag = "\"settings_" + worksheet.getId() + "-v" + (worksheet.getVersion() + 1) + "\"";
         return WorksheetSettingsResponse.of(newSettingsEtag, newSettings);

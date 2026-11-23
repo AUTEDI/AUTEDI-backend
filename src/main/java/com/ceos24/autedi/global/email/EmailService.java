@@ -1,12 +1,10 @@
 package com.ceos24.autedi.global.email;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -23,17 +21,16 @@ public class EmailService {
     private String fromName;
 
     @Async("mailExecutor")
-    public void sendInvitationEmail(String toEmail, String academyName, String rawToken) {
+    public void sendInvitationEmail(Long invitationId, String toEmail, String academyName, String rawToken) {
         String base = (frontendUrl != null && frontendUrl.endsWith("/"))
                 ? frontendUrl.substring(0, frontendUrl.length() - 1)
                 : (frontendUrl != null ? frontendUrl : "http://localhost:3000");
         String inviteLink = base + "/signup?token=" + rawToken;
-        log.info("[초대 링크 발송] To: {}, 학원: {}, 링크: {}", toEmail, academyName, inviteLink);
 
         String subject = "[" + academyName + "] 선생님 초대장";
         String htmlContent = buildInvitationHtml(academyName, inviteLink);
 
-        emailSender.send(toEmail, fromAddress, fromName, subject, htmlContent);
+        emailSender.send(invitationId, toEmail, fromAddress, fromName, subject, htmlContent);
     }
 
     private String buildInvitationHtml(String academyName, String inviteLink) {

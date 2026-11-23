@@ -25,14 +25,14 @@ public class MailConfig {
             @Value("${app.mail.http.api-key:${RESEND_API_KEY:}}") String apiKey,
             @Value("${app.mail.http.endpoint:${MAIL_HTTP_ENDPOINT:https://api.resend.com/emails}}") String endpoint,
             @Value("${app.mail.http.from:${MAIL_HTTP_FROM:onboarding@resend.dev}}") String defaultHttpFrom) {
-        log.info("이메일 발송 빈 활성화: HttpEmailSender (HTTPS 443 포트 사용, endpoint={})", endpoint);
+        log.info("[startup] 이메일 발송 설정: type=http, endpoint={}", endpoint);
         return new HttpEmailSender(RestClient.builder().build(), apiKey, endpoint, defaultHttpFrom);
     }
 
     @Bean
     @ConditionalOnMissingBean(EmailSender.class)
     public EmailSender smtpEmailSender(ObjectProvider<JavaMailSender> mailSenderProvider) {
-        log.info("이메일 발송 빈 활성화: SmtpEmailSender (표준 SMTP 587/465 포트 사용)");
+        log.info("[startup] 이메일 발송 설정: type=smtp");
         return new SmtpEmailSender(mailSenderProvider);
     }
 }

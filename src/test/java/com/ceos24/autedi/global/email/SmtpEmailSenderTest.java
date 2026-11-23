@@ -39,7 +39,7 @@ class SmtpEmailSenderTest {
         when(mailSenderProvider.getIfAvailable()).thenReturn(null);
 
         assertDoesNotThrow(
-                () -> smtpEmailSender.send("teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
+                () -> smtpEmailSender.send(5L, "teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
 
         verify(javaMailSender, never()).send(any(MimeMessage.class));
     }
@@ -52,7 +52,7 @@ class SmtpEmailSenderTest {
         when(mailSenderProvider.getIfAvailable()).thenReturn(implWithoutHost);
 
         assertDoesNotThrow(
-                () -> smtpEmailSender.send("teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
+                () -> smtpEmailSender.send(5L, "teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
 
         JavaMailSenderImpl implWithoutUser = new JavaMailSenderImpl();
         implWithoutUser.setHost("smtp.gmail.com");
@@ -60,7 +60,7 @@ class SmtpEmailSenderTest {
         when(mailSenderProvider.getIfAvailable()).thenReturn(implWithoutUser);
 
         assertDoesNotThrow(
-                () -> smtpEmailSender.send("teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
+                () -> smtpEmailSender.send(5L, "teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
 
         verify(javaMailSender, never()).send(any(MimeMessage.class));
     }
@@ -73,7 +73,7 @@ class SmtpEmailSenderTest {
         when(mailSenderProvider.getIfAvailable()).thenReturn(javaMailSender);
 
         assertDoesNotThrow(
-                () -> smtpEmailSender.send("teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
+                () -> smtpEmailSender.send(5L, "teacher@test.com", "noreply@autedi.com", "AUTEDI", "초대장", "<p>내용</p>"));
 
         verify(javaMailSender, times(1)).send(mimeMessage);
     }

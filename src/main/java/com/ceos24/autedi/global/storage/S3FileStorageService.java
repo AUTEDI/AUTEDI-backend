@@ -72,12 +72,16 @@ public class S3FileStorageService implements FileStorageService {
         } catch (WorksheetImagePreparer.ImageLimitException e) {
             throw new CustomException(ErrorCode.FILE_TOO_LARGE, e.getMessage());
         } catch (IllegalArgumentException e) {
-            // 거부 사유(확장자 불일치, 다중 이미지, 손상된 EXIF 등)를 로그와 응답에 남긴다.
-            log.warn("이미지 검사 실패: file={}, size={}, type={}, reason={}", name, file.getSize(), type, e.toString(), e);
+            // 사유 코드는 로그에, 사유 문구는 응답에 남긴다. 원본 파일명과 스택트레이스는 남기지 않는다.
+            String reason = "UNCLASSIFIED";
+            if (e instanceof ImageRejectedException rejected) {
+                reason = rejected.getReason().name();
+            }
+            log.warn("[upload] 이미지 검사 거부: ext={}, sizeKB={}, reason={}", extension, file.getSize() / 1024, reason);
             throw new CustomException(
                     ErrorCode.INVALID_IMAGE, StringUtils.hasText(e.getMessage()) ? e.getMessage() : null);
         } catch (IOException e) {
-            log.warn("이미지 읽기 실패: file={}, size={}, type={}, reason={}", name, file.getSize(), type, e.toString(), e);
+            log.warn("[upload] 이미지 검사 거부: ext={}, sizeKB={}, reason=READ_FAILED", extension, file.getSize() / 1024);
             throw new CustomException(ErrorCode.INVALID_IMAGE);
         }
         String directory = subDir == null ? "" : subDir.replaceAll("^/+|/+$", "");
@@ -95,10 +99,12 @@ public class S3FileStorageService implements FileStorageService {
             cleanup(originalKey);
             cleanup(preparedKey);
             if (fallbackService != null) {
-                log.warn("S3 업로드 실패로 로컬 저장소를 사용합니다.");
+                log.warn(
+                        "[upload] S3 저장 실패, 로컬 저장소로 대체: fallback=local, errorType={}",
+                        e.getClass().getSimpleName());
                 return fallbackService.upload(file, subDir);
             }
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, e);
         }
         return new StoredFile(
                 name,
@@ -137,7 +143,7 @@ public class S3FileStorageService implements FileStorageService {
         } catch (CustomException e) {
             throw e;
         } catch (IOException | RuntimeException e) {
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, e);
         }
     }
 
@@ -153,7 +159,7 @@ public class S3FileStorageService implements FileStorageService {
             s3Client.deleteObject(
                     DeleteObjectRequest.builder().bucket(bucket).key(key).build());
         } catch (RuntimeException e) {
-            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED);
+            throw new CustomException(ErrorCode.FILE_STORAGE_FAILED, e);
         }
     }
 
@@ -165,8 +171,10 @@ public class S3FileStorageService implements FileStorageService {
         try {
             s3Client.deleteObject(
                     DeleteObjectRequest.builder().bucket(bucket).key(key).build());
-        } catch (RuntimeException ignored) {
-            log.warn("실패한 S3 업로드의 임시 객체 정리를 완료하지 못했습니다.");
+        } catch (RuntimeException e) {
+            log.warn(
+                    "[upload] 실패한 S3 업로드의 임시 객체 정리를 완료하지 못함: errorType={}",
+                    e.getClass().getSimpleName());
         }
     }
 
