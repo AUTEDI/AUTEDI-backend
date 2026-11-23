@@ -15,6 +15,7 @@ import java.util.Arrays;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.MemoryCacheImageInputStream;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 
 /** 기존 OcrTestImage의 EXIF/eXIf·8방향 변환을 서비스 입력에 재사용한다. 원본 바이트는 바꾸지 않는다. */
 public final class WorksheetImagePreparer {
@@ -52,11 +53,23 @@ public final class WorksheetImagePreparer {
         }
         if (raw == null) throw new ImageRejectedException(ImageRejectReason.DECODE_FAILED);
         int orientation = orientation(bytes, jpeg);
+        boolean opaque = isPlainBgr(raw); // 컬러 JPEG처럼 알파가 없는 이미지면 결과도 항상 불투명하다.
         BufferedImage upright = orient(raw, orientation);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        if (!ImageIO.write(upright, "png", out)) throw new IOException("PNG 인코더가 없습니다.");
-        if (out.size() > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
-        return new PreparedImage(out.toByteArray(), upright.getWidth(), upright.getHeight(), orientation);
+        raw = null; // 방향 보정이 끝난 디코딩 결과는 더 쓰지 않으므로 PNG 인코딩 중 GC가 회수할 수 있게 한다.
+        byte[] pngBytes;
+        if (opaque && PngRgbEncoder.supports(upright)) {
+            // 항상 불투명한 이미지는 RGB PNG로 직접 인코딩한다(JDK 인코더보다 할당이 훨씬 적다).
+            pngBytes = PngRgbEncoder.encode(upright);
+        } else {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            // 결과를 바이트 배열로 받으므로 ImageIO 기본값(디스크 임시 파일 캐시) 대신 메모리 캐시를 쓴다. PNG 바이트는 같다.
+            try (var imageOut = new MemoryCacheImageOutputStream(out)) {
+                if (!ImageIO.write(upright, "png", imageOut)) throw new IOException("PNG 인코더가 없습니다.");
+            }
+            pngBytes = out.toByteArray();
+        }
+        if (pngBytes.length > MAX_BYTES) throw new ImageLimitException("보정 PNG가 20MB를 넘습니다.");
+        return new PreparedImage(pngBytes, upright.getWidth(), upright.getHeight(), orientation);
     }
 
     public static boolean isPng(byte[] bytes) {
