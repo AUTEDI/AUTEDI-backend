@@ -2,6 +2,7 @@ package com.ceos24.autedi.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,6 +21,7 @@ import com.ceos24.autedi.global.security.JwtTokenProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +31,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
@@ -216,5 +219,80 @@ class TeacherControllerTest {
     @DisplayName("POST /api/v1/teachers/{id}/resign - 토큰이 없으면 401")
     void resign_noToken_unauthorized() throws Exception {
         mockMvc.perform(post("/api/v1/teachers/{id}/resign", teacher.getId())).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 원장이 같은 기관 선생님을 조회하면 이름·이메일·연락처·입사일·상태를 받는다")
+    void getDetail_director_success() throws Exception {
+        ReflectionTestUtils.setField(teacher, "phoneNumber", "010-1234-5678");
+        ReflectionTestUtils.setField(teacher, "hireDate", LocalDate.of(2026, 3, 2));
+
+        mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId()).header(HttpHeaders.AUTHORIZATION, directorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.teacherId").value(teacher.getId()))
+                .andExpect(jsonPath("$.result.name").value("김선생"))
+                .andExpect(jsonPath("$.result.email").value("resign_teacher@autedi.com"))
+                .andExpect(jsonPath("$.result.phoneNumber").value("010-1234-5678"))
+                .andExpect(jsonPath("$.result.hireDate").value("2026-03-02"))
+                .andExpect(jsonPath("$.result.status").value("ACTIVE"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 연락처·입사일을 등록하지 않았으면 null로 내려준다")
+    void getDetail_withoutProfile_nullFields() throws Exception {
+        mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId()).header(HttpHeaders.AUTHORIZATION, directorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.phoneNumber").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.result.hireDate").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 퇴사한 선생님도 조회할 수 있고 상태는 RESIGNED")
+    void getDetail_resignedTeacher_success() throws Exception {
+        teacher.resign();
+
+        mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId()).header(HttpHeaders.AUTHORIZATION, directorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("RESIGNED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 선생님이 호출하면 403 AUTH_002")
+    void getDetail_teacherCaller_forbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId()).header(HttpHeaders.AUTHORIZATION, teacherToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 다른 기관 선생님은 404 AUTH_006")
+    void getDetail_otherAcademyTeacher_notFound() throws Exception {
+        mockMvc.perform(get("/api/v1/teachers/{id}", otherAcademyTeacher.getId())
+                        .header(HttpHeaders.AUTHORIZATION, directorToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("AUTH_006"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 존재하지 않는 사용자는 404 AUTH_006")
+    void getDetail_unknownUser_notFound() throws Exception {
+        mockMvc.perform(get("/api/v1/teachers/{id}", 999_999L).header(HttpHeaders.AUTHORIZATION, directorToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("AUTH_006"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 원장 ID를 조회하면 403 AUTH_002")
+    void getDetail_directorTarget_forbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/teachers/{id}", director.getId()).header(HttpHeaders.AUTHORIZATION, directorToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/teachers/{id} - 토큰이 없으면 401")
+    void getDetail_noToken_unauthorized() throws Exception {
+        mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId())).andExpect(status().isUnauthorized());
     }
 }

@@ -1,6 +1,7 @@
 package com.ceos24.autedi.domain.teacher.service;
 
 import com.ceos24.autedi.domain.auth.repository.RefreshTokenRepository;
+import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
 import com.ceos24.autedi.domain.user.entity.Role;
 import com.ceos24.autedi.domain.user.entity.User;
@@ -22,6 +23,11 @@ public class TeacherService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final RevokedUserRegistry revokedUserRegistry;
+
+    /** 같은 기관 선생님의 상세 정보를 조회한다. 퇴사한 선생님도 조회할 수 있다. */
+    public TeacherDetailResponse getDetail(Long academyId, Long teacherId) {
+        return TeacherDetailResponse.from(findTeacherInAcademy(academyId, teacherId));
+    }
 
     /**
      * 같은 기관의 선생님을 퇴사 처리하고 모든 Refresh Token을 폐기한다. 이미 발급된 Access Token은 커밋 직후 차단 목록에 올려 즉시 막는다. 학생

@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.teacher.controller;
 
+import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
 import com.ceos24.autedi.domain.teacher.service.TeacherService;
 import com.ceos24.autedi.global.response.ApiResponse;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class TeacherController {
 
     private final TeacherService teacherService;
+
+    @Operation(
+            summary = "선생님 상세 조회 (원장 전용)",
+            description = "같은 기관 선생님의 이름·이메일·연락처·입사일·상태를 조회합니다. 퇴사한 선생님도 조회할 수 있습니다. 연락처·입사일은 등록 전이면 null입니다.")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    @GetMapping("/{teacherId}")
+    public ResponseEntity<ApiResponse<TeacherDetailResponse>> getTeacher(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long teacherId) {
+        TeacherDetailResponse response = teacherService.getDetail(principal.academyId(), teacherId);
+        return ResponseEntity.ok(ApiResponse.onSuccess("선생님 정보를 조회했습니다.", response));
+    }
 
     @Operation(
             summary = "선생님 퇴사 처리 (원장 전용)",
