@@ -90,7 +90,10 @@ class UserControllerTest {
 
         teacherToken = "Bearer "
                 + jwtTokenProvider.createAccessToken(
-                        teacher.getId(), academy.getId(), teacher.getEmail(), teacher.getRole().name());
+                        teacher.getId(),
+                        academy.getId(),
+                        teacher.getEmail(),
+                        teacher.getRole().name());
     }
 
     @Test
@@ -170,7 +173,10 @@ class UserControllerTest {
         User saved = userRepository.findById(teacher.getId()).orElseThrow();
         assertThat(passwordEncoder.matches("NewPassword2@", saved.getPasswordHash()))
                 .isTrue();
-        assertThat(refreshTokenRepository.findByTokenHash("a".repeat(64)).orElseThrow().getRevokedAt())
+        assertThat(refreshTokenRepository
+                        .findByTokenHash("a".repeat(64))
+                        .orElseThrow()
+                        .getRevokedAt())
                 .isNotNull();
     }
 
@@ -210,7 +216,8 @@ class UserControllerTest {
         mockMvc.perform(patch("/api/v1/users/me/password")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PasswordChangeRequest("OldPassword1!", "short1!"))))
+                        .content(
+                                objectMapper.writeValueAsString(new PasswordChangeRequest("OldPassword1!", "short1!"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
     }

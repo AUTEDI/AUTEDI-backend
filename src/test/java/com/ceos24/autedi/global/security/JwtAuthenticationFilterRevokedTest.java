@@ -72,7 +72,10 @@ class JwtAuthenticationFilterRevokedTest {
     private void run(String token, AtomicBoolean authenticated) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> authenticated.set(
-                SecurityContextHolder.getContext().getAuthentication() != null));
+        filter.doFilter(
+                request,
+                new MockHttpServletResponse(),
+                (req, res) ->
+                        authenticated.set(SecurityContextHolder.getContext().getAuthentication() != null));
     }
 }

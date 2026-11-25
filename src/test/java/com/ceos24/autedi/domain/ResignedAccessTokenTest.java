@@ -96,7 +96,10 @@ class ResignedAccessTokenTest {
     private String tokenOf(User user) {
         return "Bearer "
                 + jwtTokenProvider.createAccessToken(
-                        user.getId(), academy.getId(), user.getEmail(), user.getRole().name());
+                        user.getId(),
+                        academy.getId(),
+                        user.getEmail(),
+                        user.getRole().name());
     }
 
     @Test

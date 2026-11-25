@@ -29,7 +29,8 @@ public class TeacherService {
      */
     @Transactional
     public TeacherResignResponse resign(Long academyId, Long teacherId) {
-        User teacher = userRepository.findById(teacherId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User teacher =
+                userRepository.findById(teacherId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         // 다른 기관 사용자는 존재 여부도 알려주지 않도록 없는 사용자와 같은 오류를 쓴다.
         if (!teacher.getAcademy().getId().equals(academyId)) {

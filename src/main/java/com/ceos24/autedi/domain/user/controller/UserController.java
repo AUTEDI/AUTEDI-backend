@@ -37,9 +37,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
     }
 
-    @Operation(
-            summary = "내 이름 수정",
-            description = "현재 로그인한 사용자의 이름을 수정합니다. 앞뒤 공백은 제거되어 저장되며, 수정된 최신 사용자 정보를 반환합니다.")
+    @Operation(summary = "내 이름 수정", description = "현재 로그인한 사용자의 이름을 수정합니다. 앞뒤 공백은 제거되어 저장되며, 수정된 최신 사용자 정보를 반환합니다.")
     @PatchMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> updateMyName(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,

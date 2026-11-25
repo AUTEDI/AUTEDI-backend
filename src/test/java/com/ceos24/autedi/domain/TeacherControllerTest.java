@@ -112,7 +112,10 @@ class TeacherControllerTest {
     private String tokenOf(User user) {
         return "Bearer "
                 + jwtTokenProvider.createAccessToken(
-                        user.getId(), user.getAcademy().getId(), user.getEmail(), user.getRole().name());
+                        user.getId(),
+                        user.getAcademy().getId(),
+                        user.getEmail(),
+                        user.getRole().name());
     }
 
     @Test
@@ -136,7 +139,10 @@ class TeacherControllerTest {
 
         assertThat(userRepository.findById(teacher.getId()).orElseThrow().getStatus())
                 .isEqualTo(UserStatus.RESIGNED);
-        assertThat(refreshTokenRepository.findByTokenHash("b".repeat(64)).orElseThrow().getRevokedAt())
+        assertThat(refreshTokenRepository
+                        .findByTokenHash("b".repeat(64))
+                        .orElseThrow()
+                        .getRevokedAt())
                 .isNotNull();
 
         mockMvc.perform(post("/api/v1/auth/login")
@@ -166,15 +172,17 @@ class TeacherControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("AUTH_006"));
 
-        assertThat(userRepository.findById(otherAcademyTeacher.getId()).orElseThrow().getStatus())
+        assertThat(userRepository
+                        .findById(otherAcademyTeacher.getId())
+                        .orElseThrow()
+                        .getStatus())
                 .isEqualTo(UserStatus.ACTIVE);
     }
 
     @Test
     @DisplayName("POST /api/v1/teachers/{id}/resign - 존재하지 않는 사용자는 404 AUTH_006")
     void resign_unknownUser_notFound() throws Exception {
-        mockMvc.perform(post("/api/v1/teachers/{id}/resign", 999_999L)
-                        .header(HttpHeaders.AUTHORIZATION, directorToken))
+        mockMvc.perform(post("/api/v1/teachers/{id}/resign", 999_999L).header(HttpHeaders.AUTHORIZATION, directorToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("AUTH_006"));
     }
@@ -207,7 +215,6 @@ class TeacherControllerTest {
     @Test
     @DisplayName("POST /api/v1/teachers/{id}/resign - 토큰이 없으면 401")
     void resign_noToken_unauthorized() throws Exception {
-        mockMvc.perform(post("/api/v1/teachers/{id}/resign", teacher.getId()))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/teachers/{id}/resign", teacher.getId())).andExpect(status().isUnauthorized());
     }
 }
