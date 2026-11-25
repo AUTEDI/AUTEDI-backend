@@ -42,6 +42,10 @@ public class Academy extends BaseTimeEntity {
         this.planExpiresAt = planExpiresAt;
     }
 
+    public void updateName(String name) {
+        this.name = name;
+    }
+
     public boolean isActive() {
         return this.subscriptionStatus == SubscriptionStatus.ACTIVE;
     }

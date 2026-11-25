@@ -64,6 +64,7 @@ public class InvitationService {
         UserInvitation invitation = UserInvitation.builder()
                 .academy(academy)
                 .invitedBy(director)
+                .name(request.name().trim())
                 .email(request.email())
                 .tokenHash(tokenHash)
                 .expiresAt(expiresAt)
@@ -94,7 +95,11 @@ public class InvitationService {
         }
 
         return new InvitationValidateResponse(
-                true, invitation.getEmail(), invitation.getAcademy().getName(), invitation.getExpiresAt());
+                true,
+                invitation.getName(),
+                invitation.getEmail(),
+                invitation.getAcademy().getName(),
+                invitation.getExpiresAt());
     }
 
     @Transactional
@@ -128,7 +133,7 @@ public class InvitationService {
                 .academy(invitation.getAcademy())
                 .email(invitation.getEmail())
                 .passwordHash(passwordEncoder.encode(request.password()))
-                .name(request.name())
+                .name(request.name().trim())
                 .role(Role.TEACHER)
                 .status(UserStatus.ACTIVE)
                 .invitedBy(invitation.getInvitedBy())

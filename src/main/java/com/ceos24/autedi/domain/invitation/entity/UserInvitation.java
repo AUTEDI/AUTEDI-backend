@@ -38,6 +38,9 @@ public class UserInvitation extends BaseCreatedTimeEntity {
     @JoinColumn(name = "invited_by", nullable = false)
     private User invitedBy;
 
+    @Column(name = "name", length = 50)
+    private String name;
+
     @Column(name = "email", length = 255, nullable = false)
     private String email;
 
@@ -55,9 +58,11 @@ public class UserInvitation extends BaseCreatedTimeEntity {
     private LocalDateTime acceptedAt;
 
     @Builder
-    public UserInvitation(Academy academy, User invitedBy, String email, String tokenHash, LocalDateTime expiresAt) {
+    public UserInvitation(
+            Academy academy, User invitedBy, String name, String email, String tokenHash, LocalDateTime expiresAt) {
         this.academy = academy;
         this.invitedBy = invitedBy;
+        this.name = name;
         this.email = email;
         this.tokenHash = tokenHash;
         this.status = InvitationStatus.PENDING;

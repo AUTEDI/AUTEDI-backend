@@ -117,7 +117,7 @@ class InvitationControllerTest {
     @Test
     @DisplayName("POST /api/v1/invitations - 원장(DIRECTOR) 권한으로 초대장 생성 성공 (201 Created)")
     void createInvitation_directorRole_success() throws Exception {
-        InvitationCreateRequest request = new InvitationCreateRequest("new_teacher@autedi.com");
+        InvitationCreateRequest request = new InvitationCreateRequest("  김신입  ", "new_teacher@autedi.com");
 
         mockMvc.perform(post("/api/v1/invitations")
                         .header(HttpHeaders.AUTHORIZATION, directorToken)
@@ -125,6 +125,7 @@ class InvitationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.result.name").value("김신입"))
                 .andExpect(jsonPath("$.result.email").value("new_teacher@autedi.com"))
                 .andExpect(jsonPath("$.result.status").value("PENDING"))
                 .andExpect(jsonPath("$.result.expiresAt").isNotEmpty());
@@ -132,12 +133,50 @@ class InvitationControllerTest {
         List<UserInvitation> invitations =
                 userInvitationRepository.findAllByEmailAndStatus("new_teacher@autedi.com", InvitationStatus.PENDING);
         assertThat(invitations).hasSize(1);
+        assertThat(invitations.get(0).getName()).isEqualTo("김신입");
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/invitations - 이름이 공백뿐이면 400")
+    void createInvitation_blankName_badRequest() throws Exception {
+        InvitationCreateRequest request = new InvitationCreateRequest("   ", "blank_name@autedi.com");
+
+        mockMvc.perform(post("/api/v1/invitations")
+                        .header(HttpHeaders.AUTHORIZATION, directorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_001"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/invitations - 이름이 50자를 넘으면 400")
+    void createInvitation_tooLongName_badRequest() throws Exception {
+        InvitationCreateRequest request = new InvitationCreateRequest("가".repeat(51), "long_name@autedi.com");
+
+        mockMvc.perform(post("/api/v1/invitations")
+                        .header(HttpHeaders.AUTHORIZATION, directorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_001"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/invitations - 이름 없이 이메일만 보내면 400")
+    void createInvitation_missingName_badRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/invitations")
+                        .header(HttpHeaders.AUTHORIZATION, directorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"no_name@autedi.com\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_001"));
     }
 
     @Test
     @DisplayName("POST /api/v1/invitations - 일반 교사(TEACHER) 권한으로 초대장 생성 시도 시 403 Forbidden")
     void createInvitation_teacherRole_forbidden() throws Exception {
-        InvitationCreateRequest request = new InvitationCreateRequest("another_teacher@autedi.com");
+        InvitationCreateRequest request = new InvitationCreateRequest("이선생", "another_teacher@autedi.com");
 
         mockMvc.perform(post("/api/v1/invitations")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
@@ -165,7 +204,7 @@ class InvitationControllerTest {
 
         assertThat(oldInvitation.getStatus()).isEqualTo(InvitationStatus.PENDING);
 
-        InvitationCreateRequest request = new InvitationCreateRequest(targetEmail);
+        InvitationCreateRequest request = new InvitationCreateRequest("박재초대", targetEmail);
 
         mockMvc.perform(post("/api/v1/invitations")
                         .header(HttpHeaders.AUTHORIZATION, directorToken)
@@ -191,7 +230,7 @@ class InvitationControllerTest {
     @Test
     @DisplayName("POST /api/v1/invitations - 이미 가입된 유저 이메일 초대 시 409 Conflict (AUTH_009)")
     void createInvitation_alreadyRegisteredEmail_conflict() throws Exception {
-        InvitationCreateRequest request = new InvitationCreateRequest(teacher.getEmail());
+        InvitationCreateRequest request = new InvitationCreateRequest("김선생", teacher.getEmail());
 
         mockMvc.perform(post("/api/v1/invitations")
                         .header(HttpHeaders.AUTHORIZATION, directorToken)
@@ -211,6 +250,7 @@ class InvitationControllerTest {
         userInvitationRepository.save(UserInvitation.builder()
                 .academy(academy)
                 .invitedBy(director)
+                .name("최초대")
                 .email("valid_teacher@autedi.com")
                 .tokenHash(tokenHash)
                 .expiresAt(LocalDateTime.now().plusHours(24))
@@ -220,9 +260,28 @@ class InvitationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.result.valid").value(true))
+                .andExpect(jsonPath("$.result.name").value("최초대"))
                 .andExpect(jsonPath("$.result.email").value("valid_teacher@autedi.com"))
                 .andExpect(jsonPath("$.result.academyName").value(academy.getName()))
                 .andExpect(jsonPath("$.result.expiresAt").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/invitations/validate - 이름 없이 만들어진 이전 초대는 name이 null")
+    void validateInvitation_legacyInvitationWithoutName_nameIsNull() throws Exception {
+        String rawToken = TokenHashUtil.generateRawToken();
+
+        userInvitationRepository.save(UserInvitation.builder()
+                .academy(academy)
+                .invitedBy(director)
+                .email("legacy_teacher@autedi.com")
+                .tokenHash(TokenHashUtil.hashToken(rawToken))
+                .expiresAt(LocalDateTime.now().plusHours(24))
+                .build());
+
+        mockMvc.perform(get("/api/v1/invitations/validate").param("token", rawToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.name").isEmpty());
     }
 
     @Test

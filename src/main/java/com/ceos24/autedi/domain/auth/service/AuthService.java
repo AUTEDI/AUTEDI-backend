@@ -52,6 +52,9 @@ public class AuthService {
         if (user.getStatus() == UserStatus.LOCKED) {
             throw new CustomException(ErrorCode.USER_LOCKED);
         }
+        if (user.getStatus() == UserStatus.RESIGNED) {
+            throw new CustomException(ErrorCode.USER_RESIGNED);
+        }
 
         user.updateLastLoginAt(LocalDateTime.now());
 
@@ -141,10 +144,5 @@ public class AuthService {
             String tokenHash = TokenHashUtil.hashToken(request.refreshToken());
             refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token -> token.revoke(LocalDateTime.now()));
         }
-    }
-
-    public UserResponse getCurrentUser(Long userId) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        return UserResponse.from(user);
     }
 }
