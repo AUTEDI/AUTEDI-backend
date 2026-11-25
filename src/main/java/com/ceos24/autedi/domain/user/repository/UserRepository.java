@@ -17,6 +17,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    Optional<User> findByIdAndAcademyId(Long id, Long academyId);
+
     @Query("SELECT u.id FROM User u WHERE u.status = :status AND u.updatedAt > :since")
     List<Long> findIdsByStatusAndUpdatedAtAfter(
             @Param("status") UserStatus status, @Param("since") LocalDateTime since);

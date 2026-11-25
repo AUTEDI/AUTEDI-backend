@@ -29,16 +29,8 @@ public class TeacherService {
      */
     @Transactional
     public TeacherResignResponse resign(Long academyId, Long teacherId) {
-        User teacher =
-                userRepository.findById(teacherId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User teacher = findTeacherInAcademy(academyId, teacherId);
 
-        // 다른 기관 사용자는 존재 여부도 알려주지 않도록 없는 사용자와 같은 오류를 쓴다.
-        if (!teacher.getAcademy().getId().equals(academyId)) {
-            throw new CustomException(ErrorCode.USER_NOT_FOUND);
-        }
-        if (teacher.getRole() != Role.TEACHER) {
-            throw new CustomException(ErrorCode.ACCESS_DENIED);
-        }
         if (teacher.getStatus() == UserStatus.RESIGNED) {
             throw new CustomException(ErrorCode.ALREADY_RESIGNED);
         }
@@ -48,5 +40,21 @@ public class TeacherService {
         revokedUserRegistry.revokeAfterCommit(teacher.getId());
 
         return TeacherResignResponse.from(teacher);
+    }
+
+    /**
+     * 같은 기관의 선생님을 찾는다. 선생님 API가 공통으로 쓰는 대상 확인 규칙이다.
+     *
+     * <p>없는 ID와 다른 기관 사용자는 존재 여부를 알려주지 않도록 조회 결과가 없는 것으로 합쳐 {@code USER_NOT_FOUND}로 응답한다. 같은 기관의
+     * 원장은 선생님 관리 대상이 아니므로 {@code ACCESS_DENIED}다. 계정 상태(퇴사 등)는 여기서 검사하지 않는다.
+     */
+    private User findTeacherInAcademy(Long academyId, Long teacherId) {
+        User teacher = userRepository
+                .findByIdAndAcademyId(teacherId, academyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        if (teacher.getRole() != Role.TEACHER) {
+            throw new CustomException(ErrorCode.ACCESS_DENIED);
+        }
+        return teacher;
     }
 }
