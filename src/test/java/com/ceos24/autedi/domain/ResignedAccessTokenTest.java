@@ -16,6 +16,7 @@ import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.user.service.RevokedUserInitializer;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
 import com.ceos24.autedi.global.security.RevokedUserRegistry;
+import com.github.benmanes.caffeine.cache.Cache;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -80,6 +82,13 @@ class ResignedAccessTokenTest {
                 .filter(user -> user.getAcademy().getId().equals(academy.getId()))
                 .toList());
         academyRepository.deleteById(academy.getId());
+        clearRevokedRegistry();
+    }
+
+    /** 차단 목록은 컨텍스트가 살아 있는 동안 남으므로, id가 재사용되는 다른 테스트에 영향이 없도록 비운다. */
+    private void clearRevokedRegistry() {
+        Cache<?, ?> revoked = (Cache<?, ?>) ReflectionTestUtils.getField(revokedUserRegistry, "revoked");
+        revoked.invalidateAll();
     }
 
     private User newUser(String name, Role role, UserStatus status) {
