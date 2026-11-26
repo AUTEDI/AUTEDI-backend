@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.worksheet.controller;
 
+import com.ceos24.autedi.domain.worksheet.dto.request.WorksheetMetadataUpdateRequest;
 import com.ceos24.autedi.domain.worksheet.dto.request.WorksheetSettingsUpdateRequest;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetDetailResponse;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetSettingsResponse;
@@ -24,8 +25,10 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -37,7 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 
-@Tag(name = "04. Worksheet", description = "학습지 파일 관리(F02) 및 첨삭 영역/수준 설정(F03) API")
+@Tag(name = "04. Worksheet", description = "학습지 파일 관리·제목/학생 지정·첨삭 영역/수준 설정 API")
 @RestController
 @RequestMapping("/api/v1/worksheets")
 @RequiredArgsConstructor
@@ -169,6 +172,26 @@ public class WorksheetController {
             @Parameter(description = "학습지 고유 ID", required = true) @PathVariable("worksheetId") Long worksheetId) {
         WorksheetDetailResponse response = worksheetService.getWorksheetDetail(principal.academyId(), worksheetId);
         return ResponseEntity.ok().header(HttpHeaders.ETAG, response.etag()).body(ApiResponse.onSuccess(response));
+    }
+
+    @Operation(
+            summary = "학습지 제목·학생 지정 (B4)",
+            description =
+                    "업로더 본인 또는 같은 기관 원장이 DRAFT·FAILED 학습지의 제목과 학생을 함께 지정합니다. 완료·삭제 학습지는 변경할 수 없습니다. If-Match는 선택이며 제공하면 현재 학습지 ETag 또는 *와 비교합니다.")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'TEACHER')")
+    @PatchMapping("/{worksheetId}")
+    public ResponseEntity<ApiResponse<WorksheetDetailResponse>> updateMetadata(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Parameter(description = "학습지 고유 ID", required = true) @PathVariable("worksheetId") Long worksheetId,
+            @Parameter(description = "현재 학습지 ETag 또는 *", required = false)
+                    @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
+                    String ifMatch,
+            @Valid @RequestBody WorksheetMetadataUpdateRequest request) {
+        WorksheetDetailResponse response = worksheetService.updateMetadata(
+                principal.userId(), principal.academyId(), worksheetId, ifMatch, request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, response.etag())
+                .body(ApiResponse.onSuccess("학습지 제목·학생이 지정되었습니다.", response));
     }
 
     @Operation(summary = "보존된 학습지 원본 다운로드", description = "업로드 당시 바이트를 변경 없이 반환합니다. 타 학원 자원은 404로 은닉합니다.")

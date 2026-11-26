@@ -131,10 +131,10 @@ public class Worksheet extends BaseTimeEntity {
         return this.status == WorksheetStatus.DRAFT || this.status == WorksheetStatus.FAILED;
     }
 
-    /** 메타데이터의 기본 불변 조건만 확인한다. 요청자 권한과 AI 상태별 허용 범위는 후속 서비스에서 정한다. */
+    /** 제목·학생과 수정 가능 상태를 검증한다. 요청자 권한과 잠금·버전 검사는 서비스에서 처리한다. */
     public void updateMetadata(String title, Student student) {
-        if (deletedAt != null || saveStatus == WorksheetSaveStatus.COMPLETED) {
-            throw new IllegalStateException("삭제되었거나 최종 저장된 학습지의 정보는 변경할 수 없습니다.");
+        if (deletedAt != null || saveStatus == WorksheetSaveStatus.COMPLETED || !canModifyOrReplace()) {
+            throw new IllegalStateException("현재 상태에서는 학습지 제목·학생을 변경할 수 없습니다.");
         }
         if (title == null || title.isBlank() || title.strip().length() > 255) {
             throw new IllegalArgumentException("학습지 제목은 비어 있지 않은 255자 이하여야 합니다.");

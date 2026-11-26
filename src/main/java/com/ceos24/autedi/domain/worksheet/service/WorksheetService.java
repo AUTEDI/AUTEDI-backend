@@ -5,15 +5,19 @@ import com.ceos24.autedi.domain.auth.entity.QrSession;
 import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
+import com.ceos24.autedi.domain.student.repository.StudentRepository;
+import com.ceos24.autedi.domain.user.entity.Role;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.dto.request.SettingItemRequest;
+import com.ceos24.autedi.domain.worksheet.dto.request.WorksheetMetadataUpdateRequest;
 import com.ceos24.autedi.domain.worksheet.dto.request.WorksheetSettingsUpdateRequest;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetDetailResponse;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetFileUrls;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetSettingsResponse;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
+import com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
 import com.ceos24.autedi.domain.worksheet.event.WorksheetCreated;
 import com.ceos24.autedi.domain.worksheet.event.WorksheetFileReplaced;
@@ -51,6 +55,7 @@ public class WorksheetService {
     private final WorksheetSettingRepository worksheetSettingRepository;
     private final WorksheetGenerationRepository worksheetGenerationRepository;
     private final UserRepository userRepository;
+    private final StudentRepository studentRepository;
     private final FileStorageService fileStorageService;
     private final QrSessionRepository qrSessionRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -158,6 +163,7 @@ public class WorksheetService {
     public WorksheetDetailResponse getWorksheetDetail(Long academyId, Long worksheetId) {
         Worksheet worksheet = worksheetRepository
                 .findByIdAndAcademyId(worksheetId, academyId)
+                .filter(found -> found.getDeletedAt() == null)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
@@ -168,6 +174,37 @@ public class WorksheetService {
                 .orElse(null);
 
         return WorksheetDetailResponse.of(worksheet, pages, settings, latestGenerationId);
+    }
+
+    @Transactional
+    public WorksheetDetailResponse updateMetadata(
+            Long userId, Long academyId, Long worksheetId, String ifMatch, WorksheetMetadataUpdateRequest request) {
+        Worksheet worksheet = worksheetRepository
+                .findLockedByIdAndAcademyId(worksheetId, academyId)
+                .filter(found -> found.getDeletedAt() == null)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        User editor = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        if (!editor.getAcademy().getId().equals(academyId)
+                || (!worksheet.getUser().getId().equals(userId) && editor.getRole() != Role.DIRECTOR)) {
+            throw new CustomException(ErrorCode.ACCESS_DENIED);
+        }
+        if (worksheet.getSaveStatus() == WorksheetSaveStatus.COMPLETED || !worksheet.canModifyOrReplace()) {
+            throw new CustomException(
+                    ErrorCode.INVALID_WORKSHEET_STATE, "제목·학생은 최종 저장 전 DRAFT·FAILED 상태에서만 변경할 수 있습니다.");
+        }
+        if (ifMatch != null) {
+            String expected = ifMatch.trim();
+            if (!expected.equals("*") && !expected.equals(worksheet.getEtag())) {
+                throw new CustomException(ErrorCode.PRECONDITION_FAILED);
+            }
+        }
+        var student = studentRepository
+                .findByIdAndAcademyId(request.studentId(), academyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.STUDENT_NOT_FOUND));
+        worksheet.updateMetadata(request.title(), student);
+        // 버전·감사 시각을 확정한 뒤 응답 ETag를 만든다.
+        worksheetRepository.flush();
+        return getWorksheetDetail(academyId, worksheetId);
     }
 
     @Transactional

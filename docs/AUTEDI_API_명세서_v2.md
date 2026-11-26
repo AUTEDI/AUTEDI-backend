@@ -5,11 +5,12 @@
 - 코드 기준: 로컬 브랜치 `docs/92-v2-api-doc`, 커밋 `39ad0ae`
 - B2 추가 반영: 2026-11-26. 학생 등록·상세 조회 2개 API와 중복 후보 확인·동명이인 확인 후 등록 계약을 5.1에 반영했다. 나머지 항목의 최초 코드 확인 기준은 위와 같다.
 - B3 추가 반영: 2026-11-26. 학생 목록·검색·필터·페이지네이션 및 기본 정보 부분 수정 2개 API를 구현하여 학생 API 총 4개의 계약을 5.1에 반영했다.
+- B4 추가 반영: 2026-11-26. 학습지 제목·학생 지정 PATCH 1개를 5.7에 구현하고, 기존 상세·검토 응답에 제목·학생·업무 저장 상태·저장 시각을 추가했다.
 - 기능 기준: [AUTEDI 기능명세서 v2](<C:/study/CEOS/AUTEDI/autedi/docs/AUTEDI 기능명세서 v2.md>)
-- 최초 정리 범위: 기존 API 37개, 앞선 논의의 신규 API 설계안 22개, 조건부 API 설계안 6개. 신규안 중 학생 관리 4개는 B2–B3 구현 계약을 추가 반영했다.
-- 확인 방식: 최초 문서는 Controller·Service·DTO·공통 응답·보안 설정의 정적 대조 기준이다. B2–B3 학생 API는 로컬 H2 DB와 실제 JWT 필터를 사용하는 HTTP 통합 테스트로 검증했다. 운영 DB·배포 환경 확인은 포함하지 않는다.
+- 최초 정리 범위: 기존 API 37개, 앞선 논의의 신규 API 설계안 22개, 조건부 API 설계안 6개. 신규안 중 학생 관리 4개와 학습지 제목·학생 지정 1개는 B2–B4 구현 계약을 추가 반영했다.
+- 확인 방식: 최초 문서는 Controller·Service·DTO·공통 응답·보안 설정의 정적 대조 기준이다. B2–B4 API는 로컬 H2 DB와 실제 JWT 필터를 사용하는 HTTP 통합 테스트로 검증했다. 운영 DB·배포 환경 확인은 포함하지 않는다.
 
-> 2장은 최초 정리한 기존 API의 코드 계약이다. 5.1의 학생 등록·목록·상세·수정은 B2–B3에서 구현했으며, 5–7장의 나머지 신규안·변경안은 각 항목의 설계 상태를 따른다. 기획 정책의 확정과 API 계약의 확정을 구분한다.
+> 2장은 최초 정리한 기존 API의 코드 계약에 B4 상세·검토 응답 확장을 반영했다. 5.1의 학생 API와 5.7의 제목·학생 지정은 B2–B4에서 구현했으며, 나머지 신규안·변경안은 각 항목의 설계 상태를 따른다. 기획 정책의 확정과 API 계약의 확정을 구분한다.
 
 ## 목차
 
@@ -92,6 +93,7 @@
 | 대상 | 현재 If-Match 계약 |
 | --- | --- |
 | 학습지 파일 교체 | 선택. 지정하면 현재 학습지 ETag와 비교. `*` 허용 |
+| 학습지 제목·학생 지정 (B4) | 선택. 지정하면 현재 학습지 ETag와 비교. `*` 허용. 빈 값·불일치는 `412 / COMMON_412` |
 | 첨삭 설정 교체 | 선택. 학습지 ETag 또는 설정 ETag와 비교. `*` 허용 |
 | AI 첨삭 수정·삭제·복원 | **필수**. 누락·불일치는 `412 / COMMON_412` |
 | AI 첨삭 반영 여부 변경 | 선택. 지정된 비어 있지 않은 값은 비교 |
@@ -178,7 +180,7 @@
 | 메서드 | 기능 | URL | param | 설명 |
 | --- | --- | --- | --- | --- |
 | POST | 학습지 이미지 업로드 | `/worksheets` | Form: `files[]`, `file[]`, `images[]` 중 유효 이미지 1개 이상 | 한 학습지와 페이지 생성. `201`, `WorksheetDetailResponse`, `Location`, `ETag` |
-| GET | 학습지 상세 조회 | `/worksheets/{worksheetId}` | Path: `worksheetId` | 파일·페이지·설정·AI 처리 상태·최근 생성 ID 조회. `200`, `WorksheetDetailResponse`, `ETag` |
+| GET | 학습지 상세 조회 | `/worksheets/{worksheetId}` | Path: `worksheetId` | 파일·페이지·설정·AI 처리 상태·최근 생성 ID와 B4 제목·학생·업무 저장 정보 조회. `200`, `WorksheetDetailResponse`, `ETag`. 삭제 학습지 제외 |
 | GET | 원본 다운로드 | `/worksheets/{worksheetId}/file` | Path: `worksheetId` | 업로드 당시 원본 바이트 반환. `200`, 바이너리, 첨부 파일명·Content-Type·해시 ETag 제공 |
 | GET | 페이지 보정 이미지 조회 | `/worksheets/{worksheetId}/pages/{pageNumber}/image` | Path: `worksheetId`, `pageNumber` | EXIF 방향 보정 PNG 반환. `200`, `image/png`, 해시 ETag 제공. pageNumber는 1부터 시작 |
 | PUT | 학습지 파일 교체 | `/worksheets/{worksheetId}/file` | Path: `worksheetId`; Form: `file*`; Header: `If-Match` 선택 | `DRAFT / FAILED`이고 단일 페이지일 때 이미지 한 장 교체. `200`, `WorksheetDetailResponse`, `ETag` |
@@ -192,7 +194,7 @@
 - 교체 요청은 멀티파트 파일 전체가 정확히 한 개여야 한다. 기존 첨삭 설정을 보존하고 이미지·OCR 캐시를 갱신하며 AI 상태는 `DRAFT`로 돌아간다.
 - 신규 업로드는 활성 기관 구독을 검사한다. 모든 쓰기 API에 동일한 구독 검사가 있다는 뜻은 아니다.
 - 원본·페이지 이미지는 Bearer 인증 후 바이너리로 조회하며 `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`를 제공한다. 화면의 첨삭 위치 기준 이미지는 `pages[].imageUrl`이다.
-- 현재 상세 응답에는 업무 제목·학생·임시/최종 저장 상태가 없다.
+- B4에서 상세 응답에 제목·학생 요약·업무 저장 상태·저장 시각을 추가했다. 기존 업로드는 제목·학생 없이도 가능하고 초기 saveStatus는 UNSAVED다.
 - 주요 오류: `WORKSHEET_001`, `WORKSHEET_002`, `COMMON_412`, `FILE_001`–`FILE_007`, `PAGE_001`, `QR_002`, `QR_004`, `QR_006`, `QR_007`.
 
 ### 2.6 첨삭 설정 — 2개 / F05
@@ -351,7 +353,8 @@ data: {"eventId":"00000000-0000-4000-8000-000000000001","occurredAt":"2026-11-23
 
 | DTO | 현재 필드 |
 | --- | --- |
-| `WorksheetDetailResponse` | `id`, `etag`, `status`, `file`, `pages`, `settings`, `latestGenerationId`, `createdAt`, `updatedAt` |
+| `WorksheetDetailResponse` | `id`, `etag`, `status`, `title`, `student`, `saveStatus`, `firstSavedAt`, `lastSavedAt`, `completedAt`, `file`, `pages`, `settings`, `latestGenerationId`, `createdAt`, `updatedAt` |
+| `student` (B4 학생 요약) | `studentId`, `name`, `grade`, `className`. 연락처 없음. 미지정이면 null |
 | `FileDetailResponse` | `name: String`, `mediaType: String`, `sizeBytes: Long`, `originalUrl: String`, `urlExpiresAt: LocalDateTime 또는 null` |
 | `PageDetailResponse` | `id: Long`, `pageNumber: Integer`, `width: Integer`, `height: Integer`, `imageUrl: String`, `urlExpiresAt: LocalDateTime 또는 null`, `regionCoordinateUnit` |
 | `WorksheetSettingsResponse` | `etag: String`, `areas: SettingItemResponse[]` |
@@ -360,7 +363,8 @@ data: {"eventId":"00000000-0000-4000-8000-000000000001","occurredAt":"2026-11-23
 - `WorksheetDetailResponse.status`는 `DRAFT / PROCESSING / READY / FAILED`다. `latestGenerationId`는 생성 전 null일 수 있다.
 - `pages`는 페이지 배열이고 `width/height`는 보정 PNG의 픽셀 크기다. `regionCoordinateUnit`은 `NORMALIZED_0_1`이다.
 - 파일 크기 키는 `sizeBytes`, 원본 URL은 `originalUrl`, 페이지 표시는 `imageUrl`이다. 오래된 예시의 `size`, `url`, `previewImageUrl`을 현재 계약으로 사용하지 않는다.
-- 제목·학생·업무 저장 상태는 아직 이 DTO에 없다.
+- B4의 title/student는 미지정 시 null이며 saveStatus는 UNSAVED / TEMP_SAVED / COMPLETED다. firstSavedAt/lastSavedAt/completedAt은 업무 저장 시각으로 값이 없으면 null이다. status는 AI 처리 상태 의미를 유지한다.
+- 검토 응답의 worksheet도 같은 DTO이므로 동일한 메타데이터를 제공한다. 제목·학생 지정은 임시/최종 저장을 실행하지 않으며 업무 저장 상태·시각·저장자를 변경하지 않는다.
 
 ### 3.3 생성 작업
 
@@ -524,7 +528,7 @@ JWT 필터에서 유효한 인증을 만들지 못한 일반 보호 API 요청�
 
 ## 5. 신규 엔드포인트 설계안
 
-**아래 22개 중 학생 관리 4개는 B2–B3에서 구현했다.** 해당 계약과 학생 목록 페이지네이션은 5.1을 따른다. 나머지 신규안의 경로·필드·응답·검증 한계는 개발·프런트 합의 후 확정하며, 아래 권한은 구현 표시가 없는 경우 목표 정책이다. 다른 목록의 페이지네이션 계약은 해당 API 구현 시 확정한다.
+**아래 22개 중 학생 관리 4개와 제목·학생 지정 1개는 B2–B4에서 구현했다.** 해당 계약은 5.1·5.7을 따른다. 나머지 신규안의 경로·필드·응답·검증 한계는 개발·프런트 합의 후 확정하며, 아래 권한은 구현 표시가 없는 경우 목표 정책이다. 다른 목록의 페이지네이션 계약은 해당 API 구현 시 확정한다.
 
 ### 5.1 학생 관리 — 구현 4개 / F08·F09
 
@@ -663,20 +667,24 @@ from/to는 `YYYY-MM-DD` 형태를 제안한다. 저장일 의미와 경계 포�
 
 계정 이메일 수정, 비밀번호 변경 후 다른 기기 세션 종료는 미정이다. 대상 기관·사용자 ID를 클라이언트가 임의 지정하기보다 로그인 정보를 사용하는 안이다.
 
-### 5.7 제목·학생 지정, 저장·삭제 — 신규안 4개 / D1–D6·F05·F07
+### 5.7 제목·학생 지정, 저장·삭제 — 구현 1개·신규안 3개 / D1–D6·F05·F07
 
-권한: 원장·선생님. 삭제는 업로더 본인만 가능하며 다른 교사 임시저장 이어쓰기의 허용 범위는 미정이다.
+제목·학생 지정은 업로더 본인 또는 같은 기관 원장만 가능하다. 다른 선생님은 수정할 수 없다. 삭제는 업로더 본인만 가능하며 다른 교사 임시저장 이어쓰기의 일반 허용 범위는 별도 미정이다.
 
 | 메서드 | 기능 | URL | param | 설명 |
 | --- | --- | --- | --- | --- |
-| PATCH | 학습지 제목·학생 지정 | `/worksheets/{worksheetId}` | Path: `worksheetId`; Body: `title*`, `studentId*` | 업로드 후 첨삭 설정 단계에서 지정. 학생의 기관 검증, 완료 작업 변경 거부 |
+| PATCH | 학습지 제목·학생 지정 | `/worksheets/{worksheetId}` | Path: `worksheetId`; Body: `title*`, `studentId*`; Header: `If-Match` 선택 | **구현(B4)**. 업로더·같은 기관 원장이 DRAFT/FAILED에서 두 값을 함께 지정. 200, 최신 WorksheetDetailResponse·ETag 반환 |
 | POST | 첨삭 임시저장 | `/worksheets/{worksheetId}/save-draft` | Path: `worksheetId`; Body 없음 — 아래 제안 전제 | 현재 편집 결과를 임시저장으로 기록. 홈·학생 결과물에 반영, 편집 가능 |
 | POST | 첨삭 최종 저장 | `/worksheets/{worksheetId}/complete` | Path: `worksheetId`; Body 없음 — 아래 제안 전제 | 필수 데이터 검증 후 완료 상태·최종 저장일 기록. 읽기 전용, 성장 리포트 집계 대상 |
 | DELETE | 임시저장 작업 삭제 | `/worksheets/{worksheetId}` | Path: `worksheetId`; Body 없음 | 업로더 본인의 임시저장에 deleted_at 기록. 데이터·이미지 보존, 모든 조회·집계에서 제외 |
 
 - Body 없음은 개별 편집 API로 먼저 서버에 반영한 상태를 저장한다는 제안이다. 저장 시 편집 내용 전체를 전송할지, 저장본을 어떤 일관성으로 보존할지는 미정이다.
-- title/studentId를 별도 PATCH 대신 기존 settings 요청에 합치는 방식도 후보이며 아직 확정되지 않았다.
-- 기존 `WorksheetStatus`와 별도로 업무 저장 상태가 필요하다. 제안 필드는 `saveStatus`, `savedAt`, `completedAt` 등이며 코드명과 초기 미저장 상태는 미정이다.
+- 제목·학생은 별도 PATCH로 구현했다. 제목은 앞뒤 공백 제거 후 1–255자, 학생 ID는 양수·같은 기관의 등록 학생이어야 한다. 두 필드 모두 필수이며 B3 학생 PATCH의 생략 유지·선택값 삭제 규칙을 적용하지 않는다.
+- 사용자가 확정한 수정 정책은 **DRAFT·FAILED에서만, 업로더 본인 또는 같은 기관 원장**이다. PROCESSING·READY·업무 COMPLETED는 `409 / WORKSHEET_002`, 다른 선생님은 `403 / AUTH_002`다.
+- 없는/타 기관/삭제 학습지는 `404 / WORKSHEET_001`, 없는/타 기관 학생은 `404 / STUDENT_001`이다. 입력·JSON·ID 타입 오류는 `400 / COMMON_001`이다.
+- 기관 범위 학습지 행을 잠근 뒤 권한→상태→제공된 If-Match→학생 기관을 검사한다. If-Match는 현재 학습지 ETag 또는 *만 허용하고 빈 값·불일치는 412다. 변경을 flush한 후 응답 ETag를 생성한다.
+- B1의 saveStatus는 UNSAVED / TEMP_SAVED / COMPLETED이며 B4 응답에 업무 저장 시각을 함께 노출한다. 제목·학생 지정은 업로더·AI 상태·업무 저장 상태·저장 시각·저장자를 변경하지 않는다. 실제 저장 상태 전이는 B5–B6 범위다.
+- 기존 업로드·AI 생성 API에 제목·학생 필수 검증을 추가하지 않아 기존 자료의 생성 흐름을 유지한다. 신규 프런트 흐름에서는 업로드 후 B4를 호출하고 AI 생성을 요청한다.
 - 원장은 다른 사용자의 임시저장을 삭제할 수 없다. 원장 자신이 업로드한 작업의 취급은 동일한 업로더 조건을 따른다.
 - 이번 삭제 기능은 임시저장만 허용한다. 완료 결과물의 별도 삭제 정책은 미정이다.
 - 생성 중 삭제 허용, 저장 필수 데이터, 반복 저장·삭제 응답, 완료와 편집의 동시 요청 처리는 추가 결정이 필요하다.
@@ -693,16 +701,16 @@ from/to는 `YYYY-MM-DD` 형태를 제안한다. 저장일 의미와 경계 포�
 
 ## 6. 기존 API 변경 설계안
 
-이 장은 현재 2장에 선언된 경로의 **향후 변경점**이다. 새 필드·검증이 이미 적용되었다고 해석하지 않는다.
+이 장은 기존 경로의 변경 현황과 목표다. B4 구현 표시가 있는 상세·검토 확장은 적용했으며 나머지는 각 행의 남은 작업을 따른다.
 
 | 기존 API | 현재 동작 | 변경 목표·남은 결정 |
 | --- | --- | --- |
 | `POST /auth/signup` | 비밀번호 최소 8자만 검사 | 공통 정책인 최대 20자와 영문·숫자·특수문자 조합 검증 추가 |
 | `POST /auth/logout` | 선택 Refresh Token 폐기 | 현재 세션 종료의 범위와 Access Token 처리 정의. 필요 시 요청 필수성·서버 폐기 방식 보완 |
 | `POST /invitations` | email만 입력 | 목표 요청 `name*`, `email*`. 초대 이름 저장·응답·가입 연계, 메일 전송 실패와 초대 대기 노출 정책 정의 |
-| `GET /worksheets/{worksheetId}` | AI 상태·파일·설정 조회 | 제목·학생·업무 저장 상태·저장 시각 추가. 필드명은 제안 |
-| `GET /worksheets/{worksheetId}/review` | READY 검토 조회 | 저장 결과물 조회로 연계하고 제목·학생·업무 저장 상태 제공 |
-| 기존 학습지·하위 자원 조회 | 기관 검증, 학습지 삭제 상태 없음 | deleted_at 작업의 단건·이미지·검토·생성 상태·하위 첨삭/코멘트 접근도 제외하도록 연결 조회 점검 |
+| `GET /worksheets/{worksheetId}` | **B4 구현**: 제목·학생·업무 상태·저장 시각 제공, 삭제 제외 | 실제 임시/최종 저장 처리는 후속 단계 |
+| `GET /worksheets/{worksheetId}/review` | **B4 구현**: worksheet 메타데이터 확장, 삭제 제외 | 저장본 조회·이어쓰기 연계는 후속 단계 |
+| 기존 학습지·하위 자원 조회 | B4 상세·검토 및 공유 AI 첨삭 헬퍼는 삭제 제외 | 이미지·파일·생성·수기 첨삭 등 나머지 연결 경로의 공통 삭제 제외 점검 필요 |
 | 기존 학습지·첨삭·코멘트 쓰기 | AI 상태·항목 버전 검사 | 완료 결과물의 쓰기를 서버에서 거부. 완료/삭제/편집이 겹칠 때도 상태 정책 보장 |
 
 ### 6.1 완료 결과물 쓰기 차단 검토 대상
@@ -799,7 +807,7 @@ PDF 기능 자체는 요구사항이다. 서버 API를 둘지 프런트에서 �
 
 1. 초대 검증 → 회원가입 → 로그인, 또는 기존 계정 로그인.
 2. 일반 업로드 또는 QR 생성 → 스캔·승인·토큰 발급 / 같은 사용자 link → 업로드·교체.
-3. 학습지·보정 이미지 조회 → 영역별 설정 저장.
+3. 학습지·보정 이미지 조회 → 제목·학생 지정(B4, 업로더 또는 같은 기관 원장) 및 영역별 설정 저장. 제목·학생 지정은 기존 생성 API의 새 필수 조건으로 강제하지 않는다.
 4. 생성 요청 → 생성 상태 폴링 또는 SSE 알림 후 상태 조회.
 5. READY에서 검토 조회 → AI 항목 수정·반영 여부·삭제·복원, 수기 첨삭 등록·수정·삭제.
 
