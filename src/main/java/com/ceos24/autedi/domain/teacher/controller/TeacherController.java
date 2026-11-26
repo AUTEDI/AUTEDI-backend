@@ -1,10 +1,13 @@
 package com.ceos24.autedi.domain.teacher.controller;
 
+import com.ceos24.autedi.domain.teacher.dto.TeacherListStatus;
 import com.ceos24.autedi.domain.teacher.dto.request.TeacherUpdateRequest;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
+import com.ceos24.autedi.domain.teacher.dto.response.TeacherListItemResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
 import com.ceos24.autedi.domain.teacher.service.TeacherService;
 import com.ceos24.autedi.global.response.ApiResponse;
+import com.ceos24.autedi.global.response.PageResponse;
 import com.ceos24.autedi.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "09. Teacher", description = "선생님 관리(원장 전용) API")
@@ -29,6 +33,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class TeacherController {
 
     private final TeacherService teacherService;
+
+    @Operation(
+            summary = "선생님 목록 조회 (원장 전용)",
+            description =
+                    "같은 기관의 가입한 선생님과 초대 대기를 한 목록으로 이름순 조회합니다. 원장은 포함하지 않습니다. keyword는 이름·이메일 부분 일치(대소문자 무시), status는 ACTIVE(활동 중)·INVITED(초대 대기)·RESIGNED(퇴사)이며 생략하면 전체입니다. page는 0부터 시작하고 size는 기본 20, 1~100입니다. 초대 대기 행은 teacherId가 null이고 invitationId·expiresAt을 가지며, 만료 시각이 지난 초대도 포함됩니다.")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<TeacherListItemResponse>>> getTeachers(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) TeacherListStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageResponse<TeacherListItemResponse> response =
+                teacherService.list(principal.academyId(), keyword, status, page, size);
+        return ResponseEntity.ok(ApiResponse.onSuccess("선생님 목록을 조회했습니다.", response));
+    }
 
     @Operation(
             summary = "선생님 상세 조회 (원장 전용)",
