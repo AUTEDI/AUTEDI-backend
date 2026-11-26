@@ -4,6 +4,7 @@
 - **작성 기준**:
     1. **회원/인증 도메인**: 학원(유료 서비스 구독 단위), 최고 관리자(원장 - 개발자 직접 부여), 원장의 이메일 초대를 통한 선생님 회원가입, 이메일 기반 로그인
     2. **학습지/AI 첨삭 도메인**: 학습지 업로드 / 첨삭 설정(4개 영역 · 2개 수준) / AI 첨삭 생성 / 첨삭 검토 및 수정 / 교사 코멘트 API (총 19개 엔드포인트)
+    3. **학생/학습지 공통 모델 (B1)**: 학생 기본 정보, 학습지 제목·학생 연결·업무 저장 상태·저장 시각·저장자·삭제 시각 (구현된 엔티티 및 변경 SQL 기준)
 
 ---
 
@@ -14,12 +15,16 @@ erDiagram
     academies ||--o{ users : "1:N (소속 원장/선생님)"
     academies ||--o{ user_invitations : "1:N (학원 초대장)"
     academies ||--o{ worksheets : "1:N (학원 소유 학습지)"
+    academies ||--o{ students : "1:N (소속 학생)"
 
     users ||--o{ user_invitations : "1:N (원장이 초대 발송)"
     users ||--o{ refresh_tokens : "1:N (로그인 토큰)"
     users ||--o{ worksheets : "1:N (학습지 업로드)"
+    users |o--o{ worksheets : "1:N (마지막 저장자, last_saved_by NULL 허용)"
     users ||--o{ worksheet_generations : "1:N (AI 생성 요청)"
     users ||--o{ comments : "1:N (교사 코멘트 작성)"
+
+    students |o--o{ worksheets : "1:N (학생별 학습지, student_id NULL 허용)"
 
     worksheets ||--o{ worksheet_pages : "1:N (페이지 미리보기/OCR)"
     worksheets ||--o{ worksheet_settings : "1:N (영역별 첨삭 설정)"
@@ -79,7 +84,15 @@ erDiagram
         BIGINT id PK
         BIGINT academy_id FK
         BIGINT user_id FK
-        VARCHAR status
+        VARCHAR status "DRAFT / PROCESSING / READY / FAILED"
+        VARCHAR title
+        BIGINT student_id FK
+        ENUM save_status "UNSAVED / TEMP_SAVED / COMPLETED"
+        DATETIME first_saved_at
+        DATETIME last_saved_at
+        DATETIME completed_at
+        BIGINT last_saved_by FK
+        DATETIME deleted_at
         VARCHAR original_filename
         VARCHAR file_url
         VARCHAR file_type
@@ -161,6 +174,19 @@ erDiagram
         TEXT content
         INT version "If-Match 논의 대상"
         DATETIME deleted_at
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    students {
+        BIGINT id PK
+        BIGINT academy_id FK
+        VARCHAR name
+        VARCHAR grade
+        VARCHAR class_name
+        VARCHAR student_phone
+        VARCHAR guardian_phone
+        INT version "낙관적 락 버전"
         DATETIME created_at
         DATETIME updated_at
     }
@@ -253,8 +279,16 @@ erDiagram
 | --- | --- | --- | --- | --- | --- |
 | `id` | `BIGINT UNSIGNED` | X | `AUTO_INCREMENT` | **PK** | 학습지 고유 ID (`worksheetId`) |
 | `academy_id` | `BIGINT UNSIGNED` | X | - | **FK** (`academies.id`), `INDEX` | 소속 학원 ID (학원 단위 학습지 접근 제어) |
-| `user_id` | `BIGINT UNSIGNED` | X | - | **FK** (`users.id`), `INDEX` | 학습지를 업로드/생성한 회원(선생님/원장) ID |
-| `status` | `VARCHAR(30)` | X | `'READY'` | `INDEX` | 학습지 상태 (`READY`: 생성 전, `GENERATING`: 생성 중, `COMPLETED`: 완료, `FAILED`: 실패)※ #3 파일 교체, #5 설정 변경은 `READY`, `FAILED`에서만 허용 |
+| `user_id` | `BIGINT UNSIGNED` | X | - | **FK** (`users.id`), `INDEX` | 학습지를 최초 업로드한 회원(선생님/원장) ID. 마지막 저장자 `last_saved_by`와 구분 |
+| `status` | `VARCHAR(30)` | X | `'DRAFT'` (엔티티 초기값) | `INDEX` | AI 처리 상태 (`DRAFT`: 생성 전, `PROCESSING`: 생성 중, `READY`: AI 처리 완료, `FAILED`: 실패). 업무 저장 상태 `save_status`와 구분. #3 파일 교체, #5 설정 변경은 `DRAFT`, `FAILED`에서만 허용 |
+| `title` | `VARCHAR(255)` | O | `NULL` | - | **B1 추가** — 학습지 제목. 기존 자료와 최초 업로드는 미입력 허용 |
+| `student_id` | `BIGINT` | O | `NULL` | **FK** (`students.id`, `fk_worksheets_student`), `INDEX` (`idx_worksheets_student_id`) | **B1 추가** — 연결 학생 ID. 기존 자료와 최초 업로드는 미지정 허용. 같은 기관 여부는 애플리케이션에서 검증 |
+| `save_status` | `ENUM('COMPLETED','TEMP_SAVED','UNSAVED')` | X | `'UNSAVED'` | - | **B1 추가** — 업무 저장 상태 (`UNSAVED`: 미저장, `TEMP_SAVED`: 임시저장, `COMPLETED`: 최종 저장). 기존 AI 상태와 독립 |
+| `first_saved_at` | `DATETIME(6)` | O | `NULL` | - | **B1 추가** — 최초 임시/최종 저장 시각을 보관하는 필드 |
+| `last_saved_at` | `DATETIME(6)` | O | `NULL` | - | **B1 추가** — 가장 최근 명시적 저장 시각을 보관하는 필드 |
+| `completed_at` | `DATETIME(6)` | O | `NULL` | - | **B1 추가** — 업무 최종 저장 완료 시각을 보관하는 필드. `worksheet_generations.completed_at`의 AI 작업 종료 시각과 구분 |
+| `last_saved_by` | `BIGINT` | O | `NULL` | **FK** (`users.id`, `fk_worksheets_last_saved_by`), `INDEX` (`idx_worksheets_last_saved_by`) | **B1 추가** — 마지막 저장자. 기존 업로더 `user_id`는 유지 |
+| `deleted_at` | `DATETIME(6)` | O | `NULL` | - | **B1 추가** — 학습지 논리 삭제 시각을 보관하는 필드 |
 | `original_filename` | `VARCHAR(255)` | X | - | - | 업로드한 원본 파일명 |
 | `file_url` | `VARCHAR(500)` | X | - | - | 스토리지(S3 등)에 저장된 원본 파일 경로 |
 | `file_type` | `VARCHAR(10)` | X | - | `CHECK` | 파일 확장자/형식 (`JPG`, `JPEG`, `PNG`, `PDF`만 허용) |
@@ -264,6 +298,8 @@ erDiagram
 | `version` | `INT UNSIGNED` | X | `1` | *(팀 논의 대상)* | `If-Match` 헤더(ETag) 검증용 낙관적 락 버전 (제거 합의 시 생략 가능) |
 | `created_at` | `DATETIME(3)` | X | `CURRENT_TIMESTAMP(3)` | - | 생성 일시 |
 | `updated_at` | `DATETIME(3)` | X | `CURRENT_TIMESTAMP(3)` | `ON UPDATE` | 수정 일시 |
+
+- **B1 반영 범위**: 위 8개 컬럼과 학생·저장자 FK 및 인덱스를 추가했다. 기존 자료의 AI 상태·버전은 유지하며, `save_status`는 `UNSAVED`, 나머지 추가 컬럼은 `NULL`로 시작한다. 임시/최종 저장·삭제 API 및 삭제 데이터 자동 제외 처리는 이번 모델 추가에 포함되지 않는다.
 
 ---
 
@@ -384,10 +420,35 @@ erDiagram
 
 ---
 
-## 4. v2 대비 추가 사항
+## 4. 학생 테이블 명세
+
+### ⑪ `students` (학생 기본 정보)
+
+> **역할**: 기관별 학생의 이름·학년·반·연락처를 보관하고 학습지와 연결하는 공통 모델. B1에서 엔티티·기관 범위 조회 저장소·변경 SQL을 추가했다.
+>
+
+| 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | X | `AUTO_INCREMENT` | **PK** | 학생 고유 ID (`studentId`) |
+| `academy_id` | `BIGINT` | X | - | **FK** (`academies.id`, `fk_students_academy`), `INDEX(academy_id, name, id)` (`idx_students_academy_name_id`) | 소속 학원 ID. 기관 범위 조회에 사용 |
+| `name` | `VARCHAR(50)` | X | - | 애플리케이션 검증 (공백만 입력 불가·앞뒤 공백 제거·최대 50자) | 학생 이름. 이름 자체에 UNIQUE 제약 없음 |
+| `grade` | `VARCHAR(50)` | X | - | 애플리케이션 검증 (공백만 입력 불가·앞뒤 공백 제거·최대 50자) | 학년. 현재 문자열로 저장하며 특정 학년 enum으로 제한하지 않음 |
+| `class_name` | `VARCHAR(100)` | O | `NULL` | 애플리케이션 검증 (최대 100자) | 반 이름. 선택 입력 |
+| `student_phone` | `VARCHAR(20)` | O | `NULL` | 애플리케이션 검증 (최대 20자) | 학생 연락처. 선택 입력. 현재 모델은 길이만 검증 |
+| `guardian_phone` | `VARCHAR(20)` | O | `NULL` | 애플리케이션 검증 (최대 20자) | 보호자 연락처. 선택 입력. 현재 모델은 길이만 검증 |
+| `version` | `INT` | X | `0` | JPA `@Version` | 동시 수정 충돌을 감지하는 낙관적 락 버전 |
+| `created_at` | `DATETIME(6)` | X | - | JPA 감사 (`@CreatedDate`) | 학생 최초 등록 시각. DB 기본값 없이 애플리케이션에서 기록 |
+| `updated_at` | `DATETIME(6)` | X | - | JPA 감사 (`@LastModifiedDate`) | 학생 정보 수정 시각. DB `ON UPDATE` 없이 애플리케이션에서 기록 |
+
+- **테이블 조건**: 학원당 여러 학생이 소속되며, 학생당 여러 학습지를 연결할 수 있다. 학생과 학습지의 기관 일치는 단순 FK가 아닌 애플리케이션 검증으로 보장한다. 학생·학습지에 추가한 FK에는 `ON DELETE CASCADE`를 지정하지 않는다.
+
+---
+
+## 5. v2 대비 추가 사항
 
 - ⑨ `corrections` 설명 표에 `action`, `feedback_type`, `issue_kinds`, `anchor`, `location_uncertain`, `warnings`, `requires_review` 7개 필드를 추가했다. 원문 교체와 내용 안내, 첨삭 유형과 문제 종류, 원문 연결과 검토 경고를 구분한다.
 - 기존 `area`, `original_text`, `ai_initial_content`, `content`, `regions` 등을 재사용한다. `REVIEW`·검증 제외 후보·개수 초과 항목의 별도 보존 구조는 후속 설계 대상이며 이번 표 확장만으로 완성되지 않는다.
 - 첫 연동 입력은 JPG/JPEG·PNG 이미지 한 장이며, 원본은 보존하고 EXIF/eXIf 방향을 보정한 동일 PNG를 전사·첨삭·화면 표시의 기준 이미지로 사용한다. PDF는 첫 연동 범위에서 제외한다.
 - PNG는 기준 이미지 형식이며 좌표 수치 단위와는 별개다. AI의 `boxes`는 기준 PNG 전체의 0~1 정규화 좌표를 유지하고, 서비스 `regions`의 px/정규화 단위는 A·프론트와 별도 일치시켜야 한다. 요청에 따라 v2의 기존 좌표 설명 행은 수정하지 않았다.
-- 제목·이 추가 요약과 ⑨ 표의 신규 행 외에는 v2 내용을 유지했다. 전체 Mermaid는 v2 그대로이므로 추가 필드는 ⑨ 설명 표에서 확인한다. 이 문서는 DB 확장 설계안이며 코드·DB 마이그레이션 적용을 뜻하지 않는다.
+- 기존 v3의 `corrections` 확장 설명은 ⑨ 표를 유지했다. B1에서 추가한 `students`와 `worksheets`의 8개 컬럼·관계를 전체 Mermaid와 ⑤·⑪ 설명 표에 반영하고, 학습지 AI 상태 설명을 현재 코드에 맞췄다.
+- B1 내용은 구현된 엔티티와 [DB 변경 SQL](../infra/db/2026-11-26_student_worksheet_common.sql)을 기준으로 한다. 운영 DB에는 아직 적용하지 않았다.

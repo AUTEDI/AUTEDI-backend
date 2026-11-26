@@ -1,8 +1,10 @@
 package com.ceos24.autedi.domain.worksheet.dto.response;
 
 import com.ceos24.autedi.domain.correction.entity.RegionCoordinateUnit;
+import com.ceos24.autedi.domain.student.dto.response.StudentSummaryResponse;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
+import com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,8 +15,13 @@ import java.util.List;
 public record WorksheetDetailResponse(
         @Schema(description = "학습지 고유 ID", example = "1") Long id,
         @Schema(description = "조건부 갱신(If-Match)용 ETag", example = "\"ws_1-v1\"") String etag,
-        @Schema(description = "학습지 생애주기 상태 (DRAFT, PROCESSING, READY, FAILED)", example = "DRAFT")
-                WorksheetStatus status,
+        @Schema(description = "AI 처리 상태 (DRAFT, PROCESSING, READY, FAILED)", example = "DRAFT") WorksheetStatus status,
+        @Schema(description = "학습지 제목. 미지정이면 null", example = "11월 영어 작문") String title,
+        @Schema(description = "연결된 학생 요약. 미지정이면 null") StudentSummaryResponse student,
+        @Schema(description = "AI 처리 상태와 별개인 업무 저장 상태", example = "UNSAVED") WorksheetSaveStatus saveStatus,
+        @Schema(description = "최초 업무 저장 시각. 미저장이면 null") LocalDateTime firstSavedAt,
+        @Schema(description = "최근 업무 저장 시각. 미저장이면 null") LocalDateTime lastSavedAt,
+        @Schema(description = "업무 최종 저장 시각. 미완료이면 null") LocalDateTime completedAt,
         @Schema(description = "원본 파일 상세 정보") FileDetailResponse file,
         @Schema(description = "페이지별 미리보기 목록") List<PageDetailResponse> pages,
         @Schema(description = "현재 설정된 첨삭 영역 목록") WorksheetSettingsResponse settings,
@@ -58,6 +65,12 @@ public record WorksheetDetailResponse(
                 worksheet.getId(),
                 worksheet.getEtag(),
                 worksheet.getStatus(),
+                worksheet.getTitle(),
+                worksheet.getStudent() == null ? null : StudentSummaryResponse.from(worksheet.getStudent()),
+                worksheet.getSaveStatus(),
+                worksheet.getFirstSavedAt(),
+                worksheet.getLastSavedAt(),
+                worksheet.getCompletedAt(),
                 fileDetail,
                 pageDetails,
                 settingsResponse,

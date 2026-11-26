@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
+import com.ceos24.autedi.domain.student.repository.StudentRepository;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
@@ -36,6 +37,7 @@ class WorksheetServicePreparedImageCauseTest {
                 mock(WorksheetSettingRepository.class),
                 mock(WorksheetGenerationRepository.class),
                 mock(UserRepository.class),
+                mock(StudentRepository.class),
                 fileStorageService,
                 mock(QrSessionRepository.class),
                 mock(ApplicationEventPublisher.class));

@@ -302,6 +302,7 @@ public class CorrectionService {
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
         Worksheet worksheet = worksheetRepository
                 .findByIdAndAcademyId(worksheetId, academyId)
+                .filter(found -> found.getDeletedAt() == null)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         if (worksheet.getStatus() != WorksheetStatus.READY) {

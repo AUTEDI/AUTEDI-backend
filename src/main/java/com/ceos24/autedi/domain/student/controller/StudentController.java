@@ -1,0 +1,96 @@
+package com.ceos24.autedi.domain.student.controller;
+
+import com.ceos24.autedi.domain.student.dto.request.StudentCreateRequest;
+import com.ceos24.autedi.domain.student.dto.request.StudentSearchRequest;
+import com.ceos24.autedi.domain.student.dto.request.StudentUpdateRequest;
+import com.ceos24.autedi.domain.student.dto.response.StudentListResponse;
+import com.ceos24.autedi.domain.student.dto.response.StudentResponse;
+import com.ceos24.autedi.domain.student.exception.DuplicateStudentException;
+import com.ceos24.autedi.domain.student.service.StudentService;
+import com.ceos24.autedi.global.exception.ApiErrorLogger;
+import com.ceos24.autedi.global.response.ApiResponse;
+import com.ceos24.autedi.global.security.CustomUserPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.net.URI;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Tag(name = "10. Student", description = "학생 등록·목록·상세 조회·기본 정보 수정 API (F08·F09)")
+@RestController
+@RequestMapping("/api/v1/students")
+@PreAuthorize("hasAnyRole('DIRECTOR', 'TEACHER')")
+@RequiredArgsConstructor
+public class StudentController {
+
+    private final StudentService studentService;
+
+    @Operation(
+            summary = "학생 목록 조회 (F08)",
+            description =
+                    "같은 기관 학생을 이름 부분 검색·학년·반으로 필터링합니다. unassigned=true는 반 미배정만 조회합니다. 이름·학생 ID 오름차순이며 page는 0부터, size는 기본 20·최대 100입니다.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<StudentListResponse>> getStudents(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute StudentSearchRequest request) {
+        return ResponseEntity.ok(ApiResponse.onSuccess(studentService.getStudents(principal.academyId(), request)));
+    }
+
+    @Operation(
+            summary = "학생 등록 (F08)",
+            description =
+                    "로그인한 원장·선생님의 기관에 학생을 등록합니다. 같은 이름이 있으면 학년·반과 무관하게 409/STUDENT_002와 error.candidates를 반환합니다. 기존 학생 사용은 상세 조회로 연결하고, 다른 학생이면 confirmDuplicate=true로 다시 등록합니다. 생성 성공은 201입니다.")
+    @PostMapping
+    public ResponseEntity<ApiResponse<StudentResponse>> createStudent(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestBody StudentCreateRequest request) {
+        StudentResponse response = studentService.createStudent(principal.academyId(), request);
+        URI location = URI.create("/api/v1/students/" + response.studentId());
+        return ResponseEntity.created(location).body(ApiResponse.onSuccess("학생이 등록되었습니다.", response));
+    }
+
+    @ExceptionHandler(DuplicateStudentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDuplicateStudent(DuplicateStudentException exception) {
+        var errorCode = exception.getErrorCode();
+        ApiErrorLogger.log(errorCode, exception);
+        return ResponseEntity.status(errorCode.getStatus())
+                .body(ApiResponse.onFailure(errorCode, exception.getDetail()));
+    }
+
+    @Operation(
+            summary = "학생 상세 조회 (F09)",
+            description = "같은 기관 학생의 이름·학년·반·연락처를 조회합니다. 다른 기관 학생과 존재하지 않는 학생은 동일한 404 응답을 반환합니다.")
+    @GetMapping("/{studentId}")
+    public ResponseEntity<ApiResponse<StudentResponse>> getStudent(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Parameter(description = "학생 고유 ID", required = true) @PathVariable("studentId") Long studentId) {
+        StudentResponse response = studentService.getStudent(principal.academyId(), studentId);
+        return ResponseEntity.ok(ApiResponse.onSuccess(response));
+    }
+
+    @Operation(
+            summary = "학생 기본 정보 수정 (F09)",
+            description =
+                    "같은 기관 학생의 학년·반·연락처를 부분 수정합니다. 생략한 필드는 유지하고, 선택 필드의 null·빈 값은 삭제합니다. 학년은 전달 시 필수값 검증을 하며 이름·기관 변경은 허용하지 않습니다.")
+    @PatchMapping("/{studentId}")
+    public ResponseEntity<ApiResponse<StudentResponse>> updateStudent(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Parameter(description = "학생 고유 ID", required = true) @PathVariable("studentId") Long studentId,
+            @Valid @RequestBody StudentUpdateRequest request) {
+        StudentResponse response = studentService.updateStudent(principal.academyId(), studentId, request);
+        return ResponseEntity.ok(ApiResponse.onSuccess("학생 정보가 수정되었습니다.", response));
+    }
+}
