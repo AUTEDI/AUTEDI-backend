@@ -44,6 +44,9 @@ public enum ErrorCode implements BaseErrorCode {
     ACADEMY_NOT_FOUND(HttpStatus.NOT_FOUND, "ACADEMY_001", "존재하지 않는 학원입니다.", Level.WARN),
     ACADEMY_SUBSCRIPTION_INACTIVE(HttpStatus.FORBIDDEN, "ACADEMY_002", "학원 유료 구독이 활성 상태가 아닙니다.", Level.WARN),
 
+    // Student
+    STUDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "STUDENT_001", "학생을 찾을 수 없거나 접근 권한이 없습니다.", Level.WARN),
+
     // Invitation
     INVALID_INVITATION_TOKEN(HttpStatus.NOT_FOUND, "INVITATION_001", "유효하지 않은 초대 토큰입니다.", Level.WARN),
     EXPIRED_INVITATION_TOKEN(HttpStatus.GONE, "INVITATION_002", "만료된 초대 링크입니다.", Level.INFO),
