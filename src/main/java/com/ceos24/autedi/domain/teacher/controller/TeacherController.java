@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.teacher.controller;
 
+import com.ceos24.autedi.domain.teacher.dto.request.TeacherUpdateRequest;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
 import com.ceos24.autedi.domain.teacher.service.TeacherService;
@@ -8,13 +9,16 @@ import com.ceos24.autedi.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,6 +40,20 @@ public class TeacherController {
             @PathVariable Long teacherId) {
         TeacherDetailResponse response = teacherService.getDetail(principal.academyId(), teacherId);
         return ResponseEntity.ok(ApiResponse.onSuccess("선생님 정보를 조회했습니다.", response));
+    }
+
+    @Operation(
+            summary = "선생님 정보 수정 (원장 전용)",
+            description =
+                    "같은 기관 선생님의 이름·연락처·입사일을 수정합니다. 보내지 않았거나 null인 항목은 바꾸지 않고, 연락처는 빈 문자열이면 삭제합니다. 하나 이상은 값이 있어야 합니다. 퇴사한 선생님도 수정할 수 있으며 이메일은 바꿀 수 없습니다.")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    @PatchMapping("/{teacherId}")
+    public ResponseEntity<ApiResponse<TeacherDetailResponse>> updateTeacher(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long teacherId,
+            @Valid @RequestBody TeacherUpdateRequest request) {
+        TeacherDetailResponse response = teacherService.update(principal.academyId(), teacherId, request);
+        return ResponseEntity.ok(ApiResponse.onSuccess("선생님 정보가 수정되었습니다.", response));
     }
 
     @Operation(

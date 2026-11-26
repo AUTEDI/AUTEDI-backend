@@ -55,7 +55,7 @@
 | 값 | `key=value`, 쉼표와 공백으로 구분. 공백이 들어갈 값은 쓰지 않는다 |
 | 시간 | 정수 밀리초, 키 이름은 `~Ms` (`totalMs`, `s3Ms`) |
 | 크기 | 키 이름에 단위를 붙인다 (`sizeKB`) |
-| 태그 | 흐름 단위: `[upload]`, `[display]`, `[generation]`, `[qr]`, `[email]`, `[validation]`, `[startup]`, `[api]`(에러 응답), `[feedback]`(코멘트·첨삭 편집), `[sse]`, `[auth]` |
+| 태그 | 흐름 단위: `[upload]`, `[display]`, `[generation]`, `[qr]`, `[email]`, `[validation]`, `[startup]`, `[api]`(에러 응답), `[feedback]`(코멘트·첨삭 편집), `[sse]`, `[auth]`, `[teacher]`(선생님 관리) |
 
 ```
 [upload] 완료: worksheetId=12, pageCount=1, ext=jpg, sizeKB=1252, totalMs=830, validateMs=620, s3Ms=130, dbMs=40

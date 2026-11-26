@@ -1,6 +1,7 @@
 package com.ceos24.autedi.domain.teacher.service;
 
 import com.ceos24.autedi.domain.auth.repository.RefreshTokenRepository;
+import com.ceos24.autedi.domain.teacher.dto.request.TeacherUpdateRequest;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
 import com.ceos24.autedi.domain.user.entity.Role;
@@ -11,10 +12,14 @@ import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import com.ceos24.autedi.global.security.RevokedUserRegistry;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -23,6 +28,39 @@ public class TeacherService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final RevokedUserRegistry revokedUserRegistry;
+
+    /**
+     * 같은 기관 선생님의 이름·연락처·입사일을 수정한다. 보내지 않았거나 null인 항목은 바꾸지 않는다. 연락처는 빈 문자열이면 삭제한다. 퇴사한 선생님도
+     * 수정할 수 있다. 이메일은 바꾸지 않는다.
+     */
+    @Transactional
+    public TeacherDetailResponse update(Long academyId, Long teacherId, TeacherUpdateRequest request) {
+        User teacher = findTeacherInAcademy(academyId, teacherId);
+        if (request.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        List<String> changed = new ArrayList<>();
+        if (request.name() != null) {
+            teacher.updateName(request.name().trim());
+            changed.add("name");
+        }
+        if (request.phoneNumber() != null) {
+            teacher.updatePhoneNumber(request.phoneNumber().isEmpty() ? null : request.phoneNumber());
+            changed.add("phoneNumber");
+        }
+        if (request.hireDate() != null) {
+            teacher.updateHireDate(request.hireDate());
+            changed.add("hireDate");
+        }
+
+        log.info(
+                "[teacher] 정보 수정: teacherId={}, academyId={}, changed={}",
+                teacher.getId(),
+                academyId,
+                String.join(",", changed));
+        return TeacherDetailResponse.from(teacher);
+    }
 
     /** 같은 기관 선생님의 상세 정보를 조회한다. 퇴사한 선생님도 조회할 수 있다. */
     public TeacherDetailResponse getDetail(Long academyId, Long teacherId) {

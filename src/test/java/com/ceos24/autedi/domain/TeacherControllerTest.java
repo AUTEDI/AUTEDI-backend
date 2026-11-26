@@ -3,6 +3,7 @@ package com.ceos24.autedi.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,7 +32,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
@@ -224,8 +224,8 @@ class TeacherControllerTest {
     @Test
     @DisplayName("GET /api/v1/teachers/{id} - 원장이 같은 기관 선생님을 조회하면 이름·이메일·연락처·입사일·상태를 받는다")
     void getDetail_director_success() throws Exception {
-        ReflectionTestUtils.setField(teacher, "phoneNumber", "010-1234-5678");
-        ReflectionTestUtils.setField(teacher, "hireDate", LocalDate.of(2026, 3, 2));
+        teacher.updatePhoneNumber("010-1234-5678");
+        teacher.updateHireDate(LocalDate.of(2026, 3, 2));
 
         mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId()).header(HttpHeaders.AUTHORIZATION, directorToken))
                 .andExpect(status().isOk())
@@ -294,5 +294,166 @@ class TeacherControllerTest {
     @DisplayName("GET /api/v1/teachers/{id} - 토큰이 없으면 401")
     void getDetail_noToken_unauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/teachers/{id}", teacher.getId())).andExpect(status().isUnauthorized());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions patchTeacher(Long id, String token, String body)
+            throws Exception {
+        return mockMvc.perform(patch("/api/v1/teachers/{id}", id)
+                .header(HttpHeaders.AUTHORIZATION, token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
+    private User reload(User user) {
+        entityManager.flush();
+        entityManager.clear();
+        return userRepository.findById(user.getId()).orElseThrow();
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 이름·연락처·입사일을 모두 수정하면 응답과 DB가 바뀌고 이메일은 그대로")
+    void update_all_success() throws Exception {
+        patchTeacher(
+                        teacher.getId(),
+                        directorToken,
+                        """
+                        {"name":"김민수","phoneNumber":"010-1234-5678","hireDate":"2026-03-02"}""")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.name").value("김민수"))
+                .andExpect(jsonPath("$.result.phoneNumber").value("010-1234-5678"))
+                .andExpect(jsonPath("$.result.hireDate").value("2026-03-02"))
+                .andExpect(jsonPath("$.result.email").value("resign_teacher@autedi.com"));
+
+        User saved = reload(teacher);
+        assertThat(saved.getName()).isEqualTo("김민수");
+        assertThat(saved.getPhoneNumber()).isEqualTo("010-1234-5678");
+        assertThat(saved.getHireDate()).isEqualTo(LocalDate.of(2026, 3, 2));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 이름만 보내면 연락처·입사일은 그대로")
+    void update_nameOnly_keepsOthers() throws Exception {
+        teacher.updatePhoneNumber("010-0000-0000");
+        teacher.updateHireDate(LocalDate.of(2025, 1, 1));
+
+        patchTeacher(teacher.getId(), directorToken, "{\"name\":\"김민수\"}").andExpect(status().isOk());
+
+        User saved = reload(teacher);
+        assertThat(saved.getName()).isEqualTo("김민수");
+        assertThat(saved.getPhoneNumber()).isEqualTo("010-0000-0000");
+        assertThat(saved.getHireDate()).isEqualTo(LocalDate.of(2025, 1, 1));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 이름 앞뒤 공백은 제거되어 저장")
+    void update_name_trimmed() throws Exception {
+        patchTeacher(teacher.getId(), directorToken, "{\"name\":\"  김민수  \"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.name").value("김민수"));
+
+        assertThat(reload(teacher).getName()).isEqualTo("김민수");
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 연락처를 빈 문자열로 보내면 삭제(null)")
+    void update_emptyPhone_clears() throws Exception {
+        teacher.updatePhoneNumber("010-0000-0000");
+
+        patchTeacher(teacher.getId(), directorToken, "{\"phoneNumber\":\"\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.phoneNumber").value(org.hamcrest.Matchers.nullValue()));
+
+        assertThat(reload(teacher).getPhoneNumber()).isNull();
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 퇴사한 선생님도 수정할 수 있고 상태는 그대로")
+    void update_resignedTeacher_success() throws Exception {
+        teacher.resign();
+
+        patchTeacher(teacher.getId(), directorToken, "{\"name\":\"김민수\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("RESIGNED"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 요청에 email을 넣어도 이메일은 바뀌지 않는다")
+    void update_emailIgnored() throws Exception {
+        patchTeacher(teacher.getId(), directorToken, "{\"name\":\"김민수\",\"email\":\"hacked@autedi.com\"}")
+                .andExpect(status().isOk());
+
+        assertThat(reload(teacher).getEmail()).isEqualTo("resign_teacher@autedi.com");
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 잘못된 입력은 400 COMMON_001이고 데이터는 그대로")
+    void update_invalidInput_badRequest() throws Exception {
+        String[] bodies = {
+            "{}",
+            "{\"name\":\"   \"}",
+            "{\"name\":\"" + "가".repeat(51) + "\"}",
+            "{\"phoneNumber\":\"abc-1234\"}",
+            "{\"phoneNumber\":\"123456\"}",
+            "{\"phoneNumber\":\"" + "1".repeat(21) + "\"}",
+            "{\"hireDate\":\"2026-13-45\"}",
+            "{\"hireDate\":\"2026/03/02\"}"
+        };
+        for (String body : bodies) {
+            patchTeacher(teacher.getId(), directorToken, body)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("COMMON_001"));
+        }
+
+        User saved = reload(teacher);
+        assertThat(saved.getName()).isEqualTo("김선생");
+        assertThat(saved.getPhoneNumber()).isNull();
+        assertThat(saved.getHireDate()).isNull();
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 선생님이 호출하면 403 AUTH_002, 데이터는 그대로")
+    void update_teacherCaller_forbidden() throws Exception {
+        patchTeacher(teacher.getId(), teacherToken, "{\"name\":\"김민수\"}")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+
+        assertThat(reload(teacher).getName()).isEqualTo("김선생");
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 다른 기관 선생님은 404 AUTH_006, 데이터는 그대로")
+    void update_otherAcademyTeacher_notFound() throws Exception {
+        patchTeacher(otherAcademyTeacher.getId(), directorToken, "{\"name\":\"김민수\"}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("AUTH_006"));
+
+        assertThat(reload(otherAcademyTeacher).getName()).isEqualTo("타기관선생");
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 존재하지 않는 사용자는 404 AUTH_006")
+    void update_unknownUser_notFound() throws Exception {
+        patchTeacher(999_999L, directorToken, "{\"name\":\"김민수\"}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("AUTH_006"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 원장 ID이면 403 AUTH_002, 데이터는 그대로")
+    void update_directorTarget_forbidden() throws Exception {
+        patchTeacher(director.getId(), directorToken, "{\"name\":\"김민수\"}")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+
+        assertThat(reload(director).getName()).isEqualTo("박원장");
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/teachers/{id} - 토큰이 없으면 401")
+    void update_noToken_unauthorized() throws Exception {
+        mockMvc.perform(patch("/api/v1/teachers/{id}", teacher.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"김민수\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }
