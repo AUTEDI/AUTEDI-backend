@@ -29,12 +29,15 @@ public record StudentCreateRequest(
                 @Pattern(
                         regexp = "^(?:0[0-9]{8,10}|0[0-9]{1,2}-[0-9]{3,4}-[0-9]{4})$",
                         message = "보호자 연락처는 국내 전화번호를 숫자 또는 하이픈으로 입력해 주세요.")
-                String guardianPhone) {
+                String guardianPhone,
+        @Schema(description = "같은 이름의 후보를 확인하고 다른 학생으로 신규 등록할 때만 true. 생략·null은 false", defaultValue = "false")
+                Boolean confirmDuplicate) {
 
     public StudentCreateRequest {
         className = optionalText(className);
         studentPhone = optionalText(studentPhone);
         guardianPhone = optionalText(guardianPhone);
+        confirmDuplicate = Boolean.TRUE.equals(confirmDuplicate);
     }
 
     private static String optionalText(String value) {

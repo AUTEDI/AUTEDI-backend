@@ -30,6 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -261,15 +262,206 @@ class StudentControllerTest {
     }
 
     @Test
-    @DisplayName("동명이인은 별도의 학생 ID로 등록된다")
-    void sameNamesHaveDifferentStudentIds() throws Exception {
+    @DisplayName("동명이인임을 확인하면 기존 학생을 변경하지 않고 새 학생 ID로 등록한다")
+    void confirmedSameNamesHaveDifferentStudentIds() throws Exception {
         long firstId = resultBody(create(Map.of("name", "김학생", "grade", "초등 3"), teacherToken))
                 .get("studentId")
                 .asLong();
-        long secondId = resultBody(create(Map.of("name", "김학생", "grade", "초등 4"), teacherToken))
+        long secondId = resultBody(
+                        create(Map.of("name", "김학생", "grade", "초등 4", "confirmDuplicate", true), teacherToken))
                 .get("studentId")
                 .asLong();
         assertThat(secondId).isNotEqualTo(firstId);
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(studentRepository.findById(firstId).orElseThrow().getGrade()).isEqualTo("초등 3");
+        assertThat(studentRepository.findById(secondId).orElseThrow().getGrade())
+                .isEqualTo("초등 4");
+    }
+
+    @ParameterizedTest
+    @EnumSource(Role.class)
+    @DisplayName("같은 기관·같은 이름이면 학년이 달라도 생성을 보류하고 후보를 반환한다")
+    void sameNameRequiresUserConfirmation(Role role) throws Exception {
+        Student existing = saveStudent(academy);
+        long previousCount = studentRepository.count();
+
+        mockMvc.perform(post("/api/v1/students")
+                        .header(HttpHeaders.AUTHORIZATION, tokenOf(role))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("name", "  김학생  ", "grade", "초등 4"))))
+                .andExpect(status().isConflict())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("STUDENT_002"))
+                .andExpect(jsonPath("$.result").isEmpty())
+                .andExpect(jsonPath("$.error.candidates.length()").value(1))
+                .andExpect(jsonPath("$.error.candidates[0].studentId").value(existing.getId()))
+                .andExpect(jsonPath("$.error.candidates[0].name").value("김학생"))
+                .andExpect(jsonPath("$.error.candidates[0].grade").value("초등 3"))
+                .andExpect(jsonPath("$.error.candidates[0].className").value("오후반"))
+                .andExpect(jsonPath("$.error.candidates[0].studentPhoneMatched").value(false))
+                .andExpect(
+                        jsonPath("$.error.candidates[0].guardianPhoneMatched").value(false))
+                .andExpect(jsonPath("$.error.candidates[0].studentPhone").doesNotExist())
+                .andExpect(jsonPath("$.error.candidates[0].guardianPhone").doesNotExist());
+
+        assertThat(studentRepository.count()).isEqualTo(previousCount);
+        mockMvc.perform(get("/api/v1/students/{studentId}", existing.getId())
+                        .header(HttpHeaders.AUTHORIZATION, tokenOf(role)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.grade").value("초등 3"));
+        assertThat(studentRepository.count()).isEqualTo(previousCount);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(booleans = {false})
+    @DisplayName("confirmDuplicate가 false 또는 null이면 후보가 있을 때 신규 등록하지 않는다")
+    void falseOrNullDoesNotConfirmDuplicate(Boolean confirmation) throws Exception {
+        saveStudent(academy);
+        long previousCount = studentRepository.count();
+        Map<String, Object> request = new LinkedHashMap<>(Map.of("name", "김학생", "grade", "초등 3"));
+        request.put("confirmDuplicate", confirmation);
+        mockMvc.perform(post("/api/v1/students")
+                        .header(HttpHeaders.AUTHORIZATION, teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STUDENT_002"));
+        assertThat(studentRepository.count()).isEqualTo(previousCount);
+    }
+
+    @Test
+    @DisplayName("후보는 같은 기관·같은 이름 전체를 ID 순으로 반환하며 학년·반으로 제외하지 않는다")
+    void candidatesAreScopedAndOrderedWithoutGradeOrClassFilter() throws Exception {
+        Student first = saveStudent(academy);
+        Student second = studentRepository.saveAndFlush(Student.builder()
+                .academy(academy)
+                .name("김학생")
+                .grade("초등 6")
+                .className("오전반")
+                .build());
+        studentRepository.saveAndFlush(
+                Student.builder().academy(academy).name("박학생").grade("초등 3").build());
+        saveStudent(
+                academyRepository.saveAndFlush(Academy.builder().name("다른 기관").build()));
+
+        mockMvc.perform(post("/api/v1/students")
+                        .header(HttpHeaders.AUTHORIZATION, teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                Map.of("name", "김학생", "grade", "중등 1", "className", "저녁반"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.candidates.length()").value(2))
+                .andExpect(jsonPath("$.error.candidates[0].studentId").value(first.getId()))
+                .andExpect(jsonPath("$.error.candidates[1].studentId").value(second.getId()))
+                .andExpect(jsonPath("$.error.candidates[1].grade").value("초등 6"))
+                .andExpect(jsonPath("$.error.candidates[1].className").value("오전반"));
+    }
+
+    @Test
+    @DisplayName("다른 기관에만 같은 이름이 있으면 후보로 노출하지 않고 등록한다")
+    void foreignSameNameDoesNotBlockRegistration() throws Exception {
+        Academy other =
+                academyRepository.saveAndFlush(Academy.builder().name("다른 기관").build());
+        Student foreign = saveStudent(other);
+        MvcResult created = create(Map.of("name", "김학생", "grade", "초등 3"), teacherToken);
+        assertThat(resultBody(created).get("studentId").asLong()).isNotEqualTo(foreign.getId());
+    }
+
+    @Test
+    @DisplayName("연락처가 같아도 이름이 다르면 등록을 보류하지 않는다")
+    void samePhoneWithDifferentNameIsNotACandidate() throws Exception {
+        saveStudent(academy);
+        create(
+                Map.of(
+                        "name", "박학생",
+                        "grade", "초등 3",
+                        "studentPhone", "01012345678",
+                        "guardianPhone", "021234567"),
+                teacherToken);
+    }
+
+    @ParameterizedTest
+    @MethodSource("phoneMatchCases")
+    @DisplayName("연락처 일치는 하이픈을 제외해 비교하며 미입력끼리는 일치로 안내하지 않는다")
+    void candidatePhoneMatchesAreOnlyHints(
+            String storedStudent,
+            String storedGuardian,
+            String requestedStudent,
+            String requestedGuardian,
+            boolean studentMatched,
+            boolean guardianMatched)
+            throws Exception {
+        studentRepository.saveAndFlush(Student.builder()
+                .academy(academy)
+                .name("김학생")
+                .grade("초등 3")
+                .studentPhone(storedStudent)
+                .guardianPhone(storedGuardian)
+                .build());
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("name", "김학생");
+        request.put("grade", "초등 4");
+        request.put("studentPhone", requestedStudent);
+        request.put("guardianPhone", requestedGuardian);
+
+        mockMvc.perform(post("/api/v1/students")
+                        .header(HttpHeaders.AUTHORIZATION, teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.candidates[0].studentPhoneMatched").value(studentMatched))
+                .andExpect(
+                        jsonPath("$.error.candidates[0].guardianPhoneMatched").value(guardianMatched))
+                .andExpect(jsonPath("$.error.candidates[0].className").isEmpty())
+                .andExpect(jsonPath("$.error.candidates[0].studentPhone").doesNotExist())
+                .andExpect(jsonPath("$.error.candidates[0].guardianPhone").doesNotExist());
+    }
+
+    static Stream<Arguments> phoneMatchCases() {
+        return Stream.of(
+                Arguments.of("010-1234-5678", "02-123-4567", "01012345678", "021234567", true, true),
+                Arguments.of("01012345678", "021234567", "010-1234-5678", "02-123-4567", true, true),
+                Arguments.of("01012345678", "021234567", "01011112222", "021234567", false, true),
+                Arguments.of("01012345678", "021234567", "01012345678", "021112222", true, false),
+                Arguments.of("01012345678", "021234567", null, null, false, false),
+                Arguments.of(null, null, "01012345678", "021234567", false, false),
+                Arguments.of(null, null, null, null, false, false));
+    }
+
+    @Test
+    @DisplayName("같은 이름·학년·연락처여도 동명이인 확인 후에는 별도 학생으로 등록할 수 있다")
+    void confirmationAllowsMatchingContactWithoutChangingExistingStudent() throws Exception {
+        Student existing = saveStudent(academy);
+        MvcResult created = create(
+                Map.of(
+                        "name", "김학생",
+                        "grade", "초등 3",
+                        "className", "새로운 반",
+                        "studentPhone", "01012345678",
+                        "guardianPhone", "021234567",
+                        "confirmDuplicate", true),
+                teacherToken);
+        assertThat(resultBody(created).get("studentId").asLong()).isNotEqualTo(existing.getId());
+        assertThat(studentRepository.findById(existing.getId()).orElseThrow().getClassName())
+                .isEqualTo("오후반");
+    }
+
+    @Test
+    @DisplayName("동명이인 확인이 있어도 입력값 검증을 생략하지 않는다")
+    void confirmationDoesNotBypassInputValidation() throws Exception {
+        saveStudent(academy);
+        long previousCount = studentRepository.count();
+        mockMvc.perform(post("/api/v1/students")
+                        .header(HttpHeaders.AUTHORIZATION, teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "김학생", "grade", "초등 3", "studentPhone", "wrong", "confirmDuplicate", true))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_001"));
+        assertThat(studentRepository.count()).isEqualTo(previousCount);
     }
 
     @ParameterizedTest

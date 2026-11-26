@@ -46,6 +46,7 @@ public enum ErrorCode implements BaseErrorCode {
 
     // Student
     STUDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "STUDENT_001", "학생을 찾을 수 없거나 접근 권한이 없습니다.", Level.WARN),
+    STUDENT_DUPLICATE_CANDIDATES(HttpStatus.CONFLICT, "STUDENT_002", "같은 이름의 학생이 있습니다. 기존 학생을 확인해 주세요.", Level.INFO),
 
     // Invitation
     INVALID_INVITATION_TOKEN(HttpStatus.NOT_FOUND, "INVITATION_001", "유효하지 않은 초대 토큰입니다.", Level.WARN),
