@@ -3,7 +3,7 @@ package com.ceos24.autedi.domain.student.dto.response;
 import com.ceos24.autedi.domain.student.entity.Student;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "학생 등록 및 상세 조회 응답")
+@Schema(description = "학생 등록·상세 조회·기본 정보 수정 응답")
 public record StudentResponse(
         @Schema(description = "학생 고유 ID", example = "1") Long studentId,
         @Schema(description = "학생 이름", example = "김학생") String name,

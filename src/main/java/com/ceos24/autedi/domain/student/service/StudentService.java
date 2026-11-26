@@ -3,8 +3,11 @@ package com.ceos24.autedi.domain.student.service;
 import com.ceos24.autedi.domain.academy.entity.Academy;
 import com.ceos24.autedi.domain.academy.repository.AcademyRepository;
 import com.ceos24.autedi.domain.student.dto.request.StudentCreateRequest;
+import com.ceos24.autedi.domain.student.dto.request.StudentSearchRequest;
+import com.ceos24.autedi.domain.student.dto.request.StudentUpdateRequest;
 import com.ceos24.autedi.domain.student.dto.response.StudentDuplicateCandidateResponse;
 import com.ceos24.autedi.domain.student.dto.response.StudentDuplicateResponse;
+import com.ceos24.autedi.domain.student.dto.response.StudentListResponse;
 import com.ceos24.autedi.domain.student.dto.response.StudentResponse;
 import com.ceos24.autedi.domain.student.entity.Student;
 import com.ceos24.autedi.domain.student.exception.DuplicateStudentException;
@@ -12,6 +15,8 @@ import com.ceos24.autedi.domain.student.repository.StudentRepository;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +61,34 @@ public class StudentService {
         Student student = studentRepository
                 .findByIdAndAcademyId(studentId, academyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.STUDENT_NOT_FOUND));
+        return StudentResponse.from(student);
+    }
+
+    public StudentListResponse getStudents(Long academyId, StudentSearchRequest request) {
+        if (request.unassigned() && request.className() != null) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "반 이름과 미배정 필터는 함께 사용할 수 없습니다.");
+        }
+        if ((long) request.page() * request.size() > Integer.MAX_VALUE) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "조회 가능한 페이지 범위를 초과했습니다.");
+        }
+        String keyword = request.keyword() == null
+                ? null
+                : request.keyword().replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        var pageable = PageRequest.of(request.page(), request.size(), Sort.by("name", "id"));
+        return StudentListResponse.from(studentRepository.findPageByFilters(
+                academyId, keyword, request.grade(), request.className(), request.unassigned(), pageable));
+    }
+
+    @Transactional
+    public StudentResponse updateStudent(Long academyId, Long studentId, StudentUpdateRequest request) {
+        Student student = studentRepository
+                .findLockedByIdAndAcademyId(studentId, academyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.STUDENT_NOT_FOUND));
+        student.updateBasicInfo(
+                request.isGradeProvided() ? request.getGrade() : student.getGrade(),
+                request.isClassNameProvided() ? request.getClassName() : student.getClassName(),
+                request.isStudentPhoneProvided() ? request.getStudentPhone() : student.getStudentPhone(),
+                request.isGuardianPhoneProvided() ? request.getGuardianPhone() : student.getGuardianPhone());
         return StudentResponse.from(student);
     }
 }

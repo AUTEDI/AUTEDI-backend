@@ -67,6 +67,18 @@ public class Student extends BaseTimeEntity {
         this.guardianPhone = optionalText(guardianPhone, 20, "보호자 연락처");
     }
 
+    /** 모든 값을 검증한 뒤 함께 반영한다. 이름과 소속 기관은 기본 정보 수정 대상이 아니다. */
+    public void updateBasicInfo(String grade, String className, String studentPhone, String guardianPhone) {
+        String checkedGrade = requiredText(grade, 50, "학년");
+        String checkedClassName = optionalText(className, 100, "수강반");
+        String checkedStudentPhone = optionalText(studentPhone, 20, "학생 연락처");
+        String checkedGuardianPhone = optionalText(guardianPhone, 20, "보호자 연락처");
+        this.grade = checkedGrade;
+        this.className = checkedClassName;
+        this.studentPhone = checkedStudentPhone;
+        this.guardianPhone = checkedGuardianPhone;
+    }
+
     /** 아직 저장되지 않은 서로 다른 기관을 id=null이라는 이유로 같은 기관으로 취급하지 않는다. */
     public boolean isInAcademy(Academy candidate) {
         return candidate != null

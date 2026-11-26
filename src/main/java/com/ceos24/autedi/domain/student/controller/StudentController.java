@@ -1,6 +1,9 @@
 package com.ceos24.autedi.domain.student.controller;
 
 import com.ceos24.autedi.domain.student.dto.request.StudentCreateRequest;
+import com.ceos24.autedi.domain.student.dto.request.StudentSearchRequest;
+import com.ceos24.autedi.domain.student.dto.request.StudentUpdateRequest;
+import com.ceos24.autedi.domain.student.dto.response.StudentListResponse;
 import com.ceos24.autedi.domain.student.dto.response.StudentResponse;
 import com.ceos24.autedi.domain.student.exception.DuplicateStudentException;
 import com.ceos24.autedi.domain.student.service.StudentService;
@@ -18,13 +21,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "10. Student", description = "학생 등록 및 상세 조회 API (F08·F09)")
+@Tag(name = "10. Student", description = "학생 등록·목록·상세 조회·기본 정보 수정 API (F08·F09)")
 @RestController
 @RequestMapping("/api/v1/students")
 @PreAuthorize("hasAnyRole('DIRECTOR', 'TEACHER')")
@@ -32,6 +37,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudentController {
 
     private final StudentService studentService;
+
+    @Operation(
+            summary = "학생 목록 조회 (F08)",
+            description =
+                    "같은 기관 학생을 이름 부분 검색·학년·반으로 필터링합니다. unassigned=true는 반 미배정만 조회합니다. 이름·학생 ID 오름차순이며 page는 0부터, size는 기본 20·최대 100입니다.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<StudentListResponse>> getStudents(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute StudentSearchRequest request) {
+        return ResponseEntity.ok(ApiResponse.onSuccess(studentService.getStudents(principal.academyId(), request)));
+    }
 
     @Operation(
             summary = "학생 등록 (F08)",
@@ -63,5 +79,18 @@ public class StudentController {
             @Parameter(description = "학생 고유 ID", required = true) @PathVariable("studentId") Long studentId) {
         StudentResponse response = studentService.getStudent(principal.academyId(), studentId);
         return ResponseEntity.ok(ApiResponse.onSuccess(response));
+    }
+
+    @Operation(
+            summary = "학생 기본 정보 수정 (F09)",
+            description =
+                    "같은 기관 학생의 학년·반·연락처를 부분 수정합니다. 생략한 필드는 유지하고, 선택 필드의 null·빈 값은 삭제합니다. 학년은 전달 시 필수값 검증을 하며 이름·기관 변경은 허용하지 않습니다.")
+    @PatchMapping("/{studentId}")
+    public ResponseEntity<ApiResponse<StudentResponse>> updateStudent(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Parameter(description = "학생 고유 ID", required = true) @PathVariable("studentId") Long studentId,
+            @Valid @RequestBody StudentUpdateRequest request) {
+        StudentResponse response = studentService.updateStudent(principal.academyId(), studentId, request);
+        return ResponseEntity.ok(ApiResponse.onSuccess("학생 정보가 수정되었습니다.", response));
     }
 }
