@@ -86,6 +86,14 @@ public class User extends BaseTimeEntity {
         this.lastLoginAt = lastLoginAt;
     }
 
+    public void updatePhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public void updateHireDate(LocalDate hireDate) {
+        this.hireDate = hireDate;
+    }
+
     public void updateName(String name) {
         this.name = name;
     }
