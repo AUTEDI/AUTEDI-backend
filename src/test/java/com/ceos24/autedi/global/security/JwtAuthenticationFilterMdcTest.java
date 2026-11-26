@@ -19,7 +19,8 @@ class JwtAuthenticationFilterMdcTest {
     private static final String SECRET = "autedi-test-secret-key-must-be-at-least-32-bytes-long-2026";
 
     private final JwtTokenProvider tokenProvider = new JwtTokenProvider(SECRET, 3_600_000L);
-    private final JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenProvider);
+    private final JwtAuthenticationFilter filter =
+            new JwtAuthenticationFilter(tokenProvider, new RevokedUserRegistry(3_600_000L));
 
     @AfterEach
     void tearDown() {

@@ -22,6 +22,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final RevokedUserRegistry revokedUserRegistry;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -30,11 +31,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
             Authentication authentication = jwtTokenProvider.getAuthentication(token);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            putUserInfoToMdc(authentication);
+            // 퇴사 처리된 사용자의 기존 토큰은 인증하지 않는다. 인증 정보가 없으면 진입점이 401로 응답한다.
+            if (!isRevoked(authentication)) {
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+                putUserInfoToMdc(authentication);
+            }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isRevoked(Authentication authentication) {
+        return authentication.getPrincipal() instanceof CustomUserPrincipal principal
+                && revokedUserRegistry.isRevoked(principal.userId());
     }
 
     private String resolveToken(HttpServletRequest request) {

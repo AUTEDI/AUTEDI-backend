@@ -26,6 +26,10 @@ public enum ErrorCode implements BaseErrorCode {
     USER_INACTIVE(HttpStatus.FORBIDDEN, "AUTH_007", "비활성화된 계정입니다.", Level.WARN),
     USER_LOCKED(HttpStatus.FORBIDDEN, "AUTH_008", "잠금 처리된 계정입니다.", Level.WARN),
     ALREADY_REGISTERED_EMAIL(HttpStatus.CONFLICT, "AUTH_009", "이미 가입된 이메일입니다.", Level.INFO),
+    CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "AUTH_010", "현재 비밀번호가 일치하지 않습니다.", Level.INFO),
+    SAME_AS_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "AUTH_011", "새 비밀번호는 현재 비밀번호와 달라야 합니다.", Level.INFO),
+    USER_RESIGNED(HttpStatus.FORBIDDEN, "AUTH_012", "퇴사 처리된 계정입니다. 관리자에게 문의해 주세요.", Level.WARN),
+    ALREADY_RESIGNED(HttpStatus.CONFLICT, "AUTH_013", "이미 퇴사 처리된 계정입니다.", Level.INFO),
 
     // QR Login
     QR_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "QR_001", "유효하지 않은 QR입니다.", Level.INFO),

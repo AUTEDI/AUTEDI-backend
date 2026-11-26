@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.auth.dto.request;
 
+import com.ceos24.autedi.global.validation.ValidPassword;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +19,7 @@ public record SignupRequest(
                 @NotBlank(message = "이름은 필수 입력값입니다.")
                 @Size(max = 50, message = "이름은 50자 이내여야 합니다.")
                 String name,
-        @Schema(description = "로그인 비밀번호 (8자 이상)", example = "Password123!")
+        @Schema(description = "로그인 비밀번호 (8~20자, 영문·숫자·특수문자 각 1개 이상 포함)", example = "Password123!")
                 @NotBlank(message = "비밀번호는 필수 입력값입니다.")
-                @Size(min = 8, message = "비밀번호는 최소 8자 이상이어야 합니다.")
+                @ValidPassword
                 String password) {}
