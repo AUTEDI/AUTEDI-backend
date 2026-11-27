@@ -51,6 +51,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class WorksheetService {
 
     private final WorksheetRepository worksheetRepository;
+    private final WorksheetReviewAccessService reviewAccess;
     private final WorksheetPageRepository worksheetPageRepository;
     private final WorksheetSettingRepository worksheetSettingRepository;
     private final WorksheetGenerationRepository worksheetGenerationRepository;
@@ -219,9 +220,7 @@ public class WorksheetService {
     @Transactional
     public WorksheetDetailResponse replaceWorksheetFile(
             Long academyId, Long userId, String qrSessionId, Long worksheetId, String ifMatch, MultipartFile file) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        Worksheet worksheet = reviewAccess.lockForChange(academyId, worksheetId);
 
         QrSession qr = resolveQrTarget(qrSessionId, userId);
         if (qr != null) {
@@ -422,9 +421,7 @@ public class WorksheetService {
     @Transactional
     public WorksheetSettingsResponse updateSettings(
             Long academyId, Long worksheetId, String ifMatch, WorksheetSettingsUpdateRequest request) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        Worksheet worksheet = reviewAccess.lockForChange(academyId, worksheetId);
 
         // 상태 검증: DRAFT 또는 FAILED 상태에서만 설정 변경 가능
         if (!worksheet.canModifyOrReplace()) {

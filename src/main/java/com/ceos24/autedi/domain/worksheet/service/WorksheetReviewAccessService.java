@@ -29,13 +29,28 @@ public class WorksheetReviewAccessService {
         return worksheet;
     }
 
+    /** 반복 완료 요청은 기존 저장본을 그대로 반환할 수 있도록 COMPLETED도 허용한다. */
+    public Worksheet lockForCompletion(Long userId, Long academyId, Long worksheetId) {
+        Worksheet worksheet = locked(academyId, worksheetId);
+        requireOwner(worksheet, userId);
+        requireReady(worksheet);
+        return worksheet;
+    }
+
+    /** 파일·설정·생성 등 기존 쓰기의 공통 완료/삭제 차단. AI 단계별 제한은 호출자가 검사한다. */
+    public Worksheet lockForChange(Long academyId, Long worksheetId) {
+        Worksheet worksheet = locked(academyId, worksheetId);
+        requireNotCompleted(worksheet);
+        return worksheet;
+    }
+
     public Worksheet readForOwner(Long userId, Long academyId, Long worksheetId) {
         Worksheet worksheet = worksheets
                 .findByIdAndAcademyId(worksheetId, academyId)
                 .filter(w -> w.getDeletedAt() == null)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
         requireOwner(worksheet, userId);
-        requireEditable(worksheet);
+        requireReady(worksheet);
         return worksheet;
     }
 
@@ -51,9 +66,19 @@ public class WorksheetReviewAccessService {
     }
 
     private void requireEditable(Worksheet worksheet) {
-        if (worksheet.getStatus() != WorksheetStatus.READY
-                || worksheet.getSaveStatus() == WorksheetSaveStatus.COMPLETED) {
-            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "READY 상태의 미완료 학습지만 사용할 수 있습니다.");
+        requireReady(worksheet);
+        requireNotCompleted(worksheet);
+    }
+
+    private void requireReady(Worksheet worksheet) {
+        if (worksheet.getStatus() != WorksheetStatus.READY) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "학습지가 READY 상태가 아닙니다.");
+        }
+    }
+
+    private void requireNotCompleted(Worksheet worksheet) {
+        if (worksheet.getSaveStatus() == WorksheetSaveStatus.COMPLETED) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "최종 저장된 학습지는 수정할 수 없습니다.");
         }
     }
 }

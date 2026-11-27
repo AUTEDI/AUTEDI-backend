@@ -6,12 +6,15 @@ import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.correction.service.CorrectionService;
+import com.ceos24.autedi.domain.generation.entity.GenerationStatus;
+import com.ceos24.autedi.domain.generation.entity.WorksheetGeneration;
 import com.ceos24.autedi.domain.generation.repository.WorksheetGenerationRepository;
 import com.ceos24.autedi.domain.worksheet.dto.response.ReviewResponse;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetSavedResultResponse;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSavedResult;
+import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSavedResultRepository;
 import com.ceos24.autedi.global.exception.CustomException;
@@ -42,6 +45,7 @@ public class WorksheetSavedResultService {
     private final WorksheetRepository worksheets;
     private final WorksheetSavedResultRepository savedResults;
     private final WorksheetGenerationRepository generations;
+    private final WorksheetPageRepository pages;
     private final CorrectionRepository corrections;
     private final CommentRepository comments;
     private final CorrectionService reviewService;
@@ -50,11 +54,51 @@ public class WorksheetSavedResultService {
     public WorksheetSavedResultResponse saveDraft(Long userId, Long academyId, Long worksheetId, String ifMatch) {
         Worksheet worksheet = access.lockForOwner(userId, academyId, worksheetId);
         validateIfMatch(ifMatch, worksheet.getEtag(), false);
-        if (worksheet.getTitle() == null || worksheet.getTitle().isBlank() || worksheet.getStudent() == null) {
-            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "AI 생성 전에 제목과 학생을 지정해 주세요.");
-        }
+        validateMetadata(worksheet);
         LocalDateTime savedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         worksheet.saveDraft(worksheet.getUser(), savedAt);
+        return saveSnapshot(
+                academyId,
+                worksheet,
+                generations
+                        .findFirstByWorksheetIdOrderByCreatedAtDescIdDesc(worksheetId)
+                        .orElse(null));
+    }
+
+    @Transactional
+    public WorksheetSavedResultResponse complete(Long userId, Long academyId, Long worksheetId, String ifMatch) {
+        Worksheet worksheet = access.lockForCompletion(userId, academyId, worksheetId);
+        // 반복 요청도 현재 버전을 검사한다. 최신 태그로 재요청하면 시각·revision을 바꾸지 않는다.
+        validateIfMatch(ifMatch, worksheet.getEtag(), true);
+        if (worksheet.getSaveStatus() == WorksheetSaveStatus.COMPLETED) return savedResponse(worksheet);
+        validateMetadata(worksheet);
+        WorksheetGeneration generation = generations
+                .findFirstByWorksheetIdOrderByCreatedAtDescIdDesc(worksheetId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "성공한 AI 생성 작업이 필요합니다."));
+        if (generation.getStatus() != GenerationStatus.SUCCEEDED
+                || !Objects.equals(generation.getRequestFileHash(), worksheet.getFileHash())) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "현재 원본에 대한 최신 AI 생성 작업이 성공해야 합니다.");
+        }
+        var worksheetPages = pages.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
+        if (worksheetPages.isEmpty() || worksheetPages.size() != worksheet.getPageCount()) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "학습지 페이지 정보가 일치하지 않습니다.");
+        }
+        for (int i = 0; i < worksheetPages.size(); i++) {
+            var page = worksheetPages.get(i);
+            if (page.getPageNumber() != i + 1
+                    || page.getWidth() <= 0
+                    || page.getHeight() <= 0
+                    || page.getPreviewImageUrl().isBlank()) {
+                throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "유효한 페이지 미리보기 정보가 필요합니다.");
+            }
+        }
+        worksheet.complete(worksheet.getUser(), LocalDateTime.now().truncatedTo(ChronoUnit.MICROS));
+        return saveSnapshot(academyId, worksheet, generation);
+    }
+
+    private WorksheetSavedResultResponse saveSnapshot(
+            Long academyId, Worksheet worksheet, WorksheetGeneration generation) {
+        Long worksheetId = worksheet.getId();
         worksheets.flush();
         ReviewResponse review = reviewService.getReview(academyId, worksheetId);
         var snapshot = new WorksheetSavedSnapshot(
@@ -67,19 +111,36 @@ public class WorksheetSavedResultService {
                         .toList());
         WorksheetSavedResult saved =
                 savedResults.findById(worksheetId).orElseGet(() -> new WorksheetSavedResult(worksheet));
-        var generation = generations
-                .findFirstByWorksheetIdOrderByCreatedAtDescIdDesc(worksheetId)
-                .orElse(null);
-        saved.replace(generation, worksheet.getUser(), savedAt, JSON.convertValue(snapshot, OBJECT));
+        saved.replace(generation, worksheet.getUser(), worksheet.getLastSavedAt(), JSON.convertValue(snapshot, OBJECT));
         saved = savedResults.saveAndFlush(saved);
         return response(saved, decode(saved));
     }
 
     public WorksheetSavedResultResponse getSavedResult(Long userId, Long academyId, Long worksheetId) {
         Worksheet worksheet = access.readForOwner(userId, academyId, worksheetId);
-        WorksheetSavedResult saved = findSaved(worksheetId);
+        return savedResponse(worksheet);
+    }
+
+    private WorksheetSavedResultResponse savedResponse(Worksheet worksheet) {
+        WorksheetSavedResult saved = findSaved(worksheet.getId());
         validateSource(worksheet, saved);
-        return response(saved, decode(saved));
+        WorksheetSavedSnapshot snapshot = decode(saved);
+        var metadata = snapshot.review().worksheet();
+        if (metadata == null
+                || !Objects.equals(metadata.id(), worksheet.getId())
+                || metadata.saveStatus() != worksheet.getSaveStatus()) {
+            throw new CustomException(ErrorCode.SAVED_RESULT_CONFLICT);
+        }
+        return response(saved, snapshot);
+    }
+
+    private void validateMetadata(Worksheet worksheet) {
+        if (worksheet.getTitle() == null
+                || worksheet.getTitle().isBlank()
+                || worksheet.getStudent() == null
+                || !worksheet.getStudent().isInAcademy(worksheet.getAcademy())) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "AI 생성 전에 제목과 같은 기관 학생을 지정해 주세요.");
+        }
     }
 
     @Transactional

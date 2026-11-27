@@ -5,7 +5,7 @@
     1. **회원/인증 도메인**: 학원(유료 서비스 구독 단위), 최고 관리자(원장 - 개발자 직접 부여), 원장의 이메일 초대를 통한 선생님 회원가입, 이메일 기반 로그인
     2. **학습지/AI 첨삭 도메인**: 학습지 업로드 / 첨삭 설정(4개 영역 · 2개 수준) / AI 첨삭 생성 / 첨삭 검토 및 수정 / 교사 코멘트 API (총 19개 엔드포인트)
     3. **학생/학습지 공통 모델 (B1)**: 학생 기본 정보, 학습지 제목·학생 연결·업무 저장 상태·저장 시각·저장자·삭제 시각 (구현된 엔티티 및 변경 SQL 기준)
-    4. **임시저장본 (B5)**: 학습지별 마지막 명시적 저장본 한 개, 저장 버전·저장자·원본 연결 및 편집 복원 데이터
+    4. **마지막 저장본 (B5–B6)**: 학습지별 마지막 명시적 임시·최종 저장본 한 개, 저장 버전·저장자·원본 연결 및 편집 복원 데이터
 
 ---
 
@@ -462,20 +462,20 @@ erDiagram
 
 ---
 
-## 5. 임시저장본 테이블 명세
+## 5. 마지막 저장본 테이블 명세
 
 ### ⑫ `worksheet_saved_results` (학습지별 마지막 명시적 저장본)
 
-> **관련 API**: `POST /worksheets/{worksheetId}/save-draft`, `GET /worksheets/{worksheetId}/saved-result`, `POST /worksheets/{worksheetId}/resume` — B5 구현. READY·업로더 본인만 허용하며 업무 완료·삭제 상태는 거부한다.
+> **관련 API**: `POST /worksheets/{worksheetId}/save-draft`, `POST /worksheets/{worksheetId}/complete`, `GET /worksheets/{worksheetId}/saved-result`, `POST /worksheets/{worksheetId}/resume` — B5–B6 구현. READY·업로더 본인 기준이며 완료 후 저장본 조회·현재 ETag를 사용한 완료 재요청은 허용한다. 완료 후 임시저장·이어쓰기는 거부한다. 삭제 학습지는 제외한다.
 >
 
 | 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
 | --- | --- | --- | --- | --- | --- |
-| `worksheet_id` | `BIGINT` | X | - | **PK**, **FK** (`worksheets.id`, `fk_saved_results_worksheet`) | 학습지별 최신 저장본 한 개. 첫 명시적 저장에서 생성 |
-| `revision` | `BIGINT` | X | - | 애플리케이션 관리 | 첫 저장 1, 반복 저장마다 1 증가. 과거 저장본 이력은 보관하지 않음 |
+| `worksheet_id` | `BIGINT` | X | - | **PK**, **FK** (`worksheets.id`, `fk_saved_results_worksheet`) | 학습지별 최신 저장본 한 개. 첫 임시저장 또는 직접 최종 저장에서 생성 |
+| `revision` | `BIGINT` | X | - | 애플리케이션 관리 | 첫 저장 1, 임시저장·최초 최종 저장마다 1 증가. 완료 재요청은 유지. 과거 저장본 이력은 보관하지 않음 |
 | `schema_version` | `INT` | X | `1` (SQL) | 애플리케이션 관리 | JSON 저장 구조 버전. 현재 1만 읽기·복원 지원 |
 | `source_file_hash` | `VARCHAR(64)` | X | - | 애플리케이션 검증 | 저장 당시 원본 파일 해시. 현재 원본과 다르면 조회·복원 거부 |
-| `source_generation_id` | `BIGINT` | O | `NULL` | **FK** (`worksheet_generations.id`, `fk_saved_results_generation`), `INDEX` (`idx_saved_results_generation`) | 저장 당시 최신 AI 작업. 기존 READY 자료 호환을 위해 NULL 허용. 현재 최신 생성과 비교 |
+| `source_generation_id` | `BIGINT` | O | `NULL` | **FK** (`worksheet_generations.id`, `fk_saved_results_generation`), `INDEX` (`idx_saved_results_generation`) | 저장 당시 최신 AI 작업. B5 기존 READY 자료 호환을 위해 NULL 허용. B6 최종 저장은 현재 파일에 대한 최신 SUCCEEDED 작업 필수 |
 | `saved_by` | `BIGINT` | X | - | **FK** (`users.id`, `fk_saved_results_user`), `INDEX` (`idx_saved_results_saved_by`) | 명시적으로 저장한 업로더. 원래 `worksheets.user_id`는 유지 |
 | `saved_at` | `DATETIME(6)` | X | - | 애플리케이션 기록 | 마지막 명시적 저장 시각. 이어쓰기·개별 편집·저장본 조회로 갱신하지 않음 |
 | `snapshot` | `JSON` | X | - | 애플리케이션 직렬화·버전 검증 | 저장 당시 전체 검토 응답과 모든 첨삭·코멘트의 복원용 편집 값. 삭제 행도 포함. 작업본 변경과 분리 |
@@ -484,8 +484,8 @@ erDiagram
 | `updated_at` | `DATETIME(6)` | X | - | JPA 감사 (`@LastModifiedDate`) | 최신 저장본 교체 시각 |
 
 - **테이블 조건**: 기존 학습지는 자동으로 저장본을 만들지 않는다. 저장 시 부모 학습지 행을 잠근 뒤 업무 저장 상태·시각과 JSON을 같은 트랜잭션에서 반영한다. 개별 첨삭·코멘트 쓰기도 같은 잠금을 사용한다.
-- **복원 조건**: 현재 학습지 ETag가 일치할 때만 저장 이후의 편집을 되돌린다. 저장 후 추가한 코멘트·첨삭은 논리 삭제하며 원본 AI 데이터·식별자·작성자·최초 작성 시각·기존 버전을 덮어쓰지 않는다. JPA가 변경된 버전을 증가시킨다.
-- **보존 조건**: FK에 `ON DELETE CASCADE`를 지정하지 않는다. 저장본 버전 이력·최종 저장 스냅샷·리포트용 테이블은 이번 변경에 추가하지 않았다.
+- **복원 조건**: TEMP_SAVED에서 현재 학습지 ETag가 일치할 때만 저장 이후의 편집을 되돌린다. 저장 후 추가한 코멘트·첨삭은 논리 삭제하며 원본 AI 데이터·식별자·작성자·최초 작성 시각·기존 버전을 덮어쓰지 않는다. JPA가 변경된 버전을 증가시킨다. 완료 저장본은 읽기 전용이다.
+- **보존 조건**: FK에 `ON DELETE CASCADE`를 지정하지 않는다. B6 최종 저장은 이 테이블의 기존 snapshot 구조를 재사용한다. 저장본 버전 이력·별도 최종 저장 테이블·리포트용 테이블은 추가하지 않았다.
 
 ---
 
@@ -498,3 +498,4 @@ erDiagram
 - 기존 v3의 `corrections` 확장 설명은 ⑨ 표를 유지했다. B1에서 추가한 `students`와 `worksheets`의 8개 컬럼·관계를 전체 Mermaid와 ⑤·⑪ 설명 표에 반영하고, 학습지 AI 상태 설명을 현재 코드에 맞췄다.
 - B1 내용은 구현된 엔티티와 [DB 변경 SQL](../infra/db/2026-11-26_student_worksheet_common.sql)을 기준으로 한다. 운영 DB에는 아직 적용하지 않았다.
 - B5에서 ⑫ `worksheet_saved_results`를 추가했다. 기존 테이블 컬럼 변경은 없으며, `worksheets`의 기존 업무 저장 필드를 실제 저장 시 갱신한다. [B5 DB 변경 SQL](../infra/db/2026-11-27_worksheet_saved_results.sql)은 운영 DB에 아직 적용하지 않았다.
+- B6는 B1의 `save_status`, `first_saved_at`, `last_saved_at`, `completed_at`, `last_saved_by`와 B5 저장본 테이블을 재사용한다. 기존 테이블·컬럼·관계·JSON 구조 버전 변경 및 신규 DDL은 없다. 임시저장 없는 완료는 저장본을 생성하고, 임시저장 후 완료는 같은 행을 최종 내용으로 갱신한다.

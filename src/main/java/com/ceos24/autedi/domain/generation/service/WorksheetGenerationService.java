@@ -12,6 +12,7 @@ import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
+import com.ceos24.autedi.domain.worksheet.service.WorksheetReviewAccessService;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import java.util.List;
@@ -31,6 +32,7 @@ import org.springframework.util.StringUtils;
 @Transactional(readOnly = true)
 public class WorksheetGenerationService {
     private final WorksheetRepository worksheets;
+    private final WorksheetReviewAccessService reviewAccess;
     private final WorksheetSettingRepository settings;
     private final WorksheetGenerationRepository generations;
     private final UserRepository users;
@@ -141,9 +143,7 @@ public class WorksheetGenerationService {
     }
 
     private Worksheet ownedForUpdate(Long academyId, Long worksheetId) {
-        return worksheets
-                .findLockedByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        return reviewAccess.lockForChange(academyId, worksheetId);
     }
 
     private WorksheetGeneration target(Long worksheetId, Long id) {

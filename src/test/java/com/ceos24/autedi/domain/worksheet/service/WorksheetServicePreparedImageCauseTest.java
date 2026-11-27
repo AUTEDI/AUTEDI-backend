@@ -33,6 +33,7 @@ class WorksheetServicePreparedImageCauseTest {
         FileStorageService fileStorageService = mock(FileStorageService.class);
         WorksheetService service = new WorksheetService(
                 worksheetRepository,
+                mock(WorksheetReviewAccessService.class),
                 pageRepository,
                 mock(WorksheetSettingRepository.class),
                 mock(WorksheetGenerationRepository.class),
