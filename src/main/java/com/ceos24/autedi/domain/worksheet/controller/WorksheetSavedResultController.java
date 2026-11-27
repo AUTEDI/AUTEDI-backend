@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "08. Worksheet Save", description = "업로더 본인의 READY 학습지 임시·최종 저장, 저장본 조회 및 이어쓰기")
+@Tag(name = "08. Worksheet Save", description = "READY 학습지 임시·최종 저장 및 이어쓰기, 임시저장본 본인 조회·완료 저장본 기관 공유")
 @RestController
 @RequestMapping("/api/v1/worksheets/{worksheetId}")
 @RequiredArgsConstructor
@@ -50,7 +51,8 @@ public class WorksheetSavedResultController {
 
     @Operation(
             summary = "마지막 저장본 조회",
-            description = "임시저장 또는 최종 저장 당시의 읽기 전용 검토 데이터를 반환합니다. 현재 작업본은 바꾸지 않으며 완료 결과도 조회할 수 있습니다.")
+            description = "임시저장본은 업로더 본인만, 완료 저장본은 같은 기관 원장·선생님이 읽기 전용으로 조회합니다. 현재 작업본은 바꾸지 않으며 쓰기 권한은 확장하지 않습니다.")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'TEACHER')")
     @GetMapping("/saved-result")
     public ResponseEntity<ApiResponse<WorksheetSavedResultResponse>> savedResult(
             @AuthenticationPrincipal CustomUserPrincipal principal, @PathVariable Long worksheetId) {

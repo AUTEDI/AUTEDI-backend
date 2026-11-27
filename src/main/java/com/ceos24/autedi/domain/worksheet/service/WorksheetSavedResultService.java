@@ -117,7 +117,7 @@ public class WorksheetSavedResultService {
     }
 
     public WorksheetSavedResultResponse getSavedResult(Long userId, Long academyId, Long worksheetId) {
-        Worksheet worksheet = access.readForOwner(userId, academyId, worksheetId);
+        Worksheet worksheet = access.readSavedResult(userId, academyId, worksheetId);
         return savedResponse(worksheet);
     }
 
