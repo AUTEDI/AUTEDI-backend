@@ -1,6 +1,7 @@
 package com.ceos24.autedi.domain.comment.dto.response;
 
 import com.ceos24.autedi.domain.comment.entity.Comment;
+import com.ceos24.autedi.domain.comment.entity.CommentClassification;
 import com.ceos24.autedi.domain.comment.entity.CommentColor;
 import com.ceos24.autedi.domain.comment.entity.HighlightType;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
@@ -23,7 +24,12 @@ public record CommentResponse(
         @Schema(description = "강조된 캔버스 영역 좌표 목록") List<RegionPayload> regions,
         @Schema(description = "코멘트 텍스트 내용", example = "단수 주어(He) 다음에는 3인칭 단수 동사 goes를 사용해야 합니다.") String content,
         @Schema(description = "작성 일시", example = "2026-10-30T10:10:00") LocalDateTime createdAt,
-        @Schema(description = "수정 일시", example = "2026-10-30T10:12:00") LocalDateTime updatedAt) {
+        @Schema(description = "수정 일시", example = "2026-10-30T10:12:00") LocalDateTime updatedAt,
+        CommentClassification classification) {
+    public CommentResponse {
+        classification = classification == null ? CommentClassification.general() : classification;
+    }
+
     public static CommentResponse from(Comment comment) {
         return of(comment, comment.getEtag());
     }
@@ -39,6 +45,7 @@ public record CommentResponse(
                 comment.getRegions(),
                 comment.getContent(),
                 comment.getCreatedAt(),
-                comment.getUpdatedAt());
+                comment.getUpdatedAt(),
+                comment.getClassification());
     }
 }

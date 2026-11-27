@@ -9,13 +9,14 @@
 - B5 추가 반영: 2026-11-27. 임시저장과 마지막 저장본 조회·명시적 이어쓰기 API 3개를 5.7에 구현했다. READY·업로더 본인에게만 허용한다.
 - B6 추가 반영: 2026-11-27. 최종 저장 API, 임시저장 없는 직접 완료, 완료 저장본 조회 및 기존 편집·파일 교체·설정·AI 생성의 공통 완료/삭제 차단을 5.7에 반영했다.
 - B7 추가 반영: 2026-11-27. 학생별 저장 결과물 목록과 홈 최근 작업 API를 5.4·5.8에 구현했다. 사용자 확정에 따라 임시저장 목록·저장본은 업로더만, 완료 목록·저장본은 같은 기관 원장·선생님에게 공유한다. 쓰기 권한은 유지한다.
+- B8 추가 반영: 2026-11-27. 성장 그래프 조회 1개를 5.3에 구현했다. 최종 저장본의 교사 확정 오류 피드백을 집계하며, 교사 코멘트 분류를 기존 작성·수정 API에 추가했다. 저장 JSON은 신규 v2를 기록하고 기존 v1도 조회·복원한다. AI 인사이트는 후속 B10이다.
 - A3 추가 반영: 2026-11-27. 삭제·완료 학습지의 공통 접근 정책(삭제는 `404 / WORKSHEET_001`, 완료 쓰기는 `409 / WORKSHEET_003`), 임시저장 학습지 삭제 `DELETE /worksheets/{worksheetId}`를 구현해 5.7·6장·8장에 반영했다. 검증은 H2 통합 테스트이며 운영 DB는 포함하지 않는다.
 - 기능 기준: [AUTEDI 기능명세서 v2](<C:/study/CEOS/AUTEDI/autedi/docs/AUTEDI 기능명세서 v2.md>)
-- 최초 정리 범위: 기존 API 37개, 앞선 논의의 신규 API 설계안 22개, 조건부 API 설계안 6개. 신규안 중 학생 관리 4개·제목 및 학생 지정 1개·임시저장 1개·최종 저장 1개·학생 결과물 1개·홈 최근 작업 1개는 B2–B7 구현 계약을 반영했다. B5에서 저장본 조회·이어쓰기 2개를 별도 추가했다. 최초 설계안 개수를 현재 구현 개수로 해석하지 않는다.
-- 확인 방식: 최초 문서는 Controller·Service·DTO·공통 응답·보안 설정의 정적 대조 기준이다. B2–B7 API는 로컬 H2 DB와 실제 JWT 필터를 사용하는 HTTP 통합 테스트로 검증했다. 운영 DB·배포 환경 확인은 포함하지 않는다.
+- 최초 정리 범위: 기존 API 37개, 앞선 논의의 신규 API 설계안 22개, 조건부 API 설계안 6개. 신규안 중 학생 관리 4개·제목 및 학생 지정 1개·임시저장 1개·최종 저장 1개·학생 결과물 1개·홈 최근 작업 1개·성장 그래프 1개는 B2–B8 구현 계약을 반영했다. B5에서 저장본 조회·이어쓰기 2개를 별도 추가했다. 최초 설계안 개수를 현재 구현 개수로 해석하지 않는다.
+- 확인 방식: 최초 문서는 Controller·Service·DTO·공통 응답·보안 설정의 정적 대조 기준이다. B2–B8 API는 로컬 H2 DB와 실제 JWT 필터를 사용하는 HTTP 통합 테스트로 검증했다. B8 반영 후 전체 97개 스위트·2,292개 테스트와 포맷 검사가 통과했다. 운영 DB·배포 환경 확인은 포함하지 않는다.
 - A4 추가 반영: 2026-11-27. 학생 메모 목록 조회·등록 2개 API를 5.2에 구현으로 반영했다. 검증은 로컬 H2 HTTP 통합 테스트이며 운영 DB는 포함하지 않는다. 같은 날 선생님 목록의 월별 첨삭 수(`monthlyCorrectionCount`)와 선생님 첨삭 이력 조회 `GET /teachers/{teacherId}/worksheets`를 5.5에 구현으로 반영하고 집계 기준을 확정했다.
 
-> 2장은 최초 정리한 기존 API의 코드 계약에 B4 상세·검토 응답 확장을 반영했다. 5.1의 학생 API, 5.4·5.8의 학생·홈 저장 목록과 5.7의 제목·학생 지정·임시/최종 저장·저장본 조회·이어쓰기는 B2–B7에서 구현했으며, 나머지 신규안·변경안은 각 항목의 설계 상태를 따른다. 기획 정책의 확정과 API 계약의 확정을 구분한다.
+> 2장은 최초 정리한 기존 API의 코드 계약에 B4 상세·검토 응답 및 B8 코멘트 분류 확장을 반영했다. 5.1의 학생 API, 5.3의 성장 그래프, 5.4·5.8의 학생·홈 저장 목록과 5.7의 제목·학생 지정·임시/최종 저장·저장본 조회·이어쓰기는 B2–B8에서 구현했으며, 나머지 신규안·변경안은 각 항목의 설계 상태를 따른다. 기획 정책의 확정과 API 계약의 확정을 구분한다.
 
 ## 목차
 
@@ -266,12 +267,13 @@
 | --- | --- | --- | --- | --- |
 | GET | 수기 첨삭 목록 조회 | `/worksheets/{worksheetId}/comments` | Path: `worksheetId`; Query: `pageId` | 삭제되지 않은 코멘트·강조 표시 조회. `200`, `CommentListResponse` |
 | GET | 수기 첨삭 단건 조회 | `/worksheets/{worksheetId}/comments/{commentId}` | Path: `worksheetId`, `commentId` | 코멘트 단건 조회. `200`, `CommentResponse`, `ETag` |
-| POST | 수기 첨삭 등록 | `/worksheets/{worksheetId}/comments` | Path: `worksheetId`; Body: `pageId*`, `highlightType*`, `regions*`, `content*`, `color` | 교사 코멘트·강조 영역 생성. `201`, `CommentResponse`, `Location`, `ETag` |
-| PATCH | 수기 첨삭 수정 | `/worksheets/{worksheetId}/comments/{commentId}` | Path: `worksheetId`, `commentId`; Body: `content*`, `color`; Header: `If-Match*` | 내용·색상 수정. 좌표·강조 유형 수정 API는 아님. `200`, `CommentResponse`, `ETag` |
+| POST | 수기 첨삭 등록 | `/worksheets/{worksheetId}/comments` | Path: `worksheetId`; Body: `pageId*`, `highlightType*`, `regions*`, `content*`, `color`, `classification` | 교사 코멘트·강조 영역·선택 분류 생성. `201`, `CommentResponse`, `Location`, `ETag` |
+| PATCH | 수기 첨삭 수정 | `/worksheets/{worksheetId}/comments/{commentId}` | Path: `worksheetId`, `commentId`; Body: `content*`, `color`, `classification`; Header: `If-Match*` | 내용·색상·분류 수정. 좌표·강조 유형 수정 API는 아님. `200`, `CommentResponse`, `ETag` |
 | DELETE | 수기 첨삭 논리 삭제 | `/worksheets/{worksheetId}/comments/{commentId}` | Path: `worksheetId`, `commentId`; Header: `If-Match*` | 코멘트·연결 강조 표시를 논리 삭제. `204`, 본문 없음 |
 
 - `highlightType`: `HIGHLIGHT`, `UNDERLINE`, `STRIKETHROUGH`, `ARROW`, `TEXTBOX`, `CARET`.
 - `color`: `RED`, `BLUE`, `YELLOW`, `GREEN`. 생성 시 생략하면 `BLUE`, 수정 시 생략하면 기존 색상 유지.
+- B8 `classification`은 코멘트 응답에도 포함한다. 작성 생략은 GENERAL, 수정 생략은 유지하며 종류·영역·오류 태그·보충 대상의 전체 계약은 5.3을 따른다. 잘못된 보충 대상은 `CORRECTION_001`이다.
 - `regions`는 비어 있으면 안 된다. 대상 페이지는 해당 학습지에 있어야 하며 region의 pageId를 주면 대상 페이지와 같아야 한다. 현재 Service가 모든 좌표 수치에 Correction과 동일한 검증을 한다고 해석하지 않는다.
 - `content`는 공백 불가이며 저장 시 앞뒤 공백을 제거한다. 삭제한 코멘트는 조회 시 찾을 수 없음으로 처리한다.
 - 학생 프로필 메모와 다른 자원이다. 기존 수기 첨삭 목록 역시 페이지네이션이 아닌 `{items, total}`이다.
@@ -632,20 +634,69 @@ PATCH 예시: 아래 요청은 학년을 바꾸고 반을 미배정으로 만들
 - 메모 단건 조회, 수정, 삭제는 제공하지 않는다. 수정·삭제 정책이 정해지면 작성자·이력 보존 방식과 함께 추가한다.
 - 운영 DB는 `ddl-auto: validate`이므로 배포 전에 `infra/db/2026-11-27_student_memos.sql`을 적용해야 한다.
 
-### 5.3 학생 성장 리포트 — 신규안 2개 / F09
+### 5.3 학생 성장 리포트 — 그래프 구현 1개(B8)·인사이트 신규안 1개 / F09
 
 권한: 원장·선생님, 같은 기관.
 
 | 메서드 | 기능 | URL | param | 설명 |
 | --- | --- | --- | --- | --- |
-| GET | 학생 성장 그래프 조회 | `/students/{studentId}/growth-report` | Path: `studentId`; Query: `period`, `area` | 완료 결과물의 영역별 시계열. 완료일·제목·오류 수·100단어당 오류 수·대표 수정·학습지 ID 제공 |
+| GET | 학생 성장 그래프 조회 **구현(B8)** | `/students/{studentId}/growth-report` | Path: `studentId`; Query: `period`, `area` | 완료 저장본의 교사 확정 오류 피드백을 결과물별·영역별로 집계. `200`, `GrowthReportResponse` |
 | GET | 학생 AI 인사이트 조회 | `/students/{studentId}/insights` | Path: `studentId` | 완료 이력의 반복 오류·우선 학습 영역·코칭 포인트·데이터 부족 상태 조회 |
 
-- period는 `1M / 3M / 6M / ALL`, area는 네 표준 첨삭 영역 값을 재사용하는 안이다. 기본 기간·필수 여부·미분석 영역 표현은 미정이다.
-- 최종 저장한 완료 결과물만 집계하며 삭제·임시저장은 제외한다. 날짜 기준은 업무 최종 저장 완료일이다.
-- 정규화 공식은 `(영역 오류 수 ÷ 인식된 총 단어 수) × 100`. 오류·단어 수 정의와 0단어 처리는 미정이다.
-- 데이터 없음과 실제 오류 0을 구분한다. 점 선택에 필요한 결과물 정보를 응답에 포함하고 별도 점 클릭 API는 만들지 않는 안이다.
-- 인사이트 생성·갱신 방식, 최소 완료 건수, 근거 표시·복사 상세는 미정이다. 근거 없는 임의 인사이트를 만들지 않는다.
+**조회 조건**
+
+- 같은 기관 원장·선생님이 완료 결과물을 조회한다. 다른 기관·없는 학생은 동일한 `404 / STUDENT_001`이다. 미인증 `401`, 역할 거부 `403`, 잘못된 쿼리는 `400 / COMMON_001`이다.
+- `period`: 정확히 `1M / 3M / 6M / ALL`, 기본 `3M`. KST 오늘에서 해당 개월 수를 뺀 날짜 00:00 이상, 내일 00:00 미만이다. `ALL`은 과거 시작일 제한이 없다.
+- `area`: 생략하면 네 표준 영역 모두, 지정하면 해당 영역의 `areas`·`series`만 반환한다. 기존 `GRAMMAR_MECHANICS`는 `GRAMMAR_SPELLING`으로 정규화한다. 각 점의 전체 합계는 영역 필터와 무관하게 유지한다.
+- `COMPLETED`·`completedAt` 존재·미삭제·저장본 존재 조건을 만족하는 해당 학생의 결과물만 조회한다. `completedAt ASC, worksheetId ASC`이며 하루의 여러 결과물을 합치지 않는다. `ALL`도 임의로 점을 생략하지 않는다.
+
+**집계 계약 `CONFIRMED_FEEDBACK_V1`**
+
+- 작업 테이블의 현재 값이 아닌 **최종 `snapshot.review`**를 사용한다. AI는 `ACTIVE` + `isApplied=true` + `feedbackType=CORRECTION` 한 카드당 1건이다. 삭제·미적용은 제외하며 `SUGGESTION`은 별도 제안 수다.
+- 교사 코멘트 `classification.type=CORRECTION`은 새로운 오류 1건, `SUGGESTION`은 제안 1건, `GENERAL`은 일반 코멘트 1건, `SUPPLEMENT`는 기존 카드 보충 설명 1건이다. 보충 설명은 오류를 추가로 세지 않으며, 연결 카드가 나중에 삭제되어도 새로운 오류로 승격하지 않는다.
+- `area`는 대표 영역 한 개, `issueKinds`는 중복 없는 복수 태그다. 정상 종류는 `grammar`, `spelling`, `punctuation`, `vocabulary`, `sentence_structure`, `content` 여섯 개다. 한 카드의 종류가 여러 개여도 전체·대표 영역 오류 수는 1이고 각 종류 빈도는 1씩 증가한다. 종류별 합은 전체 수보다 클 수 있다.
+- 과거 카드의 `issueKinds`가 없으면 전체·영역 건수에는 포함하되 `unclassifiedIssueCount`로 명시한다. 종류를 추측하지 않는다. AI 원래 분류는 이번 작업에서 변경하지 않는다.
+- 단어 수는 저장본 AI 작업의 결과 아카이브가 **실제 참조한 불변 전사문 전체**를 페이지마다 한 번씩 센다. 재시도로 이전 작업의 전사를 재사용한 경우도 지원한다. 수정문·카드 원문 조각·가변 OCR 캐시는 사용하지 않는다.
+- 단어는 Unicode 문자·숫자 토큰이며 내부 `'`, `’`, ASCII `-`는 연결한다. `don't`, `well-known`은 각각 1단어, 숫자 토큰은 1단어, 나머지 구두점·줄바꿈은 경계다.
+- 영역 수치는 `(영역 확정 오류 피드백 수 / 전체 원문 단어 수) × 100`, 소수 2자리 HALF_UP이다. 전사 누락·연결 불일치·페이지 일부 누락이면 `wordCount=null / MISSING_TRANSCRIPTION`, 0단어면 `wordCount=0 / EMPTY_TRANSCRIPTION`이며 정규화 수치는 `null`이다.
+- 영역 분석은 저장된 서버 검증 `summary`의 실제 선택 수준·최대 개수가 있는 페이지로 판별한다. 모든 페이지가 분석된 `ANALYZED`만 정규화한다. 일부만 분석되면 `PARTIAL`, AI 분석 없이 교사 분류만 있으면 `TEACHER_ONLY`, 둘 다 없으면 `NOT_ANALYZED`다. `NOT_ANALYZED.errorCount=null`이며 실제 분석된 0건과 구분한다.
+- 이 지표는 학생의 모든 오류를 빠짐없이 센 값이 아니다. AI 카드 개수 제한·교사 선택의 영향을 받는 **교사가 확정한 오류 수정 피드백 수**다. 낮은 값만으로 실력 향상을 단정하지 않는다.
+
+**응답 필드**
+
+| 위치 | 필드 | 의미 |
+| --- | --- | --- |
+| 최상위 | `studentId`, `period`, `selectedArea`, `from`, `to`, `metricVersion` | 조회 기준. `ALL.from=null`, `to`는 KST 오늘 |
+| 최상위 | `dataStatus`, `minimumPointCount=2`, `comparablePointCount`, `unavailableResultCount` | `EMPTY` / `INSUFFICIENT_DATA` / `AVAILABLE`. 같은 영역에서 정규화 가능한 점이 최소 2개면 비교 가능. 전체 영역 조회의 비교 건수는 영역별 건수의 최댓값 |
+| `series[]` | `area`, `comparablePointCount`, `dataStatus` | 영역별 데이터 충분 여부. 서로 다른 영역의 점을 합쳐 2개로 판단하지 않음 |
+| `points[]` | `worksheetId`, `title`, `completedAt`, `aggregationStatus` | 학습지별 점과 결과물 이동 ID. 원문 전체·연락처 등은 노출하지 않음 |
+| `points[]` | `wordCount`, `wordCountStatus` | 단어 수 및 `AVAILABLE` / `MISSING_TRANSCRIPTION` / `EMPTY_TRANSCRIPTION` |
+| `points[]` | `errorCount`, `aiErrorCount`, `teacherErrorCount`, `suggestionCount`, `generalCommentCount`, `supplementCommentCount` | 전체 합계. 제안·일반·보충 설명은 오류 합계와 별도 |
+| `points[]` | `unclassifiedIssueCount`, `issueKindCounts[]` | 종류 미분류 오류 건수와 여섯 종류별 `{issueKind,count}` |
+| `points[].areas[]` | `area`, `analysisStatus`, `errorCount`, `aiErrorCount`, `teacherErrorCount`, `suggestionCount`, `unclassifiedIssueCount`, `errorsPer100Words`, `issueKindCounts` | 영역별 집계. 종류 수치는 해당 대표 영역에 속한 카드의 태그 빈도 |
+| `points[].areas[]` | `representativeFeedback[]` | 오류 피드백 최대 3건. `{source, feedbackId, originalText, content}`. 교사 코멘트의 `originalText=null` |
+
+저장 JSON을 해석할 수 없거나 완료 메타데이터가 불일치하면 그 점을 `aggregationStatus=UNREADABLE_SNAPSHOT`·집계 값 `null`·빈 `areas`로 반환하고 `unavailableResultCount`를 증가시킨다. 다른 정상 점은 유지한다. 최소 2개는 그래프 비교 기준이며 **B10 AI 인사이트 최소 건수 정책과 별개**다. AI 인사이트 API는 아직 구현하지 않았다.
+
+**기존 교사 코멘트 API 확장**
+
+`POST /worksheets/{worksheetId}/comments`, `PATCH /worksheets/{worksheetId}/comments/{commentId}`의 Body와 코멘트 응답에 `classification`을 추가했다. 별도 분류 API는 만들지 않았다.
+
+```json
+{
+  "type": "CORRECTION",
+  "area": "GRAMMAR_SPELLING",
+  "issueKinds": ["grammar", "punctuation"],
+  "correctionId": null
+}
+```
+
+- 작성 시 생략·`null`이면 `GENERAL`; 수정 시 생략·`null`이면 현재 분류 유지. 지정하면 분류 전체 교체다. 기존 수정 API의 필수 `content`와 코멘트 `If-Match`는 유지한다.
+- `CORRECTION`·`SUGGESTION`: 대표 `area`와 일반 `issueKinds`가 필수다. 종류는 중복·null·진단 종류를 허용하지 않고 최소 하나가 대표 영역과 대응해야 한다. `correctionId`는 지정할 수 없다.
+- `GENERAL`: `area`, `correctionId` 없음, 종류는 생략 또는 `[]`다.
+- `SUPPLEMENT`: 같은 학습지의 활성 `correctionId` 필수, `area` 없음, 종류는 생략 또는 `[]`다. 존재하지 않거나 타 학습지·삭제 카드이면 `404 / CORRECTION_001`이다. 보충 설명의 여러 코멘트는 오류를 중복 증가시키지 않는다.
+- 분류 조합·형식 오류는 `400 / COMMON_001`, 오래된 코멘트 ETag는 기존 `412`, 완료 후 변경은 기존 `409 / WORKSHEET_003`이다. 모든 분류 쓰기는 기존 부모 학습지 잠금·기관·READY·임시저장 소유권 검사를 따른다.
+- 신규 저장 행은 `schema_version=2`이며 분류를 JSON의 공개 코멘트와 복원 상태에 함께 저장한다. 기존 v1의 누락 분류는 GENERAL로 조회·복원하며 기존 최종 저장본을 현재 작업 테이블로 보충하거나 재작성하지 않는다.
 
 ### 5.4 학생 결과물 목록 — 구현 1개(B7) / F09
 
@@ -845,7 +896,7 @@ PATCH 예시: 아래 요청은 학년을 바꾸고 반을 미배정으로 만들
 - **반복 완료**: 학습지 잠금→업로더·READY→If-Match 순서로 검사한다. 이미 완료된 경우 현재 ETag로 재요청하면 기존 저장본을 200으로 반환하고 시각·revision·JPA 버전을 바꾸지 않는다. 최초 요청 전의 태그로 재시도하면 412다. 네트워크 오류 후에는 학습지 상세 또는 `/review`에서 현재 ETag를 다시 확인한다. 손상·누락된 완료 저장본은 자동 재생성하지 않는다.
 - **완료 조회·되돌리기**: `/saved-result`는 B7 확정에 따라 완료 저장본을 같은 기관 원장·선생님에게 공유하며 임시저장본은 업로더만 조회한다. 조회·완료 재요청 시 현재 원본·최신 생성 ID·저장본의 학습지 ID·업무 상태 일치를 검사한다. `/review`는 기존처럼 현재 테이블을 조합한다. 완료 후 `save-draft`·`resume`은 409로 거부하며 COMPLETED→TEMP_SAVED 전환은 없다. 완료 재요청도 업로더만 허용한다.
 - **공통 차단 연결(A3 통합)**: 삭제·완료 검사는 A의 `WorksheetAccessPolicy`로 통일했다. 첨삭·코멘트는 B의 `lockForEdit`가 내부에서 A의 `getForWrite`를 호출하고 READY·임시저장 업로더 검사를 추가한다. 파일 교체(일반·QR 공용)·설정·생성·재시도·삭제·QR 생성은 A의 공통 정책을 사용한다. 삭제는 `404 / WORKSHEET_001`, 완료 쓰기는 `409 / WORKSHEET_003`이다. 자식 편집의 부모 ETag 갱신과 기존 AI 단계별 제한은 유지한다. 최종 저장 재요청은 `getLockedReadable`로 완료 상태를 허용해 잠그고, 업로더·READY·If-Match 검사 후 기존 결과만 반환한다. 목록·통계는 후속 API에 같은 정책을 적용한다.
-- **DB**: B1의 완료 관련 컬럼과 B5 저장본 테이블·schema_version=1을 재사용한다. 이번 B6의 신규 테이블·컬럼·DDL 마이그레이션은 없다. 홈·학생 결과물 목록은 B7 구현, 성장 리포트·PDF·신규 첨삭 시작 화면은 후속 범위다.
+- **DB**: B6에서는 B1의 완료 관련 컬럼과 B5 저장본 테이블·schema_version=1을 재사용했다. B6의 신규 테이블·컬럼·DDL은 없다. B8부터는 코멘트 분류를 포함해 새 저장을 v2로 기록하고 v1 읽기·복원도 유지한다. 홈·학생 결과물 목록은 B7, 성장 그래프는 B8 구현이며 PDF·신규 첨삭 시작 화면은 후속 범위다.
 
 ### 5.8 홈 최근 작업 — 구현 1개(B7) / F04
 
@@ -972,7 +1023,7 @@ PDF 기능 자체는 요구사항이다. 서버 API를 둘지 프런트에서 �
 | 월별 집계 | 5.5에서 확정(처음 저장한 시각, 한국 시간, 업로더, 중복 없음). 이력 항목의 추가 필드는 화면 확정 후 조정 |
 | 학생 | 학년 범위, 이름 수정, 연락처 열람·마스킹·보관/파기. 중복 후보·동명이인 확인 등록, 미배정 필터·기본 정보 PATCH는 5.1에 구현 |
 | 메모 | 수정·삭제 범위와 작성자 권한·감사 이력 |
-| 성장 리포트 | 오류·단어 수 정의·0단어, 인사이트 최소 완료 건수·갱신·근거 표시·복사 상세 |
+| 성장 리포트 | B8의 오류 피드백·단어 수·0단어·영역별 데이터 부족 계약은 5.3에 구현 반영. AI 인사이트 최소 완료 건수·갱신·근거 표시·복사 상세는 B10에서 결정 |
 | 교사 | 이메일 수정, 이력 전체 기간, 퇴사 코드·취소·재입사·기존 요청 차단, 초대 대기 행의 상세 진입, 만료 초대 정리 (원장 목록 포함·입사일 입력은 5.5에서 정함) |
 | 초대 | 만료·재발송·취소·중복 이메일 정책, 초대 이름과 가입 이름, 메일 실패와 목록 상태 |
 | 계정·기관 | 이메일 수정, 비밀번호 변경 시 다른 세션 종료, 로그아웃의 Access Token, 구독 만료 쓰기 제한 |
@@ -995,7 +1046,7 @@ PDF 기능 자체는 요구사항이다. 서버 API를 둘지 프런트에서 �
 
 9. 학생 프로필에서 `/students/{studentId}/worksheets`, 홈에서 `/worksheets/recent`(B7) 조회 → `/saved-result`로 저장본 표시. 임시저장은 본인만, 완료는 기관 공유. 복원은 명시적 resume으로만 수행한다.
 
-성장 리포트·PDF 연결은 후속 범위다. 개별 첨삭 DB 변경과 B5/B6의 명시적 임시/최종 저장은 별개다.
+성장 그래프 조회는 B8에서 구현했으며 PDF 연결은 후속 범위다. 개별 첨삭 DB 변경과 B5/B6의 명시적 임시/최종 저장은 별개다.
 
 ### 9.2 구현 후 연결할 흐름
 

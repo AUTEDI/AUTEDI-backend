@@ -5,8 +5,11 @@ import com.ceos24.autedi.domain.comment.dto.request.CommentUpdateRequest;
 import com.ceos24.autedi.domain.comment.dto.response.CommentListResponse;
 import com.ceos24.autedi.domain.comment.dto.response.CommentResponse;
 import com.ceos24.autedi.domain.comment.entity.Comment;
+import com.ceos24.autedi.domain.comment.entity.CommentClassification;
 import com.ceos24.autedi.domain.comment.repository.CommentRepository;
+import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
+import com.ceos24.autedi.domain.correction.repository.CorrectionRepository;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
@@ -34,6 +37,7 @@ public class CommentService {
     private final WorksheetPageRepository worksheetPageRepository;
     private final CommentRepository commentRepository;
     private final UserRepository userRepository;
+    private final CorrectionRepository correctionRepository;
 
     public CommentListResponse getComments(Long academyId, Long worksheetId, Long pageId) {
         findReadyWorksheetForRead(academyId, worksheetId);
@@ -85,6 +89,10 @@ public class CommentService {
                 .content(request.content().trim())
                 .build();
         // @Version이 미리 채워져 있어 save()가 merge로 동작하므로, 반드시 반환된 영속 엔티티를 사용한다.
+        if (request.classification() != null) {
+            validateClassification(worksheetId, request.classification());
+            newComment.changeClassification(request.classification());
+        }
         Comment comment = commentRepository.save(newComment);
         worksheet.markReviewEdited();
         commentRepository.flush();
@@ -113,6 +121,10 @@ public class CommentService {
         validateIfMatch(ifMatch, comment.getEtag());
 
         comment.updateContent(request.content().trim(), request.color());
+        if (request.classification() != null) {
+            validateClassification(worksheetId, request.classification());
+            comment.changeClassification(request.classification());
+        }
         worksheet.markReviewEdited();
         commentRepository.flush();
         log.info("[feedback] 교사 코멘트 내용/색상 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
@@ -132,6 +144,15 @@ public class CommentService {
         worksheet.markReviewEdited();
         commentRepository.flush();
         log.info("[feedback] 교사 코멘트 삭제 완료: commentId={}, worksheetId={}", commentId, worksheetId);
+    }
+
+    private void validateClassification(Long worksheetId, CommentClassification classification) {
+        if (classification.correctionId() == null) return;
+        correctionRepository
+                .findById(classification.correctionId())
+                .filter(card ->
+                        card.getWorksheet().getId().equals(worksheetId) && card.getStatus() == CorrectionStatus.ACTIVE)
+                .orElseThrow(() -> new CustomException(ErrorCode.CORRECTION_NOT_FOUND));
     }
 
     private Worksheet findReadyWorksheetForRead(Long academyId, Long worksheetId) {
