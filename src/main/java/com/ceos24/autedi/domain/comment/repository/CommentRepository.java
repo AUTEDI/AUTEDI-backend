@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 
+    List<Comment> findAllByWorksheetIdOrderByIdAsc(Long worksheetId);
+
     @EntityGraph(attributePaths = {"worksheet", "page", "user"})
     Optional<Comment> findById(Long id);
 

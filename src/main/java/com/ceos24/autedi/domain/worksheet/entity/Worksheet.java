@@ -182,4 +182,36 @@ public class Worksheet extends BaseTimeEntity {
     public String getEtag() {
         return "\"ws_" + this.id + "-v" + (this.version != null ? this.version : 1) + "\"";
     }
+
+    public void markReviewEdited() {
+        touch();
+    }
+
+    public void saveDraft(User savedBy, LocalDateTime savedAt) {
+        recordSave(savedBy, savedAt, WorksheetSaveStatus.TEMP_SAVED);
+    }
+
+    public void complete(User savedBy, LocalDateTime savedAt) {
+        recordSave(savedBy, savedAt, WorksheetSaveStatus.COMPLETED);
+        this.completedAt = savedAt;
+    }
+
+    private void recordSave(User savedBy, LocalDateTime savedAt, WorksheetSaveStatus target) {
+        if (deletedAt != null || status != WorksheetStatus.READY || saveStatus == WorksheetSaveStatus.COMPLETED) {
+            throw new IllegalStateException("READY 상태의 미완료 학습지만 저장할 수 있습니다.");
+        }
+        if (savedBy == null
+                || !user.getId().equals(savedBy.getId())
+                || savedAt == null
+                || title == null
+                || title.isBlank()
+                || student == null
+                || !student.isInAcademy(academy)) {
+            throw new IllegalArgumentException("업로더와 제목·학생·저장 시각이 필요합니다.");
+        }
+        this.saveStatus = target;
+        if (firstSavedAt == null) this.firstSavedAt = savedAt;
+        this.lastSavedAt = savedAt;
+        this.lastSavedBy = savedBy;
+    }
 }

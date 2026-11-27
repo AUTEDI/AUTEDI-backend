@@ -30,6 +30,7 @@ import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
 import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
+import com.ceos24.autedi.domain.worksheet.service.WorksheetReviewAccessService;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import java.util.ArrayList;
@@ -50,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CorrectionService {
 
     private final WorksheetAccessPolicy worksheetAccessPolicy;
+    private final WorksheetReviewAccessService reviewAccess;
     private final WorksheetPageRepository worksheetPageRepository;
     private final WorksheetSettingRepository worksheetSettingRepository;
     private final WorksheetGenerationRepository worksheetGenerationRepository;
@@ -156,8 +158,13 @@ public class CorrectionService {
 
     @Transactional
     public CorrectionResponse updateCorrection(
-            Long academyId, Long worksheetId, Long correctionId, String ifMatch, CorrectionUpdateRequest request) {
-        findReadyWorksheetForWrite(academyId, worksheetId);
+            Long userId,
+            Long academyId,
+            Long worksheetId,
+            Long correctionId,
+            String ifMatch,
+            CorrectionUpdateRequest request) {
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
 
@@ -183,6 +190,7 @@ public class CorrectionService {
                 content == null || correction.getAction() == AiAction.REPLACE ? content : content.trim(),
                 regions,
                 request.isApplied());
+        worksheet.markReviewEdited();
         correctionRepository.flush();
         log.info("[feedback] 첨삭 내용 수정 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
@@ -191,20 +199,15 @@ public class CorrectionService {
 
     @Transactional
     public CorrectionResponse toggleCorrectionApplied(
-            Long academyId, Long worksheetId, Long correctionId, boolean applied) {
-        return toggleCorrectionApplied(academyId, worksheetId, correctionId, null, applied);
-    }
-
-    @Transactional
-    public CorrectionResponse toggleCorrectionApplied(
-            Long academyId, Long worksheetId, Long correctionId, String ifMatch, boolean applied) {
-        findReadyWorksheetForWrite(academyId, worksheetId);
+            Long userId, Long academyId, Long worksheetId, Long correctionId, String ifMatch, boolean applied) {
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
         // develop의 기존 토글 요청은 헤더 없이도 허용한다. 헤더가 있으면 충돌을 검사한다.
         if (ifMatch != null && !ifMatch.isBlank()) validateIfMatch(ifMatch, correction.getEtag());
         if (correction.getStatus() == CorrectionStatus.DELETED)
             throw new CustomException(ErrorCode.CANNOT_MODIFY_DELETED_CORRECTION);
         correction.updateApplied(applied);
+        worksheet.markReviewEdited();
         correctionRepository.flush();
         return response(correction);
     }
@@ -231,8 +234,8 @@ public class CorrectionService {
     }
 
     @Transactional
-    public String deleteCorrection(Long academyId, Long worksheetId, Long correctionId, String ifMatch) {
-        findReadyWorksheetForWrite(academyId, worksheetId);
+    public String deleteCorrection(Long userId, Long academyId, Long worksheetId, Long correctionId, String ifMatch) {
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
 
@@ -244,6 +247,7 @@ public class CorrectionService {
         }
 
         correction.delete();
+        worksheet.markReviewEdited();
         correctionRepository.flush();
         log.info("[feedback] 첨삭 항목 논리 삭제 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
@@ -251,8 +255,9 @@ public class CorrectionService {
     }
 
     @Transactional
-    public CorrectionResponse restoreCorrection(Long academyId, Long worksheetId, Long correctionId, String ifMatch) {
-        findReadyWorksheetForWrite(academyId, worksheetId);
+    public CorrectionResponse restoreCorrection(
+            Long userId, Long academyId, Long worksheetId, Long correctionId, String ifMatch) {
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
 
@@ -264,6 +269,7 @@ public class CorrectionService {
         }
 
         correction.restore();
+        worksheet.markReviewEdited();
         correctionRepository.flush();
         log.info("[feedback] 첨삭 항목 복원 완료: correctionId={}, worksheetId={}", correctionId, worksheetId);
 
@@ -301,10 +307,6 @@ public class CorrectionService {
 
     private Worksheet findReadyWorksheetForRead(Long academyId, Long worksheetId) {
         return requireReady(worksheetAccessPolicy.getReadable(academyId, worksheetId));
-    }
-
-    private Worksheet findReadyWorksheetForWrite(Long academyId, Long worksheetId) {
-        return requireReady(worksheetAccessPolicy.getForWrite(academyId, worksheetId));
     }
 
     private Worksheet requireReady(Worksheet worksheet) {

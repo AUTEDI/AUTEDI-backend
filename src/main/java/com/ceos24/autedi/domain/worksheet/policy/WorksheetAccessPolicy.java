@@ -35,11 +35,19 @@ public class WorksheetAccessPolicy {
      * 404, 완료는 409다.
      */
     public Worksheet getForWrite(Long academyId, Long worksheetId) {
-        Worksheet worksheet = requireVisible(worksheetRepository.findLockedByIdAndAcademyId(worksheetId, academyId));
+        Worksheet worksheet = getLockedReadable(academyId, worksheetId);
         if (worksheet.isCompleted()) {
             throw new CustomException(ErrorCode.WORKSHEET_COMPLETED);
         }
         return worksheet;
+    }
+
+    /**
+     * 부모 행을 잠그고 조회한다. 완료 재요청의 기존 저장본 반환처럼 완료 상태도 필요한 경우에 사용한다.
+     * 일반 편집은 완료를 차단하는 getForWrite를 사용하며, 호출자는 쓰기 트랜잭션을 연다.
+     */
+    public Worksheet getLockedReadable(Long academyId, Long worksheetId) {
+        return requireVisible(worksheetRepository.findLockedByIdAndAcademyId(worksheetId, academyId));
     }
 
     private Worksheet requireVisible(Optional<Worksheet> found) {

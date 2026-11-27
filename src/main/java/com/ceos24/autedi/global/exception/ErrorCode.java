@@ -60,6 +60,9 @@ public enum ErrorCode implements BaseErrorCode {
     WORKSHEET_NOT_FOUND(HttpStatus.NOT_FOUND, "WORKSHEET_001", "학습지를 찾을 수 없거나 접근 권한이 없습니다.", Level.WARN),
     INVALID_WORKSHEET_STATE(HttpStatus.CONFLICT, "WORKSHEET_002", "현재 학습지 상태에서는 요청한 작업을 수행할 수 없습니다.", Level.WARN),
     WORKSHEET_COMPLETED(HttpStatus.CONFLICT, "WORKSHEET_003", "완료된 학습지는 수정할 수 없습니다.", Level.INFO),
+    SAVED_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "WORKSHEET_006", "저장본이 없습니다.", Level.INFO),
+    SAVED_RESULT_CONFLICT(HttpStatus.CONFLICT, "WORKSHEET_004", "저장본의 원본 또는 AI 생성 작업이 현재 학습지와 다릅니다.", Level.WARN),
+    SAVED_RESULT_UNREADABLE(HttpStatus.INTERNAL_SERVER_ERROR, "WORKSHEET_005", "저장본을 읽거나 복원할 수 없습니다.", Level.ERROR),
     EMPTY_FILE(HttpStatus.BAD_REQUEST, "FILE_001", "업로드할 파일이 비어 있습니다.", Level.INFO),
     UNSUPPORTED_FILE_TYPE(
             HttpStatus.UNSUPPORTED_MEDIA_TYPE,

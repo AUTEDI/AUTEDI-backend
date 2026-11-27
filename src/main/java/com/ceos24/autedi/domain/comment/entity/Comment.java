@@ -112,6 +112,16 @@ public class Comment extends BaseTimeEntity {
         return this.deletedAt != null;
     }
 
+    public void restoreSavedEdit(String content, CommentColor color, LocalDateTime deletedAt) {
+        if (content == null || content.isBlank() || color == null) {
+            throw new IllegalArgumentException("유효한 저장 코멘트가 필요합니다.");
+        }
+        this.content = content;
+        this.color = color;
+        this.deletedAt = deletedAt;
+        touch();
+    }
+
     public String getEtag() {
         return "\"com_" + id + "-v" + (version != null ? version : 1) + "\"";
     }
