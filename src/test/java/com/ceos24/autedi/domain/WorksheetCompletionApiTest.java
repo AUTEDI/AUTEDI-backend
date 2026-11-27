@@ -424,10 +424,13 @@ class WorksheetCompletionApiTest {
     }
 
     @Test
-    void completedSnapshotRemainsOwnerOnlyAndDeletedResultsAreHidden() throws Exception {
+    void completedSnapshotIsSharedWithinAcademyAndDeletedResultsAreHidden() throws Exception {
         complete(owner, etag()).andExpect(status().isOk());
-        call(get(base() + "/saved-result"), peer).andExpect(status().isForbidden());
-        call(get(base() + "/saved-result"), director).andExpect(status().isForbidden());
+        call(get(base() + "/saved-result"), peer).andExpect(status().isOk());
+        call(get(base() + "/saved-result"), director).andExpect(status().isOk());
+        complete(peer, etag()).andExpect(status().isForbidden());
+        call(post(base() + "/resume").header(HttpHeaders.IF_MATCH, etag()), peer)
+                .andExpect(status().isConflict());
         call(get(base() + "/saved-result"), foreign).andExpect(status().isNotFound());
         jdbc.update("update worksheets set deleted_at=current_timestamp where id=?", worksheetId);
         call(get(base() + "/saved-result"), owner).andExpect(status().isNotFound());

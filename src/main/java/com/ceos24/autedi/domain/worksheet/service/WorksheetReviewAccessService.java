@@ -37,9 +37,10 @@ public class WorksheetReviewAccessService {
         return worksheet;
     }
 
-    public Worksheet readForOwner(Long userId, Long academyId, Long worksheetId) {
+    /** 저장본 읽기: 임시/미저장은 업로더만, 완료는 같은 기관에 공유한다. 쓰기 권한은 확장하지 않는다. */
+    public Worksheet readSavedResult(Long userId, Long academyId, Long worksheetId) {
         Worksheet worksheet = worksheetAccessPolicy.getReadable(academyId, worksheetId);
-        requireOwner(worksheet, userId);
+        if (worksheet.getSaveStatus() != WorksheetSaveStatus.COMPLETED) requireOwner(worksheet, userId);
         requireReady(worksheet);
         return worksheet;
     }

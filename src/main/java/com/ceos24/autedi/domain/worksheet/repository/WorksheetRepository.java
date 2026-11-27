@@ -28,6 +28,71 @@ public interface WorksheetRepository extends JpaRepository<Worksheet, Long> {
 
     List<Worksheet> findAllByAcademyIdOrderByCreatedAtDesc(Long academyId);
 
+    /** 학생 결과물은 최근 명시적 저장일 기준. 완료는 기관 공유, 임시저장은 업로더만 노출한다. */
+    @Query(
+            value =
+                    """
+            select new com.ceos24.autedi.domain.worksheet.repository.SavedWorksheetRow(
+                w.id, w.title, w.saveStatus, w.status, w.lastSavedAt, w.updatedAt,
+                s.id, s.name, s.grade, s.className, u.id, u.name)
+            from Worksheet w join w.student s join w.user u
+            where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
+              and s.id = :studentId and w.deletedAt is null and w.lastSavedAt is not null
+              and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
+                   or (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.TEMP_SAVED and u.id = :userId))
+              and exists (select r.worksheetId from WorksheetSavedResult r where r.worksheetId = w.id)
+              and (:pattern is null or lower(w.title) like :pattern escape '!')
+              and (:from is null or w.lastSavedAt >= :from)
+              and (:to is null or w.lastSavedAt <= :to)
+            order by w.lastSavedAt desc, w.id desc
+            """,
+            countQuery =
+                    """
+            select count(w) from Worksheet w join w.student s join w.user u
+            where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
+              and s.id = :studentId and w.deletedAt is null and w.lastSavedAt is not null
+              and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
+                   or (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.TEMP_SAVED and u.id = :userId))
+              and exists (select r.worksheetId from WorksheetSavedResult r where r.worksheetId = w.id)
+              and (:pattern is null or lower(w.title) like :pattern escape '!')
+              and (:from is null or w.lastSavedAt >= :from)
+              and (:to is null or w.lastSavedAt <= :to)
+            """)
+    Page<SavedWorksheetRow> searchStudentSavedResults(
+            Long academyId,
+            Long studentId,
+            Long userId,
+            String pattern,
+            LocalDateTime from,
+            LocalDateTime to,
+            Pageable pageable);
+
+    /** 홈은 추가 편집을 포함한 최근 작업 시각 기준이며, 목록 공개 범위는 학생 결과물과 동일하다. */
+    @Query(
+            value =
+                    """
+            select new com.ceos24.autedi.domain.worksheet.repository.SavedWorksheetRow(
+                w.id, w.title, w.saveStatus, w.status, w.lastSavedAt, w.updatedAt,
+                s.id, s.name, s.grade, s.className, u.id, u.name)
+            from Worksheet w join w.student s join w.user u
+            where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
+              and w.deletedAt is null and w.lastSavedAt is not null
+              and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
+                   or (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.TEMP_SAVED and u.id = :userId))
+              and exists (select r.worksheetId from WorksheetSavedResult r where r.worksheetId = w.id)
+            order by w.updatedAt desc, w.id desc
+            """,
+            countQuery =
+                    """
+            select count(w) from Worksheet w join w.student s join w.user u
+            where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
+              and w.deletedAt is null and w.lastSavedAt is not null
+              and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
+                   or (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.TEMP_SAVED and u.id = :userId))
+              and exists (select r.worksheetId from WorksheetSavedResult r where r.worksheetId = w.id)
+            """)
+    Page<SavedWorksheetRow> searchRecentSavedResults(Long academyId, Long userId, Pageable pageable);
+
     /**
      * 선생님별 첨삭 수. 업로더가 올린 학습지 중 {@code statuses} 상태이고 삭제되지 않았으며 처음 저장한 시각이 {@code from} 이상 {@code to}
      * 미만인 건수다. 건수가 없는 선생님은 결과에 나오지 않는다.

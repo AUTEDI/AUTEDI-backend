@@ -466,7 +466,7 @@ erDiagram
 
 ### ⑫ `worksheet_saved_results` (학습지별 마지막 명시적 저장본)
 
-> **관련 API**: `POST /worksheets/{worksheetId}/save-draft`, `POST /worksheets/{worksheetId}/complete`, `GET /worksheets/{worksheetId}/saved-result`, `POST /worksheets/{worksheetId}/resume` — B5–B6 구현. READY·업로더 본인 기준이며 완료 후 저장본 조회·현재 ETag를 사용한 완료 재요청은 허용한다. 완료 후 임시저장·이어쓰기는 거부한다. 삭제 학습지는 제외한다.
+> **관련 API**: `POST /worksheets/{worksheetId}/save-draft`, `POST /worksheets/{worksheetId}/complete`, `GET /worksheets/{worksheetId}/saved-result`, `POST /worksheets/{worksheetId}/resume` — B5–B7 구현. 쓰기는 READY·업로더 본인 기준이며, B7에서 저장본 조회는 임시저장 본인만·완료는 같은 기관 원장/선생님에게 공유한다. 완료 후 현재 ETag를 사용한 본인의 완료 재요청은 허용하고 임시저장·이어쓰기는 거부한다. 삭제 학습지는 제외한다.
 >
 
 | 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
@@ -499,3 +499,4 @@ erDiagram
 - B1 내용은 구현된 엔티티와 [DB 변경 SQL](../infra/db/2026-11-26_student_worksheet_common.sql)을 기준으로 한다. 운영 DB에는 아직 적용하지 않았다.
 - B5에서 ⑫ `worksheet_saved_results`를 추가했다. 기존 테이블 컬럼 변경은 없으며, `worksheets`의 기존 업무 저장 필드를 실제 저장 시 갱신한다. [B5 DB 변경 SQL](../infra/db/2026-11-27_worksheet_saved_results.sql)은 운영 DB에 아직 적용하지 않았다.
 - B6는 B1의 `save_status`, `first_saved_at`, `last_saved_at`, `completed_at`, `last_saved_by`와 B5 저장본 테이블을 재사용한다. 기존 테이블·컬럼·관계·JSON 구조 버전 변경 및 신규 DDL은 없다. 임시저장 없는 완료는 저장본을 생성하고, 임시저장 후 완료는 같은 행을 최종 내용으로 갱신한다.
+- B7 학생 결과물·홈 최근 작업 목록은 기존 학습지·학생·업로더 필드와 저장본 존재 여부를 조회한다. 테이블·컬럼·관계·인덱스·JSON 구조 변경 및 신규 DDL은 없다. 완료 저장본의 기관 내 읽기 권한 확장만 관련 설명에 반영했다.
