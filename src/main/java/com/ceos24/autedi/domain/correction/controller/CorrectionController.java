@@ -87,7 +87,7 @@ public class CorrectionController {
                     @RequestParam(value = "applied", defaultValue = "true")
                     boolean applied) {
         CorrectionResponse response = correctionService.toggleCorrectionApplied(
-                principal.academyId(), worksheetId, correctionId, ifMatch, applied);
+                principal.userId(), principal.academyId(), worksheetId, correctionId, ifMatch, applied);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("첨삭 반영 여부가 변경되었습니다.", response));
@@ -118,8 +118,8 @@ public class CorrectionController {
                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
                     String ifMatch,
             @Valid @RequestBody CorrectionUpdateRequest request) {
-        CorrectionResponse response =
-                correctionService.updateCorrection(principal.academyId(), worksheetId, correctionId, ifMatch, request);
+        CorrectionResponse response = correctionService.updateCorrection(
+                principal.userId(), principal.academyId(), worksheetId, correctionId, ifMatch, request);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("첨삭 내용이 수정되었습니다.", response));
@@ -136,7 +136,8 @@ public class CorrectionController {
             @Parameter(description = "동시성 제어를 위한 최신 ETag", required = false)
                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
                     String ifMatch) {
-        String nextEtag = correctionService.deleteCorrection(principal.academyId(), worksheetId, correctionId, ifMatch);
+        String nextEtag = correctionService.deleteCorrection(
+                principal.userId(), principal.academyId(), worksheetId, correctionId, ifMatch);
         return ResponseEntity.noContent().header(HttpHeaders.ETAG, nextEtag).build();
     }
 
@@ -151,8 +152,8 @@ public class CorrectionController {
             @Parameter(description = "동시성 제어를 위한 최신 ETag", required = false)
                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
                     String ifMatch) {
-        CorrectionResponse response =
-                correctionService.restoreCorrection(principal.academyId(), worksheetId, correctionId, ifMatch);
+        CorrectionResponse response = correctionService.restoreCorrection(
+                principal.userId(), principal.academyId(), worksheetId, correctionId, ifMatch);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("첨삭 삭제가 취소되었습니다.", response));
