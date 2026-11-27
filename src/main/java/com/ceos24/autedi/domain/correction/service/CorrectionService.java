@@ -27,8 +27,8 @@ import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
-import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
@@ -49,7 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CorrectionService {
 
-    private final WorksheetRepository worksheetRepository;
+    private final WorksheetAccessPolicy worksheetAccessPolicy;
     private final WorksheetPageRepository worksheetPageRepository;
     private final WorksheetSettingRepository worksheetSettingRepository;
     private final WorksheetGenerationRepository worksheetGenerationRepository;
@@ -58,7 +58,7 @@ public class CorrectionService {
     private final WorksheetGenerationResultRepository generationResults;
 
     public ReviewResponse getReview(Long academyId, Long worksheetId) {
-        Worksheet worksheet = findWorksheetAndValidateReady(academyId, worksheetId);
+        Worksheet worksheet = findReadyWorksheetForRead(academyId, worksheetId);
 
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
@@ -131,7 +131,7 @@ public class CorrectionService {
             CorrectionArea area,
             FeedbackType feedbackType,
             Boolean isApplied) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForRead(academyId, worksheetId);
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
@@ -148,7 +148,7 @@ public class CorrectionService {
     }
 
     public CorrectionResponse getCorrection(Long academyId, Long worksheetId, Long correctionId) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForRead(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
         return response(correction);
@@ -157,7 +157,7 @@ public class CorrectionService {
     @Transactional
     public CorrectionResponse updateCorrection(
             Long academyId, Long worksheetId, Long correctionId, String ifMatch, CorrectionUpdateRequest request) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForWrite(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
 
@@ -198,7 +198,7 @@ public class CorrectionService {
     @Transactional
     public CorrectionResponse toggleCorrectionApplied(
             Long academyId, Long worksheetId, Long correctionId, String ifMatch, boolean applied) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForWrite(academyId, worksheetId);
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
         // develop의 기존 토글 요청은 헤더 없이도 허용한다. 헤더가 있으면 충돌을 검사한다.
         if (ifMatch != null && !ifMatch.isBlank()) validateIfMatch(ifMatch, correction.getEtag());
@@ -232,7 +232,7 @@ public class CorrectionService {
 
     @Transactional
     public String deleteCorrection(Long academyId, Long worksheetId, Long correctionId, String ifMatch) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForWrite(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
 
@@ -252,7 +252,7 @@ public class CorrectionService {
 
     @Transactional
     public CorrectionResponse restoreCorrection(Long academyId, Long worksheetId, Long correctionId, String ifMatch) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForWrite(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
 
@@ -299,12 +299,15 @@ public class CorrectionService {
         return contexts;
     }
 
-    private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .filter(found -> found.getDeletedAt() == null)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+    private Worksheet findReadyWorksheetForRead(Long academyId, Long worksheetId) {
+        return requireReady(worksheetAccessPolicy.getReadable(academyId, worksheetId));
+    }
 
+    private Worksheet findReadyWorksheetForWrite(Long academyId, Long worksheetId) {
+        return requireReady(worksheetAccessPolicy.getForWrite(academyId, worksheetId));
+    }
+
+    private Worksheet requireReady(Worksheet worksheet) {
         if (worksheet.getStatus() != WorksheetStatus.READY) {
             throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "학습지가 검토 준비 완료(READY) 상태가 아닙니다.");
         }
