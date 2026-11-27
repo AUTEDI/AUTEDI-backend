@@ -14,6 +14,7 @@ import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
+import com.ceos24.autedi.domain.worksheet.service.WorksheetReviewAccessService;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CommentService {
 
+    private final WorksheetReviewAccessService reviewAccess;
     private final WorksheetRepository worksheetRepository;
     private final WorksheetPageRepository worksheetPageRepository;
     private final CommentRepository commentRepository;
@@ -52,7 +54,7 @@ public class CommentService {
 
     @Transactional
     public CommentResponse createComment(Long userId, Long academyId, Long worksheetId, CommentCreateRequest request) {
-        Worksheet worksheet = findWorksheetAndValidateReady(academyId, worksheetId);
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
 
         WorksheetPage page = worksheetPageRepository
                 .findByIdAndWorksheetId(request.pageId(), worksheetId)
@@ -84,6 +86,8 @@ public class CommentService {
                 .build();
         // @Version이 미리 채워져 있어 save()가 merge로 동작하므로, 반드시 반환된 영속 엔티티를 사용한다.
         Comment comment = commentRepository.save(newComment);
+        worksheet.markReviewEdited();
+        commentRepository.flush();
 
         log.info(
                 "[feedback] 교사 코멘트 작성 완료: commentId={}, worksheetId={}, pageId={}",
@@ -96,35 +100,44 @@ public class CommentService {
 
     @Transactional
     public CommentResponse updateComment(
-            Long academyId, Long worksheetId, Long commentId, String ifMatch, CommentUpdateRequest request) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+            Long userId,
+            Long academyId,
+            Long worksheetId,
+            Long commentId,
+            String ifMatch,
+            CommentUpdateRequest request) {
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
 
         Comment comment = findActiveCommentByIdAndWorksheetId(commentId, worksheetId);
 
         validateIfMatch(ifMatch, comment.getEtag());
 
         comment.updateContent(request.content().trim(), request.color());
+        worksheet.markReviewEdited();
+        commentRepository.flush();
         log.info("[feedback] 교사 코멘트 내용/색상 수정 완료: commentId={}, worksheetId={}", commentId, worksheetId);
 
-        String nextEtag = "\"com_" + comment.getId() + "-v" + (comment.getVersion() + 1) + "\"";
-        return CommentResponse.of(comment, nextEtag);
+        return CommentResponse.from(comment);
     }
 
     @Transactional
-    public void deleteComment(Long academyId, Long worksheetId, Long commentId, String ifMatch) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+    public void deleteComment(Long userId, Long academyId, Long worksheetId, Long commentId, String ifMatch) {
+        Worksheet worksheet = reviewAccess.lockForEdit(userId, academyId, worksheetId);
 
         Comment comment = findActiveCommentByIdAndWorksheetId(commentId, worksheetId);
 
         validateIfMatch(ifMatch, comment.getEtag());
 
         comment.delete();
+        worksheet.markReviewEdited();
+        commentRepository.flush();
         log.info("[feedback] 교사 코멘트 삭제 완료: commentId={}, worksheetId={}", commentId, worksheetId);
     }
 
     private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
         Worksheet worksheet = worksheetRepository
                 .findByIdAndAcademyId(worksheetId, academyId)
+                .filter(w -> w.getDeletedAt() == null)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
 
         if (worksheet.getStatus() != WorksheetStatus.READY) {

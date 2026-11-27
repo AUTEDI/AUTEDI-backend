@@ -5,6 +5,7 @@
     1. **회원/인증 도메인**: 학원(유료 서비스 구독 단위), 최고 관리자(원장 - 개발자 직접 부여), 원장의 이메일 초대를 통한 선생님 회원가입, 이메일 기반 로그인
     2. **학습지/AI 첨삭 도메인**: 학습지 업로드 / 첨삭 설정(4개 영역 · 2개 수준) / AI 첨삭 생성 / 첨삭 검토 및 수정 / 교사 코멘트 API (총 19개 엔드포인트)
     3. **학생/학습지 공통 모델 (B1)**: 학생 기본 정보, 학습지 제목·학생 연결·업무 저장 상태·저장 시각·저장자·삭제 시각 (구현된 엔티티 및 변경 SQL 기준)
+    4. **임시저장본 (B5)**: 학습지별 마지막 명시적 저장본 한 개, 저장 버전·저장자·원본 연결 및 편집 복원 데이터
 
 ---
 
@@ -31,6 +32,9 @@ erDiagram
     worksheets ||--o{ worksheet_generations : "1:N (AI 첨삭 생성 작업)"
     worksheets ||--o{ corrections : "1:N (AI 첨삭 항목)"
     worksheets ||--o{ comments : "1:N (교사 코멘트)"
+    worksheets ||--o| worksheet_saved_results : "1:0..1 (마지막 명시적 저장본)"
+    users ||--o{ worksheet_saved_results : "1:N (저장자)"
+    worksheet_generations |o--o{ worksheet_saved_results : "1:N (저장 당시 생성 작업, NULL 허용)"
 
     worksheet_pages ||--o{ corrections : "1:N (페이지별 첨삭)"
     worksheet_pages ||--o{ comments : "1:N (페이지별 코멘트)"
@@ -100,6 +104,20 @@ erDiagram
         CHAR file_hash
         INT page_count
         INT version "If-Match 논의 대상"
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    worksheet_saved_results {
+        BIGINT worksheet_id PK, FK
+        BIGINT revision "명시적 저장 횟수, 이력 아님"
+        INT schema_version
+        VARCHAR source_file_hash
+        BIGINT source_generation_id FK
+        BIGINT saved_by FK
+        DATETIME saved_at
+        JSON snapshot "검토 응답 및 삭제 행 포함 편집 상태"
+        INT version "JPA 낙관적 락"
         DATETIME created_at
         DATETIME updated_at
     }
@@ -444,7 +462,34 @@ erDiagram
 
 ---
 
-## 5. v2 대비 추가 사항
+## 5. 임시저장본 테이블 명세
+
+### ⑫ `worksheet_saved_results` (학습지별 마지막 명시적 저장본)
+
+> **관련 API**: `POST /worksheets/{worksheetId}/save-draft`, `GET /worksheets/{worksheetId}/saved-result`, `POST /worksheets/{worksheetId}/resume` — B5 구현. READY·업로더 본인만 허용하며 업무 완료·삭제 상태는 거부한다.
+>
+
+| 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
+| --- | --- | --- | --- | --- | --- |
+| `worksheet_id` | `BIGINT` | X | - | **PK**, **FK** (`worksheets.id`, `fk_saved_results_worksheet`) | 학습지별 최신 저장본 한 개. 첫 명시적 저장에서 생성 |
+| `revision` | `BIGINT` | X | - | 애플리케이션 관리 | 첫 저장 1, 반복 저장마다 1 증가. 과거 저장본 이력은 보관하지 않음 |
+| `schema_version` | `INT` | X | `1` (SQL) | 애플리케이션 관리 | JSON 저장 구조 버전. 현재 1만 읽기·복원 지원 |
+| `source_file_hash` | `VARCHAR(64)` | X | - | 애플리케이션 검증 | 저장 당시 원본 파일 해시. 현재 원본과 다르면 조회·복원 거부 |
+| `source_generation_id` | `BIGINT` | O | `NULL` | **FK** (`worksheet_generations.id`, `fk_saved_results_generation`), `INDEX` (`idx_saved_results_generation`) | 저장 당시 최신 AI 작업. 기존 READY 자료 호환을 위해 NULL 허용. 현재 최신 생성과 비교 |
+| `saved_by` | `BIGINT` | X | - | **FK** (`users.id`, `fk_saved_results_user`), `INDEX` (`idx_saved_results_saved_by`) | 명시적으로 저장한 업로더. 원래 `worksheets.user_id`는 유지 |
+| `saved_at` | `DATETIME(6)` | X | - | 애플리케이션 기록 | 마지막 명시적 저장 시각. 이어쓰기·개별 편집·저장본 조회로 갱신하지 않음 |
+| `snapshot` | `JSON` | X | - | 애플리케이션 직렬화·버전 검증 | 저장 당시 전체 검토 응답과 모든 첨삭·코멘트의 복원용 편집 값. 삭제 행도 포함. 작업본 변경과 분리 |
+| `version` | `INT` | X | `0` (SQL) | JPA `@Version` | 저장본 행의 동시 변경 감지. `revision`과 별개 |
+| `created_at` | `DATETIME(6)` | X | - | JPA 감사 (`@CreatedDate`) | 저장본 행 최초 생성 시각 |
+| `updated_at` | `DATETIME(6)` | X | - | JPA 감사 (`@LastModifiedDate`) | 최신 저장본 교체 시각 |
+
+- **테이블 조건**: 기존 학습지는 자동으로 저장본을 만들지 않는다. 저장 시 부모 학습지 행을 잠근 뒤 업무 저장 상태·시각과 JSON을 같은 트랜잭션에서 반영한다. 개별 첨삭·코멘트 쓰기도 같은 잠금을 사용한다.
+- **복원 조건**: 현재 학습지 ETag가 일치할 때만 저장 이후의 편집을 되돌린다. 저장 후 추가한 코멘트·첨삭은 논리 삭제하며 원본 AI 데이터·식별자·작성자·최초 작성 시각·기존 버전을 덮어쓰지 않는다. JPA가 변경된 버전을 증가시킨다.
+- **보존 조건**: FK에 `ON DELETE CASCADE`를 지정하지 않는다. 저장본 버전 이력·최종 저장 스냅샷·리포트용 테이블은 이번 변경에 추가하지 않았다.
+
+---
+
+## 6. v2 대비 추가 사항
 
 - ⑨ `corrections` 설명 표에 `action`, `feedback_type`, `issue_kinds`, `anchor`, `location_uncertain`, `warnings`, `requires_review` 7개 필드를 추가했다. 원문 교체와 내용 안내, 첨삭 유형과 문제 종류, 원문 연결과 검토 경고를 구분한다.
 - 기존 `area`, `original_text`, `ai_initial_content`, `content`, `regions` 등을 재사용한다. `REVIEW`·검증 제외 후보·개수 초과 항목의 별도 보존 구조는 후속 설계 대상이며 이번 표 확장만으로 완성되지 않는다.
@@ -452,3 +497,4 @@ erDiagram
 - PNG는 기준 이미지 형식이며 좌표 수치 단위와는 별개다. AI의 `boxes`는 기준 PNG 전체의 0~1 정규화 좌표를 유지하고, 서비스 `regions`의 px/정규화 단위는 A·프론트와 별도 일치시켜야 한다. 요청에 따라 v2의 기존 좌표 설명 행은 수정하지 않았다.
 - 기존 v3의 `corrections` 확장 설명은 ⑨ 표를 유지했다. B1에서 추가한 `students`와 `worksheets`의 8개 컬럼·관계를 전체 Mermaid와 ⑤·⑪ 설명 표에 반영하고, 학습지 AI 상태 설명을 현재 코드에 맞췄다.
 - B1 내용은 구현된 엔티티와 [DB 변경 SQL](../infra/db/2026-11-26_student_worksheet_common.sql)을 기준으로 한다. 운영 DB에는 아직 적용하지 않았다.
+- B5에서 ⑫ `worksheet_saved_results`를 추가했다. 기존 테이블 컬럼 변경은 없으며, `worksheets`의 기존 업무 저장 필드를 실제 저장 시 갱신한다. [B5 DB 변경 SQL](../infra/db/2026-11-27_worksheet_saved_results.sql)은 운영 DB에 아직 적용하지 않았다.

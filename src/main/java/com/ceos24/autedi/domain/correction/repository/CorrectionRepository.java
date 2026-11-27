@@ -13,6 +13,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CorrectionRepository extends JpaRepository<Correction, Long> {
 
+    List<Correction> findAllByWorksheetIdOrderByIdAsc(Long worksheetId);
+
     @EntityGraph(attributePaths = {"worksheet", "page", "generation"})
     Optional<Correction> findById(Long id);
 

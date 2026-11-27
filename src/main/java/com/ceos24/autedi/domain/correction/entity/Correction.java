@@ -214,6 +214,35 @@ public class Correction extends BaseTimeEntity {
         this.deletedAt = null;
     }
 
+    /** 저장 시점의 편집 값만 복원한다. 원본 AI 데이터·식별자·버전은 보존한다. */
+    public void restoreSavedEdit(
+            String content,
+            List<RegionPayload> regions,
+            Boolean edited,
+            Boolean applied,
+            CorrectionStatus status,
+            LocalDateTime deletedAt,
+            CorrectionV11Details details) {
+        if (content == null
+                || regions == null
+                || edited == null
+                || applied == null
+                || status == null
+                || (status == CorrectionStatus.DELETED) != (deletedAt != null)
+                || (action != AiAction.REPLACE && content.isBlank())
+                || (v11Details == null) != (details == null)) {
+            throw new IllegalArgumentException("유효한 저장 첨삭 상태가 필요합니다.");
+        }
+        this.content = content;
+        this.regions = List.copyOf(regions);
+        this.isEdited = edited;
+        this.isApplied = applied;
+        this.status = status;
+        this.deletedAt = deletedAt;
+        this.v11Details = details;
+        touch();
+    }
+
     public String getEtag() {
         return "\"cor_" + id + "-v" + (version != null ? version : 1) + "\"";
     }

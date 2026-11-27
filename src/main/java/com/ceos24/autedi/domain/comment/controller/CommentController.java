@@ -86,8 +86,8 @@ public class CommentController {
                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
                     String ifMatch,
             @Valid @RequestBody CommentUpdateRequest request) {
-        CommentResponse response =
-                commentService.updateComment(principal.academyId(), worksheetId, commentId, ifMatch, request);
+        CommentResponse response = commentService.updateComment(
+                principal.userId(), principal.academyId(), worksheetId, commentId, ifMatch, request);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("코멘트 내용이 수정되었습니다.", response));
@@ -104,7 +104,7 @@ public class CommentController {
             @Parameter(description = "동시성 제어를 위한 최신 ETag", required = false)
                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false)
                     String ifMatch) {
-        commentService.deleteComment(principal.academyId(), worksheetId, commentId, ifMatch);
+        commentService.deleteComment(principal.userId(), principal.academyId(), worksheetId, commentId, ifMatch);
         return ResponseEntity.noContent().build();
     }
 }

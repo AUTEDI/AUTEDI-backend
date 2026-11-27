@@ -163,4 +163,26 @@ public class Worksheet extends BaseTimeEntity {
     public String getEtag() {
         return "\"ws_" + this.id + "-v" + (this.version != null ? this.version : 1) + "\"";
     }
+
+    public void markReviewEdited() {
+        touch();
+    }
+
+    public void saveDraft(User savedBy, LocalDateTime savedAt) {
+        if (deletedAt != null || status != WorksheetStatus.READY || saveStatus == WorksheetSaveStatus.COMPLETED) {
+            throw new IllegalStateException("READY 상태의 미완료 학습지만 임시저장할 수 있습니다.");
+        }
+        if (savedBy == null
+                || !user.getId().equals(savedBy.getId())
+                || savedAt == null
+                || title == null
+                || title.isBlank()
+                || student == null) {
+            throw new IllegalArgumentException("업로더와 제목·학생·저장 시각이 필요합니다.");
+        }
+        this.saveStatus = WorksheetSaveStatus.TEMP_SAVED;
+        if (firstSavedAt == null) this.firstSavedAt = savedAt;
+        this.lastSavedAt = savedAt;
+        this.lastSavedBy = savedBy;
+    }
 }
