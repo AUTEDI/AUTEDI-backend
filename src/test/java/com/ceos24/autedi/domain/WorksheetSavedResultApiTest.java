@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ceos24.autedi.domain.academy.entity.Academy;
@@ -358,7 +359,9 @@ class WorksheetSavedResultApiTest {
 
     @Test
     void missingSavedResultAndStaleSaveLeaveStateUnchanged() throws Exception {
-        call(get(base() + "/saved-result"), owner).andExpect(status().isNotFound());
+        call(get(base() + "/saved-result"), owner)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("WORKSHEET_006"));
         call(post(base() + "/resume").header(HttpHeaders.IF_MATCH, etag()), owner)
                 .andExpect(status().isNotFound());
         save(owner, "\"ws_0-v0\"").andExpect(status().isPreconditionFailed());

@@ -27,8 +27,8 @@ import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
-import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
 import com.ceos24.autedi.domain.worksheet.service.WorksheetReviewAccessService;
 import com.ceos24.autedi.global.exception.CustomException;
@@ -50,8 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CorrectionService {
 
+    private final WorksheetAccessPolicy worksheetAccessPolicy;
     private final WorksheetReviewAccessService reviewAccess;
-    private final WorksheetRepository worksheetRepository;
     private final WorksheetPageRepository worksheetPageRepository;
     private final WorksheetSettingRepository worksheetSettingRepository;
     private final WorksheetGenerationRepository worksheetGenerationRepository;
@@ -60,7 +60,7 @@ public class CorrectionService {
     private final WorksheetGenerationResultRepository generationResults;
 
     public ReviewResponse getReview(Long academyId, Long worksheetId) {
-        Worksheet worksheet = findWorksheetAndValidateReady(academyId, worksheetId);
+        Worksheet worksheet = findReadyWorksheetForRead(academyId, worksheetId);
 
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
@@ -133,7 +133,7 @@ public class CorrectionService {
             CorrectionArea area,
             FeedbackType feedbackType,
             Boolean isApplied) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForRead(academyId, worksheetId);
 
         CorrectionStatus filterStatus = parseStatus(statusParam);
 
@@ -150,7 +150,7 @@ public class CorrectionService {
     }
 
     public CorrectionResponse getCorrection(Long academyId, Long worksheetId, Long correctionId) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForRead(academyId, worksheetId);
 
         Correction correction = findCorrectionByIdAndWorksheetId(correctionId, worksheetId);
         return response(correction);
@@ -305,12 +305,11 @@ public class CorrectionService {
         return contexts;
     }
 
-    private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .filter(found -> found.getDeletedAt() == null)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+    private Worksheet findReadyWorksheetForRead(Long academyId, Long worksheetId) {
+        return requireReady(worksheetAccessPolicy.getReadable(academyId, worksheetId));
+    }
 
+    private Worksheet requireReady(Worksheet worksheet) {
         if (worksheet.getStatus() != WorksheetStatus.READY) {
             throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "학습지가 검토 준비 완료(READY) 상태가 아닙니다.");
         }

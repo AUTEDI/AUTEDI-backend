@@ -12,8 +12,8 @@ import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
-import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.service.WorksheetReviewAccessService;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
@@ -29,14 +29,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CommentService {
 
+    private final WorksheetAccessPolicy worksheetAccessPolicy;
     private final WorksheetReviewAccessService reviewAccess;
-    private final WorksheetRepository worksheetRepository;
     private final WorksheetPageRepository worksheetPageRepository;
     private final CommentRepository commentRepository;
     private final UserRepository userRepository;
 
     public CommentListResponse getComments(Long academyId, Long worksheetId, Long pageId) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForRead(academyId, worksheetId);
 
         List<CommentResponse> items = commentRepository.findAllActiveByWorksheet(worksheetId, pageId).stream()
                 .map(CommentResponse::from)
@@ -46,7 +46,7 @@ public class CommentService {
     }
 
     public CommentResponse getComment(Long academyId, Long worksheetId, Long commentId) {
-        findWorksheetAndValidateReady(academyId, worksheetId);
+        findReadyWorksheetForRead(academyId, worksheetId);
 
         Comment comment = findActiveCommentByIdAndWorksheetId(commentId, worksheetId);
         return CommentResponse.from(comment);
@@ -134,12 +134,11 @@ public class CommentService {
         log.info("[feedback] 교사 코멘트 삭제 완료: commentId={}, worksheetId={}", commentId, worksheetId);
     }
 
-    private Worksheet findWorksheetAndValidateReady(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .filter(w -> w.getDeletedAt() == null)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+    private Worksheet findReadyWorksheetForRead(Long academyId, Long worksheetId) {
+        return requireReady(worksheetAccessPolicy.getReadable(academyId, worksheetId));
+    }
 
+    private Worksheet requireReady(Worksheet worksheet) {
         if (worksheet.getStatus() != WorksheetStatus.READY) {
             throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "학습지가 검토 준비 완료(READY) 상태가 아닙니다.");
         }

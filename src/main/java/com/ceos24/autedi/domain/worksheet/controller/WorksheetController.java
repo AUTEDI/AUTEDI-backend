@@ -27,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -192,6 +193,19 @@ public class WorksheetController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, response.etag())
                 .body(ApiResponse.onSuccess("학습지 제목·학생이 지정되었습니다.", response));
+    }
+
+    @Operation(
+            summary = "임시저장 학습지 삭제",
+            description =
+                    "임시저장(TEMP_SAVED) 상태의 학습지를 소프트 삭제합니다. 업로더 본인만 삭제할 수 있으며 같은 기관 원장도 남의 학습지는 삭제할 수 없습니다. 임시저장이 아닌 학습지는 409, 삭제된 학습지는 404입니다. (204 No Content)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'TEACHER')")
+    @DeleteMapping("/{worksheetId}")
+    public ResponseEntity<Void> deleteWorksheet(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Parameter(description = "학습지 고유 ID", required = true) @PathVariable("worksheetId") Long worksheetId) {
+        worksheetService.deleteWorksheet(principal.userId(), principal.academyId(), worksheetId);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "보존된 학습지 원본 다운로드", description = "업로드 당시 바이트를 변경 없이 반환합니다. 타 학원 자원은 404로 은닉합니다.")

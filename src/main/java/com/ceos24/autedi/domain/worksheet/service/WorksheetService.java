@@ -21,6 +21,7 @@ import com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
 import com.ceos24.autedi.domain.worksheet.event.WorksheetCreated;
 import com.ceos24.autedi.domain.worksheet.event.WorksheetFileReplaced;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
@@ -51,7 +52,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class WorksheetService {
 
     private final WorksheetRepository worksheetRepository;
-    private final WorksheetReviewAccessService reviewAccess;
+    private final WorksheetAccessPolicy worksheetAccessPolicy;
     private final WorksheetPageRepository worksheetPageRepository;
     private final WorksheetSettingRepository worksheetSettingRepository;
     private final WorksheetGenerationRepository worksheetGenerationRepository;
@@ -162,10 +163,7 @@ public class WorksheetService {
     }
 
     public WorksheetDetailResponse getWorksheetDetail(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .filter(found -> found.getDeletedAt() == null)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        Worksheet worksheet = worksheetAccessPolicy.getReadable(academyId, worksheetId);
 
         List<WorksheetPage> pages = worksheetPageRepository.findAllByWorksheetIdOrderByPageNumberAsc(worksheetId);
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
@@ -180,18 +178,14 @@ public class WorksheetService {
     @Transactional
     public WorksheetDetailResponse updateMetadata(
             Long userId, Long academyId, Long worksheetId, String ifMatch, WorksheetMetadataUpdateRequest request) {
-        Worksheet worksheet = worksheetRepository
-                .findLockedByIdAndAcademyId(worksheetId, academyId)
-                .filter(found -> found.getDeletedAt() == null)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
         User editor = userRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         if (!editor.getAcademy().getId().equals(academyId)
                 || (!worksheet.getUser().getId().equals(userId) && editor.getRole() != Role.DIRECTOR)) {
             throw new CustomException(ErrorCode.ACCESS_DENIED);
         }
-        if (worksheet.getSaveStatus() == WorksheetSaveStatus.COMPLETED || !worksheet.canModifyOrReplace()) {
-            throw new CustomException(
-                    ErrorCode.INVALID_WORKSHEET_STATE, "제목·학생은 최종 저장 전 DRAFT·FAILED 상태에서만 변경할 수 있습니다.");
+        if (!worksheet.canModifyOrReplace()) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "제목·학생은 DRAFT·FAILED 상태에서만 변경할 수 있습니다.");
         }
         if (ifMatch != null) {
             String expected = ifMatch.trim();
@@ -208,6 +202,20 @@ public class WorksheetService {
         return getWorksheetDetail(academyId, worksheetId);
     }
 
+    /** 임시저장 학습지를 소프트 삭제한다. 업로더 본인만 삭제할 수 있고, 같은 기관 원장도 남의 학습지는 삭제할 수 없다. */
+    @Transactional
+    public void deleteWorksheet(Long userId, Long academyId, Long worksheetId) {
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
+        if (!worksheet.getUser().getId().equals(userId)) {
+            throw new CustomException(ErrorCode.ACCESS_DENIED);
+        }
+        if (worksheet.getSaveStatus() != WorksheetSaveStatus.TEMP_SAVED) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "임시저장 상태의 학습지만 삭제할 수 있습니다.");
+        }
+        worksheet.softDelete(LocalDateTime.now());
+        log.info("[worksheet] 임시저장 학습지 삭제 완료: worksheetId={}, userId={}", worksheetId, userId);
+    }
+
     @Transactional
     public WorksheetDetailResponse replaceWorksheetFile(
             Long academyId, Long worksheetId, String ifMatch, MultipartFile file) {
@@ -220,7 +228,7 @@ public class WorksheetService {
     @Transactional
     public WorksheetDetailResponse replaceWorksheetFile(
             Long academyId, Long userId, String qrSessionId, Long worksheetId, String ifMatch, MultipartFile file) {
-        Worksheet worksheet = reviewAccess.lockForChange(academyId, worksheetId);
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
 
         QrSession qr = resolveQrTarget(qrSessionId, userId);
         if (qr != null) {
@@ -319,9 +327,7 @@ public class WorksheetService {
     }
 
     public WorksheetSettingsResponse getSettings(Long academyId, Long worksheetId) {
-        Worksheet worksheet = worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        Worksheet worksheet = worksheetAccessPolicy.getReadable(academyId, worksheetId);
 
         List<WorksheetSetting> settings = worksheetSettingRepository.findAllByWorksheetId(worksheetId);
         String etag = "\"settings_" + worksheet.getId() + "-v" + worksheet.getVersion() + "\"";
@@ -391,9 +397,7 @@ public class WorksheetService {
     }
 
     private Worksheet findOwnedWorksheet(Long academyId, Long worksheetId) {
-        return worksheetRepository
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        return worksheetAccessPolicy.getReadable(academyId, worksheetId);
     }
 
     private StoredFile storeImage(MultipartFile file, Long academyId) {
@@ -421,7 +425,7 @@ public class WorksheetService {
     @Transactional
     public WorksheetSettingsResponse updateSettings(
             Long academyId, Long worksheetId, String ifMatch, WorksheetSettingsUpdateRequest request) {
-        Worksheet worksheet = reviewAccess.lockForChange(academyId, worksheetId);
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
 
         // 상태 검증: DRAFT 또는 FAILED 상태에서만 설정 변경 가능
         if (!worksheet.canModifyOrReplace()) {

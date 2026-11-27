@@ -131,9 +131,28 @@ public class Worksheet extends BaseTimeEntity {
         return this.status == WorksheetStatus.DRAFT || this.status == WorksheetStatus.FAILED;
     }
 
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    public boolean isCompleted() {
+        return saveStatus == WorksheetSaveStatus.COMPLETED;
+    }
+
+    /** 소프트 삭제한다. 데이터는 지우지 않고 삭제 시각만 기록한다. 임시저장 상태의 학습지만 삭제할 수 있다. */
+    public void softDelete(LocalDateTime now) {
+        if (isDeleted()) {
+            return;
+        }
+        if (saveStatus != WorksheetSaveStatus.TEMP_SAVED) {
+            throw new IllegalStateException("임시저장 상태의 학습지만 삭제할 수 있습니다.");
+        }
+        this.deletedAt = now;
+    }
+
     /** 제목·학생과 수정 가능 상태를 검증한다. 요청자 권한과 잠금·버전 검사는 서비스에서 처리한다. */
     public void updateMetadata(String title, Student student) {
-        if (deletedAt != null || saveStatus == WorksheetSaveStatus.COMPLETED || !canModifyOrReplace()) {
+        if (isDeleted() || isCompleted() || !canModifyOrReplace()) {
             throw new IllegalStateException("현재 상태에서는 학습지 제목·학생을 변경할 수 없습니다.");
         }
         if (title == null || title.isBlank() || title.strip().length() > 255) {

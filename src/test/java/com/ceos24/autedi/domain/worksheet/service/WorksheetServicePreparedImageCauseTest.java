@@ -10,6 +10,7 @@ import com.ceos24.autedi.domain.student.repository.StudentRepository;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
@@ -33,7 +34,7 @@ class WorksheetServicePreparedImageCauseTest {
         FileStorageService fileStorageService = mock(FileStorageService.class);
         WorksheetService service = new WorksheetService(
                 worksheetRepository,
-                mock(WorksheetReviewAccessService.class),
+                new WorksheetAccessPolicy(worksheetRepository),
                 pageRepository,
                 mock(WorksheetSettingRepository.class),
                 mock(WorksheetGenerationRepository.class),

@@ -43,6 +43,7 @@ import com.ceos24.autedi.domain.worksheet.repository.WorksheetPageRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSavedResultRepository;
 import com.ceos24.autedi.domain.worksheet.service.WorksheetSavedResultService;
+import com.ceos24.autedi.domain.worksheet.service.WorksheetService;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.security.JwtTokenProvider;
 import java.util.List;
@@ -111,6 +112,9 @@ class WorksheetCompletionApiTest {
 
     @Autowired
     WorksheetSavedResultService saveService;
+
+    @Autowired
+    WorksheetService worksheetService;
 
     @Autowired
     CorrectionService correctionService;
@@ -469,7 +473,7 @@ class WorksheetCompletionApiTest {
                             new CorrectionUpdateRequest("too late")))
                     .isInstanceOfSatisfying(
                             CustomException.class,
-                            e -> assertThat(e.getErrorCode().name()).isEqualTo("INVALID_WORKSHEET_STATE")));
+                            e -> assertThat(e.getErrorCode().name()).isEqualTo("WORKSHEET_COMPLETED")));
             assertThrows(TimeoutException.class, () -> editing.get(200, TimeUnit.MILLISECONDS));
             release.countDown();
             completing.get(5, TimeUnit.SECONDS);
@@ -543,6 +547,96 @@ class WorksheetCompletionApiTest {
                     .isEqualTo(1);
         } finally {
             start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void deletedDraftKeepsSnapshotAndEditsButHidesAllSaveRoutes() throws Exception {
+        JsonNode draft = result(call(post(base() + "/save-draft"), owner).andExpect(status().isOk()));
+        call(delete(base()), owner).andExpect(status().isNoContent());
+        call(get(base() + "/saved-result"), owner).andExpect(status().isNotFound());
+        call(get(base() + "/review"), owner).andExpect(status().isNotFound());
+        call(post(base() + "/save-draft"), owner).andExpect(status().isNotFound());
+        call(post(base() + "/resume").header(HttpHeaders.IF_MATCH, etag()), owner)
+                .andExpect(status().isNotFound());
+        complete(owner, etag()).andExpect(status().isNotFound());
+        call(delete(base()), owner).andExpect(status().isNotFound());
+        assertThat(worksheets.findById(worksheetId).orElseThrow().isDeleted()).isTrue();
+        assertThat(savedResults.findById(worksheetId).orElseThrow().getRevision())
+                .isEqualTo(draft.path("revision").asLong());
+        assertThat(corrections.findById(correctionId).orElseThrow().getContent())
+                .isEqualTo("AI content");
+        assertThat(comments.findById(commentId).orElseThrow().isDeleted()).isFalse();
+    }
+
+    @Test
+    void completionWaitingForDeletionCannotReviveWorksheet() throws Exception {
+        call(post(base() + "/save-draft"), owner).andExpect(status().isOk());
+        String tag = etag();
+        var pool = Executors.newFixedThreadPool(2);
+        var deleted = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try {
+            var deleting = pool.submit(() -> tx.executeWithoutResult(s -> {
+                worksheetService.deleteWorksheet(
+                        owner.getId(), owner.getAcademy().getId(), worksheetId);
+                deleted.countDown();
+                await(release);
+            }));
+            assertThat(deleted.await(5, TimeUnit.SECONDS)).isTrue();
+            var completing = pool.submit(() -> assertThatThrownBy(() -> saveService.complete(
+                            owner.getId(), owner.getAcademy().getId(), worksheetId, tag))
+                    .isInstanceOfSatisfying(
+                            CustomException.class,
+                            e -> assertThat(e.getErrorCode().name()).isEqualTo("WORKSHEET_NOT_FOUND")));
+            assertThrows(TimeoutException.class, () -> completing.get(200, TimeUnit.MILLISECONDS));
+            release.countDown();
+            deleting.get(5, TimeUnit.SECONDS);
+            completing.get(5, TimeUnit.SECONDS);
+            var worksheet = worksheets.findById(worksheetId).orElseThrow();
+            assertThat(worksheet.isDeleted()).isTrue();
+            assertThat(worksheet.getSaveStatus()).isEqualTo(WorksheetSaveStatus.TEMP_SAVED);
+            assertThat(worksheet.getCompletedAt()).isNull();
+            assertThat(savedResults.findById(worksheetId).orElseThrow().getRevision())
+                    .isEqualTo(1);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void deletionWaitingForCompletionCannotRemoveFinalResult() throws Exception {
+        call(post(base() + "/save-draft"), owner).andExpect(status().isOk());
+        String tag = etag();
+        var pool = Executors.newFixedThreadPool(2);
+        var completed = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try {
+            var completing = pool.submit(() -> tx.executeWithoutResult(s -> {
+                saveService.complete(owner.getId(), owner.getAcademy().getId(), worksheetId, tag);
+                completed.countDown();
+                await(release);
+            }));
+            assertThat(completed.await(5, TimeUnit.SECONDS)).isTrue();
+            var deleting = pool.submit(() -> assertThatThrownBy(() -> worksheetService.deleteWorksheet(
+                            owner.getId(), owner.getAcademy().getId(), worksheetId))
+                    .isInstanceOfSatisfying(
+                            CustomException.class,
+                            e -> assertThat(e.getErrorCode().name()).isEqualTo("WORKSHEET_COMPLETED")));
+            assertThrows(TimeoutException.class, () -> deleting.get(200, TimeUnit.MILLISECONDS));
+            release.countDown();
+            completing.get(5, TimeUnit.SECONDS);
+            deleting.get(5, TimeUnit.SECONDS);
+            var worksheet = worksheets.findById(worksheetId).orElseThrow();
+            assertThat(worksheet.isDeleted()).isFalse();
+            assertThat(worksheet.getSaveStatus()).isEqualTo(WorksheetSaveStatus.COMPLETED);
+            assertThat(savedResults.findById(worksheetId).orElseThrow().getRevision())
+                    .isEqualTo(2);
+            call(get(base() + "/saved-result"), owner).andExpect(status().isOk());
+        } finally {
+            release.countDown();
             pool.shutdownNow();
         }
     }
