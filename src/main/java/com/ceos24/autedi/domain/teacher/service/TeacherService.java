@@ -8,21 +8,31 @@ import com.ceos24.autedi.domain.teacher.dto.request.TeacherUpdateRequest;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherListItemResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
+import com.ceos24.autedi.domain.teacher.dto.response.TeacherWorksheetHistoryItemResponse;
 import com.ceos24.autedi.domain.user.entity.Role;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.entity.UserStatus;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
+import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
+import com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus;
+import com.ceos24.autedi.domain.worksheet.repository.TeacherWorksheetCount;
+import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import com.ceos24.autedi.global.response.PageResponse;
 import com.ceos24.autedi.global.security.RevokedUserRegistry;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +43,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class TeacherService {
 
     private static final int MAX_PAGE_SIZE = 100;
+
+    /** 첨삭 수·첨삭 이력에 포함하는 업무 저장 상태. 임시저장과 완료를 세고, 저장하지 않은 학습지는 세지 않는다. 목록과 이력이 같은 기준을 쓰도록 한 곳에 둔다. */
+    static final List<WorksheetSaveStatus> COUNTED_STATUSES =
+            List.of(WorksheetSaveStatus.TEMP_SAVED, WorksheetSaveStatus.COMPLETED);
 
     /** 목록 정렬: 이름순. 이름이 같으면 이메일, 가입 선생님, ID 순으로 정해 순서가 항상 하나로 정해지게 한다. */
     private static final Comparator<TeacherListItemResponse> LIST_ORDER = Comparator.comparing(
@@ -45,6 +59,7 @@ public class TeacherService {
     private final UserInvitationRepository userInvitationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final RevokedUserRegistry revokedUserRegistry;
+    private final WorksheetRepository worksheetRepository;
 
     /**
      * 같은 기관 선생님의 이름·연락처·입사일을 수정한다. 보내지 않았거나 null인 항목은 바꾸지 않는다. 연락처는 빈 문자열이면 삭제한다. 퇴사한 선생님도
@@ -110,7 +125,36 @@ public class TeacherService {
         }
         all.sort(LIST_ORDER);
 
-        return PageResponse.fromAll(all, page, size);
+        return withMonthlyCorrectionCounts(academyId, PageResponse.fromAll(all, page, size));
+    }
+
+    /**
+     * 페이지에 보이는 가입한 선생님의 이번 달 첨삭 수를 한 번에 세어 채운다. 초대 대기 행과 첨삭이 없는 선생님은 0이다. 집계 기준은 {@link
+     * #COUNTED_STATUSES}와 {@link MonthRange#current()}이다.
+     */
+    private PageResponse<TeacherListItemResponse> withMonthlyCorrectionCounts(
+            Long academyId, PageResponse<TeacherListItemResponse> page) {
+        List<Long> teacherIds = page.items().stream()
+                .filter(TeacherListItemResponse::registered)
+                .map(TeacherListItemResponse::teacherId)
+                .toList();
+        if (teacherIds.isEmpty()) {
+            return page;
+        }
+
+        MonthRange month = MonthRange.current();
+        Map<Long, Long> counts =
+                worksheetRepository
+                        .countByTeacher(academyId, teacherIds, COUNTED_STATUSES, month.from(), month.to())
+                        .stream()
+                        .collect(Collectors.toMap(TeacherWorksheetCount::teacherId, TeacherWorksheetCount::count));
+
+        List<TeacherListItemResponse> items = page.items().stream()
+                .map(item -> item.registered()
+                        ? item.withMonthlyCorrectionCount(counts.getOrDefault(item.teacherId(), 0L))
+                        : item)
+                .toList();
+        return new PageResponse<>(items, page.total(), page.page(), page.size(), page.totalPages());
     }
 
     /** 목록 상태 필터를 가입 계정의 상태 목록으로 바꾼다. 퇴사가 아닌 계정(잠금·비활성 포함)은 모두 활동 중이다. */
@@ -143,6 +187,37 @@ public class TeacherService {
     /** 목록 정렬에 쓰는 이름. 이름이 없는 초대는 이메일로 대신한다. */
     private static String sortName(TeacherListItemResponse item) {
         return item.name() != null && !item.name().isBlank() ? item.name() : item.email();
+    }
+
+    /**
+     * 같은 기관 선생님의 첨삭 이력을 처음 저장한 시각 최신순으로 조회한다. 선생님이 올린 임시저장·완료 학습지이며 삭제된 학습지는 제외한다. 월별
+     * 첨삭 수({@link #list})와 같은 기준이라 같은 달의 건수가 일치한다. 퇴사한 선생님도 조회할 수 있다.
+     *
+     * @param keyword 학습지 제목 또는 학생 이름 부분 일치 검색어(대소문자 무시). 비어 있으면 무시
+     * @param month 처음 저장한 달(한국 시간). null이면 전체 기간
+     * @param page 0부터 시작하는 페이지 번호
+     * @param size 페이지 크기(1~100)
+     */
+    public PageResponse<TeacherWorksheetHistoryItemResponse> getWorksheetHistory(
+            Long academyId, Long teacherId, String keyword, YearMonth month, int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE || (long) page * size > Integer.MAX_VALUE) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        findTeacherInAcademy(academyId, teacherId);
+
+        MonthRange range = month == null ? MonthRange.all() : MonthRange.of(month);
+        String pattern = keyword == null || keyword.isBlank() ? null : toLikePattern(keyword);
+        Page<Worksheet> worksheets = worksheetRepository.searchTeacherHistory(
+                academyId, teacherId, COUNTED_STATUSES, range.from(), range.to(), pattern, PageRequest.of(page, size));
+
+        return new PageResponse<>(
+                worksheets.getContent().stream()
+                        .map(TeacherWorksheetHistoryItemResponse::from)
+                        .toList(),
+                worksheets.getTotalElements(),
+                worksheets.getNumber(),
+                worksheets.getSize(),
+                worksheets.getTotalPages());
     }
 
     /** 같은 기관 선생님의 상세 정보를 조회한다. 퇴사한 선생님도 조회할 수 있다. */

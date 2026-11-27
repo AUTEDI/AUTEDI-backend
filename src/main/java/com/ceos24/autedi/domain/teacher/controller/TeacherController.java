@@ -5,6 +5,7 @@ import com.ceos24.autedi.domain.teacher.dto.request.TeacherUpdateRequest;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherDetailResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherListItemResponse;
 import com.ceos24.autedi.domain.teacher.dto.response.TeacherResignResponse;
+import com.ceos24.autedi.domain.teacher.dto.response.TeacherWorksheetHistoryItemResponse;
 import com.ceos24.autedi.domain.teacher.service.TeacherService;
 import com.ceos24.autedi.global.response.ApiResponse;
 import com.ceos24.autedi.global.response.PageResponse;
@@ -13,7 +14,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.YearMonth;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -61,6 +64,27 @@ public class TeacherController {
             @PathVariable Long teacherId) {
         TeacherDetailResponse response = teacherService.getDetail(principal.academyId(), teacherId);
         return ResponseEntity.ok(ApiResponse.onSuccess("선생님 정보를 조회했습니다.", response));
+    }
+
+    @Operation(
+            summary = "선생님 첨삭 이력 조회 (원장 전용)",
+            description =
+                    "같은 기관 선생님이 올린 임시저장·완료 학습지를 처음 저장한 시각 최신순으로 조회합니다. 삭제된 학습지는 제외합니다. keyword는 학습지 제목·학생 이름 부분 일치(대소문자 무시), month는 처음 저장한 달을 yyyy-MM으로 지정하며(한국 시간) 생략하면 전체 기간입니다. page는 0부터 시작하고 size는 기본 20, 1~100입니다. 선생님 목록의 월별 첨삭 수와 같은 기준입니다. 퇴사한 선생님도 조회할 수 있습니다.")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    @GetMapping("/{teacherId}/worksheets")
+    public ResponseEntity<ApiResponse<PageResponse<TeacherWorksheetHistoryItemResponse>>> getTeacherWorksheets(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long teacherId,
+            @RequestParam(required = false) String keyword,
+            @Parameter(description = "처음 저장한 달 (yyyy-MM)", example = "2026-11")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(pattern = "yyyy-MM")
+                    YearMonth month,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageResponse<TeacherWorksheetHistoryItemResponse> response =
+                teacherService.getWorksheetHistory(principal.academyId(), teacherId, keyword, month, page, size);
+        return ResponseEntity.ok(ApiResponse.onSuccess("선생님 첨삭 이력을 조회했습니다.", response));
     }
 
     @Operation(
