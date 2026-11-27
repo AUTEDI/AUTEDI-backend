@@ -18,6 +18,8 @@ public record TeacherListItemResponse(
         @Schema(description = "연락처. 등록 전이거나 초대 대기이면 null", nullable = true) String phoneNumber,
         @Schema(description = "입사일. 등록 전이거나 초대 대기이면 null", nullable = true) LocalDate hireDate,
         @Schema(description = "상태(활동 중·초대 대기·퇴사)", example = "ACTIVE") TeacherListStatus status,
+        @Schema(description = "이번 달(한국 시간) 첨삭 수. 임시저장·완료를 포함하고 삭제는 제외. 초대 대기 행은 0", example = "12")
+                long monthlyCorrectionCount,
         @Schema(description = "초대 만료 시각. 가입한 선생님 행은 null. 지난 시각이면 만료된 초대", nullable = true) LocalDateTime expiresAt) {
 
     public static TeacherListItemResponse fromUser(User teacher) {
@@ -32,7 +34,23 @@ public record TeacherListItemResponse(
                 teacher.getPhoneNumber(),
                 teacher.getHireDate(),
                 status,
+                0,
                 null);
+    }
+
+    /** 이번 달 첨삭 수를 채운 복사본을 돌려준다. 목록은 페이지가 정해진 뒤에 행마다 집계 값을 채운다. */
+    public TeacherListItemResponse withMonthlyCorrectionCount(long monthlyCorrectionCount) {
+        return new TeacherListItemResponse(
+                teacherId,
+                invitationId,
+                registered,
+                name,
+                email,
+                phoneNumber,
+                hireDate,
+                status,
+                monthlyCorrectionCount,
+                expiresAt);
     }
 
     public static TeacherListItemResponse fromInvitation(UserInvitation invitation) {
@@ -45,6 +63,7 @@ public record TeacherListItemResponse(
                 null,
                 null,
                 TeacherListStatus.INVITED,
+                0,
                 invitation.getExpiresAt());
     }
 }
