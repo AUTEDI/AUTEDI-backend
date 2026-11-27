@@ -10,7 +10,7 @@ import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetStatus;
-import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.domain.worksheet.repository.WorksheetSettingRepository;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
@@ -30,7 +30,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class WorksheetGenerationService {
-    private final WorksheetRepository worksheets;
+    private final WorksheetAccessPolicy worksheetAccessPolicy;
     private final WorksheetSettingRepository settings;
     private final WorksheetGenerationRepository generations;
     private final UserRepository users;
@@ -46,7 +46,7 @@ public class WorksheetGenerationService {
 
     @Transactional
     public GenerationResponse requestGeneration(Long userId, Long academyId, Long worksheetId, String key) {
-        Worksheet worksheet = ownedForUpdate(academyId, worksheetId);
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
         key = key(key);
         User user = activeUser(userId, academyId);
         WorksheetGeneration existing = existing(key, worksheetId, null);
@@ -58,16 +58,14 @@ public class WorksheetGenerationService {
     }
 
     public GenerationResponse getGenerationStatus(Long academyId, Long worksheetId, Long generationId) {
-        worksheets
-                .findByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+        worksheetAccessPolicy.getReadable(academyId, worksheetId);
         return GenerationResponse.from(target(worksheetId, generationId));
     }
 
     @Transactional
     public GenerationResponse retryGeneration(
             Long userId, Long academyId, Long worksheetId, Long generationId, String key) {
-        Worksheet worksheet = ownedForUpdate(academyId, worksheetId);
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
         key = key(key);
         WorksheetGeneration target = target(worksheetId, generationId);
         User user = activeUser(userId, academyId);
@@ -138,12 +136,6 @@ public class WorksheetGenerationService {
         } catch (IllegalArgumentException e) {
             return false;
         }
-    }
-
-    private Worksheet ownedForUpdate(Long academyId, Long worksheetId) {
-        return worksheets
-                .findLockedByIdAndAcademyId(worksheetId, academyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
     }
 
     private WorksheetGeneration target(Long worksheetId, Long id) {

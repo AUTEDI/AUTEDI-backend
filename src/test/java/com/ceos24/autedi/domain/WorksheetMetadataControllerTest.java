@@ -228,7 +228,7 @@ class WorksheetMetadataControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request("변경 금지", student.getId())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("WORKSHEET_002"));
+                .andExpect(jsonPath("$.code").value("WORKSHEET_003"));
     }
 
     @ParameterizedTest

@@ -12,7 +12,7 @@ import com.ceos24.autedi.domain.auth.repository.QrSessionRepository;
 import com.ceos24.autedi.domain.user.entity.User;
 import com.ceos24.autedi.domain.user.repository.UserRepository;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
-import com.ceos24.autedi.domain.worksheet.repository.WorksheetRepository;
+import com.ceos24.autedi.domain.worksheet.policy.WorksheetAccessPolicy;
 import com.ceos24.autedi.global.exception.CustomException;
 import com.ceos24.autedi.global.exception.ErrorCode;
 import com.ceos24.autedi.global.util.QrCodeGenerator;
@@ -45,7 +45,7 @@ public class QrSessionService {
 
     private final QrSessionRepository qrSessionRepository;
     private final UserRepository userRepository;
-    private final WorksheetRepository worksheetRepository;
+    private final WorksheetAccessPolicy worksheetAccessPolicy;
     private final AuthService authService;
     private final QrCodeGenerator qrCodeGenerator;
     private final ApplicationEventPublisher eventPublisher;
@@ -62,9 +62,7 @@ public class QrSessionService {
         // 있으면 그 작업의 사진 교체용이다: 없거나 다른 학원의 작업은 WORKSHEET_001, 같은 학원이지만 소유자가 아니면 AUTH_002.
         Long worksheetId = request == null ? null : request.worksheetId();
         if (worksheetId != null) {
-            Worksheet worksheet = worksheetRepository
-                    .findByIdAndAcademyId(worksheetId, academyId)
-                    .orElseThrow(() -> new CustomException(ErrorCode.WORKSHEET_NOT_FOUND));
+            Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
             if (!worksheet.getUser().getId().equals(userId)) {
                 throw new CustomException(ErrorCode.ACCESS_DENIED);
             }

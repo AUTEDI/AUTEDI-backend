@@ -6,6 +6,7 @@
 - B2 추가 반영: 2026-11-26. 학생 등록·상세 조회 2개 API와 중복 후보 확인·동명이인 확인 후 등록 계약을 5.1에 반영했다. 나머지 항목의 최초 코드 확인 기준은 위와 같다.
 - B3 추가 반영: 2026-11-26. 학생 목록·검색·필터·페이지네이션 및 기본 정보 부분 수정 2개 API를 구현하여 학생 API 총 4개의 계약을 5.1에 반영했다.
 - B4 추가 반영: 2026-11-26. 학습지 제목·학생 지정 PATCH 1개를 5.7에 구현하고, 기존 상세·검토 응답에 제목·학생·업무 저장 상태·저장 시각을 추가했다.
+- A3 추가 반영: 2026-11-27. 삭제·완료 학습지의 공통 접근 정책(삭제는 `404 / WORKSHEET_001`, 완료 쓰기는 `409 / WORKSHEET_003`), 임시저장 학습지 삭제 `DELETE /worksheets/{worksheetId}`를 구현해 5.7·6장·8장에 반영했다. 검증은 H2 통합 테스트이며 운영 DB는 포함하지 않는다.
 - 기능 기준: [AUTEDI 기능명세서 v2](<C:/study/CEOS/AUTEDI/autedi/docs/AUTEDI 기능명세서 v2.md>)
 - 최초 정리 범위: 기존 API 37개, 앞선 논의의 신규 API 설계안 22개, 조건부 API 설계안 6개. 신규안 중 학생 관리 4개와 학습지 제목·학생 지정 1개는 B2–B4 구현 계약을 추가 반영했다.
 - 확인 방식: 최초 문서는 Controller·Service·DTO·공통 응답·보안 설정의 정적 대조 기준이다. B2–B4 API는 로컬 H2 DB와 실제 JWT 필터를 사용하는 HTTP 통합 테스트로 검증했다. 운영 DB·배포 환경 확인은 포함하지 않는다.
@@ -45,7 +46,7 @@
 
 비인증 API는 회원가입·로그인·토큰 재발급·초대 토큰 검증과 QR의 scan/status/token이다. 초대 생성은 원장만 가능하다. QR 생성·승인·거절·link와 로그아웃·본인 정보·학습지·SSE는 인증이 필요하다.
 
-현재 기관 검증을 업로더 소유권 검사와 동일하게 해석하면 안 된다. 일반 학습지 조회·편집은 기관 기준이며, QR 대상 지정·QR 업로드에는 추가 소유권 검사가 있다. 신규 임시저장 삭제에는 D6에 따라 별도의 업로더 본인 검사를 적용해야 한다.
+현재 기관 검증을 업로더 소유권 검사와 동일하게 해석하면 안 된다. 일반 학습지 조회·편집은 기관 기준이며, QR 대상 지정·QR 업로드에는 추가 소유권 검사가 있다. 임시저장 삭제는 D6에 따라 별도의 업로더 본인 검사를 적용한다(5.7).
 
 ### 1.2 구현·정책 상태
 
@@ -171,7 +172,7 @@
 - QR 하나로 이미지 한 장·작업 하나만 업로드한다. 토큰 발급의 `COMPLETED`는 QR 로그인 완료이며 사진 업로드 완료나 첨삭 최종 저장 완료를 뜻하지 않는다.
 - QR 발급 응답의 `worksheetId`가 있으면 해당 학습지 파일 교체, null이면 신규 업로드로 연결한다. QR 세션 정보가 들어간 새 토큰을 업로드에 사용한다.
 - IP·경로별 기본 제한: scan/token/link 각 분당 10, status 분당 90. 초과 시 `429 / COMMON_429`와 `Retry-After`. 설정·토큰 버킷 기반 제한이다.
-- 주요 오류: `QR_001`–`QR_007`, `AUTH_002`, `AUTH_007`, `WORKSHEET_001`.
+- 주요 오류: `QR_001`–`QR_007`, `AUTH_002`, `AUTH_007`, `WORKSHEET_001`, `WORKSHEET_003`(사진 교체용 QR 생성 시 완료 학습지).
 
 ### 2.5 학습지 파일 — 5개 / F05
 
@@ -195,7 +196,7 @@
 - 신규 업로드는 활성 기관 구독을 검사한다. 모든 쓰기 API에 동일한 구독 검사가 있다는 뜻은 아니다.
 - 원본·페이지 이미지는 Bearer 인증 후 바이너리로 조회하며 `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`를 제공한다. 화면의 첨삭 위치 기준 이미지는 `pages[].imageUrl`이다.
 - B4에서 상세 응답에 제목·학생 요약·업무 저장 상태·저장 시각을 추가했다. 기존 업로드는 제목·학생 없이도 가능하고 초기 saveStatus는 UNSAVED다.
-- 주요 오류: `WORKSHEET_001`, `WORKSHEET_002`, `COMMON_412`, `FILE_001`–`FILE_007`, `PAGE_001`, `QR_002`, `QR_004`, `QR_006`, `QR_007`.
+- 주요 오류: `WORKSHEET_001`, `WORKSHEET_002`, `WORKSHEET_003`(파일 교체), `COMMON_412`, `FILE_001`–`FILE_007`, `PAGE_001`, `QR_002`, `QR_004`, `QR_006`, `QR_007`.
 
 ### 2.6 첨삭 설정 — 2개 / F05
 
@@ -213,7 +214,7 @@
 }
 ```
 
-영역 표준값은 `GRAMMAR_SPELLING`, `VOCABULARY_EXPRESSION`, `SENTENCE_STRUCTURE`, `CONTENT_SUMMARY`, 수준은 `STANDARD / ADVANCED`다. 제목·학생은 현재 이 요청 DTO에 없다. 주요 오류: `COMMON_001`, `COMMON_412`, `WORKSHEET_001`, `WORKSHEET_002`.
+영역 표준값은 `GRAMMAR_SPELLING`, `VOCABULARY_EXPRESSION`, `SENTENCE_STRUCTURE`, `CONTENT_SUMMARY`, 수준은 `STANDARD / ADVANCED`다. 제목·학생은 현재 이 요청 DTO에 없다. 주요 오류: `COMMON_001`, `COMMON_412`, `WORKSHEET_001`, `WORKSHEET_002`, `WORKSHEET_003`(설정 변경).
 
 ### 2.7 AI 첨삭 생성 — 3개 / F06
 
@@ -229,7 +230,7 @@
 - 재시도는 최신 생성이 `FAILED`이고 재시도 가능하며, 학습지 상태·파일 해시·설정이 실패 당시와 맞아야 한다. 유효한 전사문이 있으면 재사용할 수 있다.
 - 서버 설정에 따라 실제 외부 AI, 고정 응답, 기존 Mock 경로가 달라진다. 요청 Body로 AI 계약·모델을 지정하는 API는 아니다.
 - `GenerationResponse.finishedAt`은 AI 작업 종료 시각이며 업무 최종 저장일이 아니다.
-- 주요 오류: `GENERATION_001`–`GENERATION_008`, `WORKSHEET_001`, `COMMON_001`, `AUTH_002`, `ACADEMY_002`.
+- 주요 오류: `GENERATION_001`–`GENERATION_008`, `WORKSHEET_001`, `WORKSHEET_003`(생성·재시도), `COMMON_001`, `AUTH_002`, `ACADEMY_002`.
 
 ### 2.8 검토·AI 첨삭 — 7개 / F06
 
@@ -251,7 +252,7 @@
 - `action=REPLACE`의 빈 문자열은 삭제 제안일 수 있어 허용하고 공백을 보존한다. `GUIDANCE`와 과거 미분류 자료의 공백 내용은 거부한다.
 - 좌표 수정은 페이지 일치와 0–1 정규화 영역을 검증한다. 원문·최초 AI 제안·해설·생성 아카이브는 보존한다.
 - 현재는 개별 AI 항목의 논리 삭제만 있다. 학습지 전체 삭제와 업무 완료 후 수정 금지는 아직 없다.
-- 주요 오류: `WORKSHEET_001`, `WORKSHEET_002`, `CORRECTION_001`, `CORRECTION_002`, `COMMON_001`, `COMMON_412`.
+- 주요 오류: `WORKSHEET_001`, `WORKSHEET_002`, `CORRECTION_001`, `CORRECTION_002`, `WORKSHEET_003`(쓰기 4개), `COMMON_001`, `COMMON_412`.
 
 ### 2.9 선생님 수기 첨삭 — 5개 / F07
 
@@ -270,7 +271,7 @@
 - `regions`는 비어 있으면 안 된다. 대상 페이지는 해당 학습지에 있어야 하며 region의 pageId를 주면 대상 페이지와 같아야 한다. 현재 Service가 모든 좌표 수치에 Correction과 동일한 검증을 한다고 해석하지 않는다.
 - `content`는 공백 불가이며 저장 시 앞뒤 공백을 제거한다. 삭제한 코멘트는 조회 시 찾을 수 없음으로 처리한다.
 - 학생 프로필 메모와 다른 자원이다. 기존 수기 첨삭 목록 역시 페이지네이션이 아닌 `{items, total}`이다.
-- 주요 오류: `COMMENT_001`, `COMMENT_002`, `PAGE_001`, `WORKSHEET_001`, `WORKSHEET_002`, `COMMON_001`, `COMMON_412`.
+- 주요 오류: `COMMENT_001`, `COMMENT_002`, `PAGE_001`, `WORKSHEET_001`, `WORKSHEET_002`, `WORKSHEET_003`(쓰기 3개), `COMMON_001`, `COMMON_412`.
 
 ### 2.10 실시간 이벤트 — 1개 / 공통
 
@@ -500,8 +501,9 @@ AI 계약의 세부 오류 유형과 표시 규칙은 [AI 공통 응답 계약 v
 | 410 | `INVITATION_002` | 초대 만료 |
 | 400 | `INVITATION_003` | 초대 사용 완료·취소 등 |
 | 400 | `INVITATION_004` | 초대와 가입 이메일 불일치 |
-| 404 | `WORKSHEET_001` | 학습지 없음·다른 기관 |
-| 409 | `WORKSHEET_002` | 현재 AI 처리 상태에서 작업 불가 |
+| 404 | `WORKSHEET_001` | 학습지 없음·다른 기관·삭제됨 |
+| 409 | `WORKSHEET_002` | 현재 AI 처리 상태에서 작업 불가. 삭제 API에서는 임시저장이 아닌 학습지 |
+| 409 | `WORKSHEET_003` | 완료된 학습지는 수정할 수 없음 (쓰기 API 공통) |
 | 400 | `FILE_001` | 빈 파일 |
 | 415 | `FILE_002` | 지원하지 않는 형식·PDF 업로드 |
 | 500 | `FILE_003` | 파일 저장 실패 |
@@ -726,7 +728,7 @@ from/to는 `YYYY-MM-DD` 형태를 제안한다. 저장일 의미와 경계 포�
 
 계정 이메일 수정, 비밀번호 변경 후 다른 기기 세션 종료는 미정이다. 대상 기관·사용자 ID를 클라이언트가 임의 지정하기보다 로그인 정보를 사용하는 안이다.
 
-### 5.7 제목·학생 지정, 저장·삭제 — 구현 1개·신규안 3개 / D1–D6·F05·F07
+### 5.7 제목·학생 지정, 저장·삭제 — 구현 2개·신규안 2개 / D1–D6·F05·F07
 
 제목·학생 지정은 업로더 본인 또는 같은 기관 원장만 가능하다. 다른 선생님은 수정할 수 없다. 삭제는 업로더 본인만 가능하며 다른 교사 임시저장 이어쓰기의 일반 허용 범위는 별도 미정이다.
 
@@ -735,18 +737,19 @@ from/to는 `YYYY-MM-DD` 형태를 제안한다. 저장일 의미와 경계 포�
 | PATCH | 학습지 제목·학생 지정 | `/worksheets/{worksheetId}` | Path: `worksheetId`; Body: `title*`, `studentId*`; Header: `If-Match` 선택 | **구현(B4)**. 업로더·같은 기관 원장이 DRAFT/FAILED에서 두 값을 함께 지정. 200, 최신 WorksheetDetailResponse·ETag 반환 |
 | POST | 첨삭 임시저장 | `/worksheets/{worksheetId}/save-draft` | Path: `worksheetId`; Body 없음 — 아래 제안 전제 | 현재 편집 결과를 임시저장으로 기록. 홈·학생 결과물에 반영, 편집 가능 |
 | POST | 첨삭 최종 저장 | `/worksheets/{worksheetId}/complete` | Path: `worksheetId`; Body 없음 — 아래 제안 전제 | 필수 데이터 검증 후 완료 상태·최종 저장일 기록. 읽기 전용, 성장 리포트 집계 대상 |
-| DELETE | 임시저장 작업 삭제 | `/worksheets/{worksheetId}` | Path: `worksheetId`; Body 없음 | 업로더 본인의 임시저장에 deleted_at 기록. 데이터·이미지 보존, 모든 조회·집계에서 제외 |
+| DELETE | 임시저장 작업 삭제 | `/worksheets/{worksheetId}` | Path: `worksheetId`; Body·If-Match 없음 | **구현(A3)**. 업로더 본인의 임시저장(`TEMP_SAVED`) 학습지에 deleted_at 기록. 204 No Content. 데이터·이미지 보존, 이후 모든 조회·쓰기는 404 |
 
 - Body 없음은 개별 편집 API로 먼저 서버에 반영한 상태를 저장한다는 제안이다. 저장 시 편집 내용 전체를 전송할지, 저장본을 어떤 일관성으로 보존할지는 미정이다.
 - 제목·학생은 별도 PATCH로 구현했다. 제목은 앞뒤 공백 제거 후 1–255자, 학생 ID는 양수·같은 기관의 등록 학생이어야 한다. 두 필드 모두 필수이며 B3 학생 PATCH의 생략 유지·선택값 삭제 규칙을 적용하지 않는다.
-- 사용자가 확정한 수정 정책은 **DRAFT·FAILED에서만, 업로더 본인 또는 같은 기관 원장**이다. PROCESSING·READY·업무 COMPLETED는 `409 / WORKSHEET_002`, 다른 선생님은 `403 / AUTH_002`다.
+- 사용자가 확정한 수정 정책은 **DRAFT·FAILED에서만, 업로더 본인 또는 같은 기관 원장**이다. PROCESSING·READY는 `409 / WORKSHEET_002`, 업무 COMPLETED는 `409 / WORKSHEET_003`, 다른 선생님은 `403 / AUTH_002`다.
 - 없는/타 기관/삭제 학습지는 `404 / WORKSHEET_001`, 없는/타 기관 학생은 `404 / STUDENT_001`이다. 입력·JSON·ID 타입 오류는 `400 / COMMON_001`이다.
-- 기관 범위 학습지 행을 잠근 뒤 권한→상태→제공된 If-Match→학생 기관을 검사한다. If-Match는 현재 학습지 ETag 또는 *만 허용하고 빈 값·불일치는 412다. 변경을 flush한 후 응답 ETag를 생성한다.
+- 기관 범위 학습지 행을 잠근 뒤 삭제·완료(공통 정책)→권한→AI 상태→제공된 If-Match→학생 기관을 검사한다. If-Match는 현재 학습지 ETag 또는 *만 허용하고 빈 값·불일치는 412다. 변경을 flush한 후 응답 ETag를 생성한다.
 - B1의 saveStatus는 UNSAVED / TEMP_SAVED / COMPLETED이며 B4 응답에 업무 저장 시각을 함께 노출한다. 제목·학생 지정은 업로더·AI 상태·업무 저장 상태·저장 시각·저장자를 변경하지 않는다. 실제 저장 상태 전이는 B5–B6 범위다.
 - 기존 업로드·AI 생성 API에 제목·학생 필수 검증을 추가하지 않아 기존 자료의 생성 흐름을 유지한다. 신규 프런트 흐름에서는 업로드 후 B4를 호출하고 AI 생성을 요청한다.
 - 원장은 다른 사용자의 임시저장을 삭제할 수 없다. 원장 자신이 업로드한 작업의 취급은 동일한 업로더 조건을 따른다.
-- 이번 삭제 기능은 임시저장만 허용한다. 완료 결과물의 별도 삭제 정책은 미정이다.
-- 생성 중 삭제 허용, 저장 필수 데이터, 반복 저장·삭제 응답, 완료와 편집의 동시 요청 처리는 추가 결정이 필요하다.
+- 삭제 API 처리 순서는 공통 정책(없음·타 기관·삭제됨 `404 / WORKSHEET_001`, 완료 `409 / WORKSHEET_003`)→업로더 본인(아니면 `403 / AUTH_002`)→임시저장 여부(저장 전 `UNSAVED`는 `409 / WORKSHEET_002`) 순이며, 학습지 행을 잠근 채 처리한다. 인증 없음은 401이다.
+- 삭제는 임시저장만 허용한다. 저장하지 않은 작업은 삭제하지 않고 AI 처리 전이면 파일 교체(`PUT /worksheets/{worksheetId}/file`)로 사진을 바꾼다. 이미 삭제된 학습지를 다시 삭제하면 404이며 멱등 성공으로 취급하지 않는다. 삭제는 AI 처리 상태를 보지 않는다. 완료 결과물의 별도 삭제 정책은 미정이다.
+- 저장하지 않은 작업의 만료 정리, 생성 중 삭제 시 진행 중인 AI 작업 처리, 저장 필수 데이터, 반복 저장 응답, 완료와 편집의 동시 요청 처리는 추가 결정이 필요하다.
 
 ### 5.8 홈 최근 작업 — 신규안 1개 / F04
 
@@ -769,26 +772,44 @@ from/to는 `YYYY-MM-DD` 형태를 제안한다. 저장일 의미와 경계 포�
 | `POST /invitations` | email만 입력 | 목표 요청 `name*`, `email*`. 초대 이름 저장·응답·가입 연계, 메일 전송 실패와 초대 대기 노출 정책 정의 |
 | `GET /worksheets/{worksheetId}` | **B4 구현**: 제목·학생·업무 상태·저장 시각 제공, 삭제 제외 | 실제 임시/최종 저장 처리는 후속 단계 |
 | `GET /worksheets/{worksheetId}/review` | **B4 구현**: worksheet 메타데이터 확장, 삭제 제외 | 저장본 조회·이어쓰기 연계는 후속 단계 |
-| 기존 학습지·하위 자원 조회 | B4 상세·검토 및 공유 AI 첨삭 헬퍼는 삭제 제외 | 이미지·파일·생성·수기 첨삭 등 나머지 연결 경로의 공통 삭제 제외 점검 필요 |
-| 기존 학습지·첨삭·코멘트 쓰기 | AI 상태·항목 버전 검사 | 완료 결과물의 쓰기를 서버에서 거부. 완료/삭제/편집이 겹칠 때도 상태 정책 보장 |
+| 기존 학습지·하위 자원 조회 | **A3 구현**: 상세·설정·원본 파일·이미지·검토·첨삭·코멘트·생성 상태 조회가 삭제 학습지를 `404 / WORKSHEET_001`로 숨김 | 다른 사용자의 조회 범위(홈·학생 결과물 등)는 후속 API에서 같은 정책을 사용 |
+| 기존 학습지·첨삭·코멘트 쓰기 | **A3 구현**: 쓰기 API 13개(QR 생성 포함)가 학습지 행을 잠근 채 삭제(404)·완료(`409 / WORKSHEET_003`)를 거부. 기존 AI 상태·항목 버전 검사는 그대로 | 완료 읽기는 허용. 새 쓰기 API도 같은 정책을 거쳐야 함 |
 
-### 6.1 완료 결과물 쓰기 차단 검토 대상
+### 6.1 삭제·완료 공통 접근 정책 — 구현(A3)
 
-다음은 현재 쓰기 API에 D1을 적용할 대상 목록이다. 원문에서도 구체적인 차단 범위는 구현 시 확정 대상으로 표시했다.
+학습지를 조회하는 모든 서비스는 `WorksheetAccessPolicy`를 거친다.
 
-| 메서드 | URL | 목표 |
+| 구분 | 메서드 | 삭제된 학습지 | 완료된 학습지 | 락 |
+| --- | --- | --- | --- | --- |
+| 읽기 | `getReadable` | `404 / WORKSHEET_001` | 허용 | 없음 |
+| 쓰기 | `getForWrite` | `404 / WORKSHEET_001` | `409 / WORKSHEET_003` | 학습지 행 비관적 락 |
+
+- 삭제 검사가 완료 검사보다 먼저이므로 삭제된 완료 학습지는 404다. 다른 기관 학습지도 404로 숨긴다.
+- 쓰기는 같은 학습지의 삭제·최종 저장·편집이 동시에 들어와도 순서대로 처리되도록 행을 잠근 채 검사한다.
+- 정책 검사는 요청 본문·하위 자원 검증보다 먼저 적용된다. 이후 기존 AI 상태(READY 등)·If-Match 검사가 이어진다.
+- 새 API를 추가할 때는 학습지를 직접 조회하지 않고 이 정책의 메서드로 찾는다.
+
+완료 결과물에 적용한 쓰기 API는 다음과 같다. 모두 `409 / WORKSHEET_003`이다.
+
+| 메서드 | URL | 비고 |
 | --- | --- | --- |
-| PATCH | `/worksheets/{worksheetId}/corrections/{correctionId}/apply` | 완료 작업의 반영 여부 변경 거부 |
-| PATCH | `/worksheets/{worksheetId}/corrections/{correctionId}` | 완료 작업의 첨삭 수정 거부 |
-| DELETE | `/worksheets/{worksheetId}/corrections/{correctionId}` | 완료 작업의 첨삭 항목 삭제 거부 |
-| POST | `/worksheets/{worksheetId}/corrections/{correctionId}/restore` | 완료 작업의 첨삭 항목 복원 거부 |
-| POST | `/worksheets/{worksheetId}/comments` | 완료 작업의 수기 첨삭 추가 거부 |
-| PATCH | `/worksheets/{worksheetId}/comments/{commentId}` | 완료 작업의 수기 첨삭 수정 거부 |
-| DELETE | `/worksheets/{worksheetId}/comments/{commentId}` | 완료 작업의 수기 첨삭 삭제 거부 |
-| PUT | `/worksheets/{worksheetId}/file` | 기존 AI 상태 조건과 업무 완료 조건을 함께 정리 |
-| PUT | `/worksheets/{worksheetId}/settings` | 기존 AI 상태 조건과 업무 완료 조건을 함께 정리 |
+| PATCH | `/worksheets/{worksheetId}` | 제목·학생 지정 (이전에는 `WORKSHEET_002`) |
+| PUT | `/worksheets/{worksheetId}/file` | 기존 DRAFT·FAILED 조건과 함께 적용 |
+| PUT | `/worksheets/{worksheetId}/settings` | 기존 DRAFT·FAILED 조건과 함께 적용 |
+| PATCH | `/worksheets/{worksheetId}/corrections/{correctionId}/apply` | 반영 여부 변경 |
+| PATCH | `/worksheets/{worksheetId}/corrections/{correctionId}` | 첨삭 수정 |
+| DELETE | `/worksheets/{worksheetId}/corrections/{correctionId}` | 첨삭 항목 삭제 |
+| POST | `/worksheets/{worksheetId}/corrections/{correctionId}/restore` | 첨삭 항목 복원 |
+| POST | `/worksheets/{worksheetId}/comments` | 수기 첨삭 추가 |
+| PATCH | `/worksheets/{worksheetId}/comments/{commentId}` | 수기 첨삭 수정 |
+| DELETE | `/worksheets/{worksheetId}/comments/{commentId}` | 수기 첨삭 삭제 |
+| POST | `/worksheets/{worksheetId}/generations` | AI 생성 요청 |
+| POST | `/worksheets/{worksheetId}/generations/{generationId}/retry` | AI 생성 재시도 |
+| POST | `/auth/qr-sessions` (`worksheetId` 지정 시) | 사진 교체용 QR 생성 |
 
-AI 생성·재시도도 완료 상태와의 일관성을 검토하되, 원문에 AI 재생성 차단 세부 범위가 확인 필요로 남아 있다. 기존 READY 생성 차단을 업무 완료 정책 구현으로 간주하지 않는다. 완료 조회는 계속 허용하며 차단 HTTP 상태·에러 코드는 미정이다.
+- 읽기 API(상세·설정·원본 파일·이미지·검토·첨삭·코멘트·생성 상태 조회)는 삭제만 거부하고 완료는 허용한다.
+- 같은 요청 키를 다시 보낸 AI 생성 요청도 완료 이후에는 이전 응답 대신 409를 받는다.
+- 완료 결과물의 별도 삭제 정책은 미정이다. 완료된 학습지는 삭제 API에서도 `409 / WORKSHEET_003`이다.
 
 ### 6.2 퇴사·세션·구독
 
@@ -817,12 +838,12 @@ PDF 기능 자체는 요구사항이다. 서버 API를 둘지 프런트에서 �
 
 | ID | 정책 | 명세 적용 |
 | --- | --- | --- |
-| D1 | 완료 결과물은 수정 불가 | 완료 읽기 전용, 서버 쓰기 차단 필요 |
-| D2 | 임시저장 작업 삭제 가능 | 신규 삭제 기능 필요 |
-| D3 | 삭제는 soft delete | deleted_at 기록, 연결 데이터 보존 |
+| D1 | 완료 결과물은 수정 불가 | 구현(A3). 쓰기 API 13개 서버 차단 (6.1) |
+| D2 | 임시저장 작업 삭제 가능 | 구현(A3). 임시저장(`TEMP_SAVED`)만 삭제 |
+| D3 | 삭제는 soft delete | 구현(A3). deleted_at 기록, 연결 데이터 보존 |
 | D4 | 제목·학생 지정과 임시/최종 저장 포함 | F05·F07 연관 백엔드도 이번 범위 |
 | D5 | 완료 → 임시저장 되돌리기 없음 | 되돌리기 API를 추가하지 않는 방향. 원문에 개발 해석·확인 필요 주석이 남아 있으므로 해소된 것으로 기록하지 않음 |
-| D6 | 임시저장 삭제는 업로더 본인만 | 원장 역할로 타인 작업 삭제 허용하지 않음 |
+| D6 | 임시저장 삭제는 업로더 본인만 | 구현(A3). 원장 역할로 타인 작업 삭제 허용하지 않음 |
 | D7 | 월별 첨삭 수에 임시저장 포함 | 임시저장+완료, 삭제 제외. 세부 집계 기준 미정 |
 
 전달용 문서는 이번 임시저장 삭제 API의 완료 상태 거부와 완료 결과물 삭제 정책 자체의 미정을 함께 적고 있다. 이번 삭제는 임시저장 전용으로 설계하고 완료 결과물의 별도 삭제 기능은 확정하지 않는다.
@@ -832,7 +853,7 @@ PDF 기능 자체는 요구사항이다. 서버 API를 둘지 프런트에서 �
 | 구분 | 임시저장 | 완료 |
 | --- | --- | --- |
 | 편집 | 가능. 타인 작업 이어쓰기 권한은 미정 | 불가 |
-| 이번 삭제 API | 업로더 본인만 가능 | 거부. 별도 완료 삭제 정책은 미정 |
+| 이번 삭제 API | 업로더 본인만 가능 (`UNSAVED`는 불가) | 거부. 별도 완료 삭제 정책은 미정 |
 | 홈·학생 결과물 | 포함 | 포함 |
 | 교사 이력 | 포함 | 포함 |
 | 교사 월별 첨삭 수 | 포함 | 포함 |
@@ -847,7 +868,7 @@ PDF 기능 자체는 요구사항이다. 서버 API를 둘지 프런트에서 �
 | --- | --- |
 | 신규 API 계약 | 메서드·경로·필드명·타입·페이지네이션·기본값·성공 상태·오류 코드 |
 | 저장 | 초기 미저장 상태·목록 노출, 최종 필수 검증, 저장 요청 구조·버전 일관성, 자동 저장·동시 편집·보관 기간 |
-| 삭제 | 생성 중 삭제, 완료 별도 삭제, 반복 삭제 응답, 삭제 자원 접근 응답, 파일 보관 기간 |
+| 삭제 | 생성 중 삭제 시 AI 작업 처리, 완료 별도 삭제, 저장하지 않은 작업의 만료 정리, 파일 보관 기간. 반복 삭제와 삭제 자원 접근은 404로 확정 |
 | 접근 | 타 교사 임시저장 열람·이어쓰기, 최근 작업의 개인/기관 범위 |
 | 월별 집계 | 저장일 등 기준일, 월 시간대, 업로더/마지막 저장자, 임시→완료 상태 전환 중복 계산 |
 | 학생 | 학년 범위, 이름 수정, 연락처 열람·마스킹·보관/파기. 중복 후보·동명이인 확인 등록, 미배정 필터·기본 정보 PATCH는 5.1에 구현 |
