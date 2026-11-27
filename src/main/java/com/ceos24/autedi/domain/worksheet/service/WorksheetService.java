@@ -17,6 +17,7 @@ import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetFileUrls;
 import com.ceos24.autedi.domain.worksheet.dto.response.WorksheetSettingsResponse;
 import com.ceos24.autedi.domain.worksheet.entity.Worksheet;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetPage;
+import com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus;
 import com.ceos24.autedi.domain.worksheet.entity.WorksheetSetting;
 import com.ceos24.autedi.domain.worksheet.event.WorksheetCreated;
 import com.ceos24.autedi.domain.worksheet.event.WorksheetFileReplaced;
@@ -199,6 +200,20 @@ public class WorksheetService {
         // 버전·감사 시각을 확정한 뒤 응답 ETag를 만든다.
         worksheetRepository.flush();
         return getWorksheetDetail(academyId, worksheetId);
+    }
+
+    /** 임시저장 학습지를 소프트 삭제한다. 업로더 본인만 삭제할 수 있고, 같은 기관 원장도 남의 학습지는 삭제할 수 없다. */
+    @Transactional
+    public void deleteWorksheet(Long userId, Long academyId, Long worksheetId) {
+        Worksheet worksheet = worksheetAccessPolicy.getForWrite(academyId, worksheetId);
+        if (!worksheet.getUser().getId().equals(userId)) {
+            throw new CustomException(ErrorCode.ACCESS_DENIED);
+        }
+        if (worksheet.getSaveStatus() != WorksheetSaveStatus.TEMP_SAVED) {
+            throw new CustomException(ErrorCode.INVALID_WORKSHEET_STATE, "임시저장 상태의 학습지만 삭제할 수 있습니다.");
+        }
+        worksheet.softDelete(LocalDateTime.now());
+        log.info("[worksheet] 임시저장 학습지 삭제 완료: worksheetId={}, userId={}", worksheetId, userId);
     }
 
     @Transactional
