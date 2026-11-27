@@ -10,6 +10,7 @@
 - 기능 기준: [AUTEDI 기능명세서 v2](<C:/study/CEOS/AUTEDI/autedi/docs/AUTEDI 기능명세서 v2.md>)
 - 최초 정리 범위: 기존 API 37개, 앞선 논의의 신규 API 설계안 22개, 조건부 API 설계안 6개. 신규안 중 학생 관리 4개와 학습지 제목·학생 지정 1개는 B2–B4 구현 계약을 추가 반영했다.
 - 확인 방식: 최초 문서는 Controller·Service·DTO·공통 응답·보안 설정의 정적 대조 기준이다. B2–B4 API는 로컬 H2 DB와 실제 JWT 필터를 사용하는 HTTP 통합 테스트로 검증했다. 운영 DB·배포 환경 확인은 포함하지 않는다.
+- A4 추가 반영: 2026-11-27. 학생 메모 목록 조회·등록 2개 API를 5.2에 구현으로 반영했다. 검증은 로컬 H2 HTTP 통합 테스트이며 운영 DB는 포함하지 않는다.
 
 > 2장은 최초 정리한 기존 API의 코드 계약에 B4 상세·검토 응답 확장을 반영했다. 5.1의 학생 API와 5.7의 제목·학생 지정은 B2–B4에서 구현했으며, 나머지 신규안·변경안은 각 항목의 설계 상태를 따른다. 기획 정책의 확정과 API 계약의 확정을 구분한다.
 
@@ -606,16 +607,24 @@ PATCH 예시: 아래 요청은 학년을 바꾸고 반을 미배정으로 만들
 }
 ```
 
-### 5.2 학생 메모 — 신규안 2개 / F09
+### 5.2 학생 메모 — 구현 2개 / F09
 
 권한: 원장·선생님, 같은 기관.
 
 | 메서드 | 기능 | URL | param | 설명 |
 | --- | --- | --- | --- | --- |
-| GET | 학생 메모 목록 조회 | `/students/{studentId}/memos` | Path: `studentId`; Query: `page`, `size` | 메모 ID·내용·작성자 이름·작성일을 최신순 조회 |
-| POST | 학생 메모 등록 | `/students/{studentId}/memos` | Path: `studentId`; Body: `content*` | 빈 내용 금지. 작성자·작성 시각은 서버에서 기록 |
+| GET | 학생 메모 목록 조회 | `/students/{studentId}/memos` | Path: `studentId`; Query: `page`, `size` | **구현(A4)**. 메모 ID·내용·작성자 이름·작성일을 최신순 조회. 200, `PageResponse<StudentMemoResponse>` |
+| POST | 학생 메모 등록 | `/students/{studentId}/memos` | Path: `studentId`; Body: `content*` | **구현(A4)**. 로그인한 사용자를 작성자로 저장. 201, 등록한 `StudentMemoResponse`(`Location` 헤더 없음) |
 
 기존 학습지 `comments`와 다른 자원이다. 메모 수정·삭제는 7장의 조건부 항목이다.
+
+- 한 학생에게 여러 메모를 남길 수 있다. 같은 기관의 원장·선생님은 서로 쓴 메모를 모두 볼 수 있다.
+- 응답 `StudentMemoResponse`는 `memoId`, `content`, `authorName`, `createdAt`이다. 작성자 이름은 조회 시점의 계정 이름이며 퇴사한 작성자의 메모도 그대로 표시한다. 작성자 이메일 등 다른 정보는 내려주지 않는다.
+- 목록은 작성 시각 최신순이고 같으면 메모 ID가 큰 순이다. `page`는 0부터(기본 0), `size`는 기본 20·최대 100이며 잘못된 값은 `400 / COMMON_001`이다. 응답은 선생님 목록과 같은 `PageResponse`(`items`, `total`, `page`, `size`, `totalPages`)이다.
+- `content`는 앞뒤 공백 제거 후 1–1,000자이다. 비었거나 공백뿐이면, 누락·길이 초과·JSON 형식 오류이면 `400 / COMMON_001`이다.
+- 다른 기관 학생과 존재하지 않는 학생은 같은 `404 / STUDENT_001`이다. 메모가 없는 학생은 `200`과 빈 목록이다. 인증이 없으면 `401`이다.
+- 메모 단건 조회, 수정, 삭제는 제공하지 않는다. 수정·삭제 정책이 정해지면 작성자·이력 보존 방식과 함께 추가한다.
+- 운영 DB는 `ddl-auto: validate`이므로 배포 전에 `infra/db/2026-11-27_student_memos.sql`을 적용해야 한다.
 
 ### 5.3 학생 성장 리포트 — 신규안 2개 / F09
 
