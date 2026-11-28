@@ -19,9 +19,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -73,6 +75,12 @@ public class StudentGrowthService {
                         generationId == null ? List.of() : byGeneration.getOrDefault(generationId, List.of()),
                         request.area()));
             } catch (CustomException | IllegalArgumentException | NullPointerException e) {
+                log.warn(
+                        "[growth] 저장본 집계 실패: worksheetId={}, studentId={}, reason={}",
+                        row.getWorksheetId(),
+                        studentId,
+                        e.toString(),
+                        e);
                 points.add(unreadable(row));
             }
         }

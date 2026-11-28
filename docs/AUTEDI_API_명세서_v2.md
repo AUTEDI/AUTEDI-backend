@@ -676,7 +676,9 @@ PATCH 예시: 아래 요청은 학년을 바꾸고 반을 미배정으로 만들
 | `points[].areas[]` | `area`, `analysisStatus`, `errorCount`, `aiErrorCount`, `teacherErrorCount`, `suggestionCount`, `unclassifiedIssueCount`, `errorsPer100Words`, `issueKindCounts` | 영역별 집계. 종류 수치는 해당 대표 영역에 속한 카드의 태그 빈도 |
 | `points[].areas[]` | `representativeFeedback[]` | 오류 피드백 최대 3건. `{source, feedbackId, originalText, content}`. 교사 코멘트의 `originalText=null` |
 
-저장 JSON을 해석할 수 없거나 완료 메타데이터가 불일치하면 그 점을 `aggregationStatus=UNREADABLE_SNAPSHOT`·집계 값 `null`·빈 `areas`로 반환하고 `unavailableResultCount`를 증가시킨다. 다른 정상 점은 유지한다. 최소 2개는 그래프 비교 기준이며 **B10 AI 인사이트 최소 건수 정책과 별개**다. AI 인사이트 API는 아직 구현하지 않았다.
+저장 JSON을 해석할 수 없거나 완료 메타데이터가 불일치하면 그 점을 `aggregationStatus=UNREADABLE_SNAPSHOT`·집계 값 `null`·빈 `areas`로 반환하고 `unavailableResultCount`를 증가시킨다. 다른 정상 점은 유지한다. 집계 실패 시 `[growth]` WARN 로그에 학습지 ID·학생 ID·예외 종류와 메시지·스택 트레이스를 남기며 스냅샷 전문은 기록하지 않는다. 최소 2개는 그래프 비교 기준이며 **B10 AI 인사이트 최소 건수 정책과 별개**다. AI 인사이트 API는 아직 구현하지 않았다.
+
+`period=ALL`은 현재 완료 저장본 JSON과 전사문을 전체 조회하므로 이력이 많은 학생의 요청은 힙 사용량이 커질 수 있다. 전사 IN 조건 500개 분할은 전체 자료를 메모리에 보관하는 문제를 해소하지 않는다. 현재 점을 임의로 자르지 않는 계약을 유지하며, 대량 이력 부하 측정 후 집계 데이터 분리·배치 처리 등으로 개선할 후속 항목이다.
 
 **기존 교사 코멘트 API 확장**
 
@@ -697,6 +699,7 @@ PATCH 예시: 아래 요청은 학년을 바꾸고 반을 미배정으로 만들
 - `SUPPLEMENT`: 같은 학습지의 활성 `correctionId` 필수, `area` 없음, 종류는 생략 또는 `[]`다. 존재하지 않거나 타 학습지·삭제 카드이면 `404 / CORRECTION_001`이다. 보충 설명의 여러 코멘트는 오류를 중복 증가시키지 않는다.
 - 분류 조합·형식 오류는 `400 / COMMON_001`, 오래된 코멘트 ETag는 기존 `412`, 완료 후 변경은 기존 `409 / WORKSHEET_003`이다. 모든 분류 쓰기는 기존 부모 학습지 잠금·기관·READY·임시저장 소유권 검사를 따른다.
 - 신규 저장 행은 `schema_version=2`이며 분류를 JSON의 공개 코멘트와 복원 상태에 함께 저장한다. 기존 v1의 누락 분류는 GENERAL로 조회·복원하며 기존 최종 저장본을 현재 작업 테이블로 보충하거나 재작성하지 않는다.
+- 배포·롤백: 이전 코드는 v2 및 추가 classification 필드를 읽지 못한다. 개발 서버에서 v1 조회·이어쓰기와 v2 임시/최종 저장·조회·복원을 검증한 뒤 운영 배포한다. v2 저장본 생성 후 구버전으로 단순 롤백하면 조회·복원이 실패할 수 있으며, schema_version을 1로만 바꿔도 추가 필드 거부 문제는 남는다. 롤백 후보 코드에도 v1/v2 읽기 호환이 필요하다. 이번 검증은 로컬 H2 기준이며 개발·운영 서버 배포 검증은 별도다.
 
 ### 5.4 학생 결과물 목록 — 구현 1개(B7) / F09
 
