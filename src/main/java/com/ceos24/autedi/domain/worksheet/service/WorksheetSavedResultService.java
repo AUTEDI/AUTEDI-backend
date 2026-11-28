@@ -179,6 +179,11 @@ public class WorksheetSavedResultService {
                 || !currentComments.keySet().containsAll(commentIds)) {
             throw new CustomException(ErrorCode.SAVED_RESULT_CONFLICT);
         }
+        if (snapshot.comments().stream()
+                .anyMatch(edit -> edit.classification().correctionId() != null
+                        && !currentCorrections.containsKey(edit.classification().correctionId()))) {
+            throw new CustomException(ErrorCode.SAVED_RESULT_CONFLICT);
+        }
         try {
             snapshot.corrections().forEach(edit -> edit.restore(currentCorrections.remove(edit.id())));
             snapshot.comments().forEach(edit -> edit.restore(currentComments.remove(edit.id())));
@@ -216,12 +221,7 @@ public class WorksheetSavedResultService {
     }
 
     private WorksheetSavedSnapshot decode(WorksheetSavedResult saved) {
-        try {
-            if (saved.getSchemaVersion() != 1) throw new IllegalArgumentException("지원하지 않는 저장본 버전");
-            return JSON.convertValue(saved.getSnapshot(), WorksheetSavedSnapshot.class);
-        } catch (RuntimeException e) {
-            throw new CustomException(ErrorCode.SAVED_RESULT_UNREADABLE);
-        }
+        return WorksheetSnapshotCodec.decode(saved);
     }
 
     private WorksheetSavedResultResponse response(WorksheetSavedResult saved, WorksheetSavedSnapshot snapshot) {

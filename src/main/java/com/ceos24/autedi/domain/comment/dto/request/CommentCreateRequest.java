@@ -1,5 +1,6 @@
 package com.ceos24.autedi.domain.comment.dto.request;
 
+import com.ceos24.autedi.domain.comment.entity.CommentClassification;
 import com.ceos24.autedi.domain.comment.entity.CommentColor;
 import com.ceos24.autedi.domain.comment.entity.HighlightType;
 import com.ceos24.autedi.domain.correction.entity.RegionPayload;
@@ -23,7 +24,13 @@ public record CommentCreateRequest(
                 List<RegionPayload> regions,
         @Schema(description = "교사 코멘트 내용", example = "단수 주어(He) 다음에는 3인칭 단수 동사 goes를 사용해야 합니다.")
                 @NotBlank(message = "코멘트 내용을 입력해 주세요.")
-                String content) {
+                String content,
+        @Schema(description = "생략·null이면 GENERAL. 분류를 지정한 오류·제안만 성장 집계에 반영") CommentClassification classification) {
+    public CommentCreateRequest(
+            Long pageId, HighlightType highlightType, CommentColor color, List<RegionPayload> regions, String content) {
+        this(pageId, highlightType, color, regions, content, null);
+    }
+
     public CommentCreateRequest(Long pageId, HighlightType highlightType, List<RegionPayload> regions, String content) {
         this(pageId, highlightType, CommentColor.BLUE, regions, content);
     }

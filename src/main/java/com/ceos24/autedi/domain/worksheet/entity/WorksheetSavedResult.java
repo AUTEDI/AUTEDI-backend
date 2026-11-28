@@ -79,7 +79,7 @@ public class WorksheetSavedResult extends BaseTimeEntity {
             WorksheetGeneration generation, User savedBy, LocalDateTime savedAt, Map<String, Object> snapshot) {
         if (savedBy == null || savedAt == null || snapshot == null) throw new IllegalArgumentException("저장본이 필요합니다.");
         this.revision++;
-        this.schemaVersion = 1;
+        this.schemaVersion = 2;
         this.sourceFileHash = worksheet.getFileHash();
         this.sourceGeneration = generation;
         this.savedBy = savedBy;

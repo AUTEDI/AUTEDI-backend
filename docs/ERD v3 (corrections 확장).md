@@ -6,6 +6,7 @@
     2. **학습지/AI 첨삭 도메인**: 학습지 업로드 / 첨삭 설정(4개 영역 · 2개 수준) / AI 첨삭 생성 / 첨삭 검토 및 수정 / 교사 코멘트 API (총 19개 엔드포인트)
     3. **학생/학습지 공통 모델 (B1)**: 학생 기본 정보, 학습지 제목·학생 연결·업무 저장 상태·저장 시각·저장자·삭제 시각 (구현된 엔티티 및 변경 SQL 기준)
     4. **마지막 저장본 (B5–B6)**: 학습지별 마지막 명시적 임시·최종 저장본 한 개, 저장 버전·저장자·원본 연결 및 편집 복원 데이터
+    5. **피드백 분류 및 성장 집계 (B8)**: 교사 코멘트의 종류·대표 영역·오류 종류·보충 대상 카드 연결, 저장 JSON v1/v2 호환
 
 ---
 
@@ -38,6 +39,7 @@ erDiagram
 
     worksheet_pages ||--o{ corrections : "1:N (페이지별 첨삭)"
     worksheet_pages ||--o{ comments : "1:N (페이지별 코멘트)"
+    corrections |o--o{ comments : "1:N (보충 설명 대상, correction_id NULL 허용)"
     worksheet_generations ||--o{ corrections : "1:N (생성 작업 결과)"
 
     academies {
@@ -190,6 +192,10 @@ erDiagram
         VARCHAR highlight_type
         JSON regions
         TEXT content
+        VARCHAR feedback_type "CORRECTION / SUGGESTION / GENERAL / SUPPLEMENT"
+        VARCHAR area "대표 영역, 일반·보충 설명은 NULL"
+        JSON issue_kinds "일반 오류 종류 배열"
+        BIGINT correction_id FK
         INT version "If-Match 논의 대상"
         DATETIME deleted_at
         DATETIME created_at
@@ -431,6 +437,10 @@ erDiagram
 | `highlight_type` | `VARCHAR(20)` | X | - | `CHECK (highlight_type IN ('HIGHLIGHT', 'UNDERLINE'))` | 강조 방식 (`HIGHLIGHT`: 형광펜, `UNDERLINE`: 밑줄) — #18 수정 시 변경 불가 |
 | `regions` | `JSON` | X | - | - | 선택한 원문 강조 영역 좌표 배열 (`regions`) — #18 수정 시 변경 불가 |
 | `content` | `TEXT` | X | - | `CHECK (CHAR_LENGTH(TRIM(content)) > 0)` | 코멘트 내용 (#17 공백만 있는 문자열 저장 불가 조건 반영) |
+| `feedback_type` | `VARCHAR(20)` | X | `GENERAL` | 애플리케이션 분류 검증 | **B8 추가** — 새 오류 `CORRECTION`, 개선 제안 `SUGGESTION`, 일반 코멘트 `GENERAL`, 기존 첨삭 보충 설명 `SUPPLEMENT`. 기존 코멘트는 GENERAL 유지 |
+| `area` | `VARCHAR(50)` | O | `NULL` | 애플리케이션 검증 | **B8 추가** — 오류·제안의 대표 영역 1개. 일반·보충 설명에는 지정 불가. 문법의 과거 별칭은 표준값으로 정규화 |
+| `issue_kinds` | `JSON` | O | `NULL` | 애플리케이션 검증 | **B8 추가** — 오류·제안은 중복·null 없는 일반 종류 배열 필수. 대표 영역과 대응하는 종류 최소 1개 필요. 일반·보충 설명의 공개 응답은 `[]`; 기존 DB NULL 허용 |
+| `correction_id` | `BIGINT` | O | `NULL` | **FK** (`corrections.id`, `fk_comments_correction`), `INDEX` (`idx_comments_correction`) | **B8 추가** — SUPPLEMENT만 같은 학습지의 활성 카드 연결 필수. 존재·소속·활성은 서비스, 물리 참조는 변경 SQL의 FK로 검증. 오류 수 중복 증가 방지 |
 | `version` | `INT UNSIGNED` | X | `1` | *(팀 논의 대상)* | `If-Match` 헤더 검증용 버전 (제거 합의 시 생략 가능) |
 | `deleted_at` | `DATETIME(3)` | O | `NULL` | - | 삭제 일시 (`NULL`이면 활성, 값이 있으면 삭제됨 — #15 목록 제외 및 #16 조회 시 404 반환) |
 | `created_at` | `DATETIME(3)` | X | `CURRENT_TIMESTAMP(3)` | - | 작성 일시 |
@@ -473,12 +483,12 @@ erDiagram
 | --- | --- | --- | --- | --- | --- |
 | `worksheet_id` | `BIGINT` | X | - | **PK**, **FK** (`worksheets.id`, `fk_saved_results_worksheet`) | 학습지별 최신 저장본 한 개. 첫 임시저장 또는 직접 최종 저장에서 생성 |
 | `revision` | `BIGINT` | X | - | 애플리케이션 관리 | 첫 저장 1, 임시저장·최초 최종 저장마다 1 증가. 완료 재요청은 유지. 과거 저장본 이력은 보관하지 않음 |
-| `schema_version` | `INT` | X | `1` (SQL) | 애플리케이션 관리 | JSON 저장 구조 버전. 현재 1만 읽기·복원 지원 |
+| `schema_version` | `INT` | X | `1` (기존 SQL) | 애플리케이션 관리 | JSON 저장 구조 버전. B8부터 새 저장은 2, 기존 1도 읽기·복원 지원. v1에 없는 코멘트 분류는 GENERAL로 처리 |
 | `source_file_hash` | `VARCHAR(64)` | X | - | 애플리케이션 검증 | 저장 당시 원본 파일 해시. 현재 원본과 다르면 조회·복원 거부 |
 | `source_generation_id` | `BIGINT` | O | `NULL` | **FK** (`worksheet_generations.id`, `fk_saved_results_generation`), `INDEX` (`idx_saved_results_generation`) | 저장 당시 최신 AI 작업. B5 기존 READY 자료 호환을 위해 NULL 허용. B6 최종 저장은 현재 파일에 대한 최신 SUCCEEDED 작업 필수 |
 | `saved_by` | `BIGINT` | X | - | **FK** (`users.id`, `fk_saved_results_user`), `INDEX` (`idx_saved_results_saved_by`) | 명시적으로 저장한 업로더. 원래 `worksheets.user_id`는 유지 |
 | `saved_at` | `DATETIME(6)` | X | - | 애플리케이션 기록 | 마지막 명시적 저장 시각. 이어쓰기·개별 편집·저장본 조회로 갱신하지 않음 |
-| `snapshot` | `JSON` | X | - | 애플리케이션 직렬화·버전 검증 | 저장 당시 전체 검토 응답과 모든 첨삭·코멘트의 복원용 편집 값. 삭제 행도 포함. 작업본 변경과 분리 |
+| `snapshot` | `JSON` | X | - | 애플리케이션 직렬화·버전 검증 | 저장 당시 전체 검토 응답과 모든 첨삭·코멘트의 복원용 편집 값. 삭제 행도 포함. B8 v2에는 코멘트 classification 포함. 작업본 변경과 분리하며 성장 집계도 최종 공개 review 사용 |
 | `version` | `INT` | X | `0` (SQL) | JPA `@Version` | 저장본 행의 동시 변경 감지. `revision`과 별개 |
 | `created_at` | `DATETIME(6)` | X | - | JPA 감사 (`@CreatedDate`) | 저장본 행 최초 생성 시각 |
 | `updated_at` | `DATETIME(6)` | X | - | JPA 감사 (`@LastModifiedDate`) | 최신 저장본 교체 시각 |
@@ -500,3 +510,4 @@ erDiagram
 - B5에서 ⑫ `worksheet_saved_results`를 추가했다. 기존 테이블 컬럼 변경은 없으며, `worksheets`의 기존 업무 저장 필드를 실제 저장 시 갱신한다. [B5 DB 변경 SQL](../infra/db/2026-11-27_worksheet_saved_results.sql)은 운영 DB에 아직 적용하지 않았다.
 - B6는 B1의 `save_status`, `first_saved_at`, `last_saved_at`, `completed_at`, `last_saved_by`와 B5 저장본 테이블을 재사용한다. 기존 테이블·컬럼·관계·JSON 구조 버전 변경 및 신규 DDL은 없다. 임시저장 없는 완료는 저장본을 생성하고, 임시저장 후 완료는 같은 행을 최종 내용으로 갱신한다.
 - B7 학생 결과물·홈 최근 작업 목록은 기존 학습지·학생·업로더 필드와 저장본 존재 여부를 조회한다. 테이블·컬럼·관계·인덱스·JSON 구조 변경 및 신규 DDL은 없다. 완료 저장본의 기관 내 읽기 권한 확장만 관련 설명에 반영했다.
+- B8은 `comments`에 분류 관련 4개 컬럼·보충 대상 FK·인덱스를 추가했다. [B8 DB 변경 SQL](../infra/db/2026-11-27_comment_feedback_classification.sql)은 운영 DB에 아직 적용하지 않았다. 새 저장 JSON은 코멘트 분류를 포함하는 v2이고 v1 호환을 유지한다. 성장 전용 테이블·단어 수 컬럼은 추가하지 않고, 완료 스냅샷과 연결된 불변 전사문에서 조회 시 계산한다.

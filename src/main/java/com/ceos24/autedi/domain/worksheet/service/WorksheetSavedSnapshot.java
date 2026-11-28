@@ -1,6 +1,7 @@
 package com.ceos24.autedi.domain.worksheet.service;
 
 import com.ceos24.autedi.domain.comment.entity.Comment;
+import com.ceos24.autedi.domain.comment.entity.CommentClassification;
 import com.ceos24.autedi.domain.comment.entity.CommentColor;
 import com.ceos24.autedi.domain.correction.entity.Correction;
 import com.ceos24.autedi.domain.correction.entity.CorrectionStatus;
@@ -57,19 +58,25 @@ public record WorksheetSavedSnapshot(
         }
     }
 
-    public record CommentEdit(Long id, String content, CommentColor color, LocalDateTime deletedAt) {
+    public record CommentEdit(
+            Long id,
+            String content,
+            CommentColor color,
+            LocalDateTime deletedAt,
+            CommentClassification classification) {
         public CommentEdit {
             Objects.requireNonNull(id);
             Objects.requireNonNull(content);
             Objects.requireNonNull(color);
+            classification = classification == null ? CommentClassification.general() : classification;
         }
 
         public static CommentEdit from(Comment c) {
-            return new CommentEdit(c.getId(), c.getContent(), c.getColor(), c.getDeletedAt());
+            return new CommentEdit(c.getId(), c.getContent(), c.getColor(), c.getDeletedAt(), c.getClassification());
         }
 
         public void restore(Comment c) {
-            c.restoreSavedEdit(content, color, deletedAt);
+            c.restoreSavedEdit(content, color, deletedAt, classification);
         }
     }
 }
