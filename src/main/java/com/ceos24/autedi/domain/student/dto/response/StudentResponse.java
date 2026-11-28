@@ -10,7 +10,9 @@ public record StudentResponse(
         @Schema(description = "학년", example = "초등 3") String grade,
         @Schema(description = "수강반. 미배정이면 null", example = "오후반") String className,
         @Schema(description = "학생 연락처. 미입력이면 null", example = "010-1234-5678") String studentPhone,
-        @Schema(description = "보호자 연락처. 미입력이면 null", example = "01012345678") String guardianPhone) {
+        @Schema(description = "보호자 연락처. 미입력이면 null", example = "01012345678") String guardianPhone,
+        @Schema(description = "학원 설정의 학년 ID. 미이관 구 데이터는 null") Long gradeId,
+        @Schema(description = "학원 설정의 반 ID. 미배정·미이관이면 null") Long classId) {
 
     public static StudentResponse from(Student student) {
         return new StudentResponse(
@@ -19,6 +21,8 @@ public record StudentResponse(
                 student.getGrade(),
                 student.getClassName(),
                 student.getStudentPhone(),
-                student.getGuardianPhone());
+                student.getGuardianPhone(),
+                student.getGradeId(),
+                student.getClassId());
     }
 }

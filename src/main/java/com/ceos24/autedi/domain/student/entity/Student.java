@@ -1,6 +1,8 @@
 package com.ceos24.autedi.domain.student.entity;
 
 import com.ceos24.autedi.domain.academy.entity.Academy;
+import com.ceos24.autedi.domain.academy.entity.AcademyClass;
+import com.ceos24.autedi.domain.academy.entity.AcademyGrade;
 import com.ceos24.autedi.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,7 +22,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "students", indexes = @Index(name = "idx_students_academy_name_id", columnList = "academy_id,name,id"))
+@Table(
+        name = "students",
+        indexes = {
+            @Index(name = "idx_students_academy_name_id", columnList = "academy_id,name,id"),
+            @Index(name = "idx_students_grade_id", columnList = "grade_id"),
+            @Index(name = "idx_students_class_id", columnList = "class_id")
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Student extends BaseTimeEntity {
@@ -36,12 +44,20 @@ public class Student extends BaseTimeEntity {
     @Column(name = "name", length = 50, nullable = false)
     private String name;
 
-    // 학년 허용값은 후속 API 정책에서 정한다. 지금은 특정 학교급/학년 enum으로 제한하지 않는다.
+    // 기존 데이터 이관 및 과거 스키마 호환용 표시값. 신규 API는 학원 설정 ID로 선택한다.
     @Column(name = "grade", length = 50, nullable = false)
     private String grade;
 
     @Column(name = "class_name", length = 100)
     private String className;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grade_id", foreignKey = @ForeignKey(name = "fk_students_grade"))
+    private AcademyGrade gradeOption;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_id", foreignKey = @ForeignKey(name = "fk_students_class"))
+    private AcademyClass schoolClass;
 
     @Column(name = "student_phone", length = 20)
     private String studentPhone;
@@ -77,6 +93,35 @@ public class Student extends BaseTimeEntity {
         this.className = checkedClassName;
         this.studentPhone = checkedStudentPhone;
         this.guardianPhone = checkedGuardianPhone;
+        this.gradeOption = null;
+        this.schoolClass = null;
+    }
+
+    public void select(AcademyGrade grade, AcademyClass schoolClass) {
+        if (grade == null
+                || !isInAcademy(grade.getAcademy())
+                || (schoolClass != null && !isInAcademy(schoolClass.getAcademy())))
+            throw new IllegalArgumentException("같은 학원의 학년·반만 선택할 수 있습니다.");
+        this.gradeOption = grade;
+        this.schoolClass = schoolClass;
+        this.grade = grade.getName();
+        this.className = schoolClass == null ? null : schoolClass.getName();
+    }
+
+    public String getGrade() {
+        return gradeOption == null ? grade : gradeOption.getName();
+    }
+
+    public String getClassName() {
+        return schoolClass == null ? className : schoolClass.getName();
+    }
+
+    public Long getGradeId() {
+        return gradeOption == null ? null : gradeOption.getId();
+    }
+
+    public Long getClassId() {
+        return schoolClass == null ? null : schoolClass.getId();
     }
 
     /** 아직 저장되지 않은 서로 다른 기관을 id=null이라는 이유로 같은 기관으로 취급하지 않는다. */

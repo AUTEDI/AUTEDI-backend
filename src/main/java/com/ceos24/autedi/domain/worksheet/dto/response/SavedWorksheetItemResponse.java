@@ -33,7 +33,9 @@ public record SavedWorksheetItemResponse(
                         row.studentId(),
                         row.studentName(),
                         row.grade(),
-                        className == null || className.isBlank() ? null : className),
+                        className == null || className.isBlank() ? null : className,
+                        row.gradeId(),
+                        row.classId()),
                 new TeacherSummary(row.teacherId(), row.teacherName()),
                 ready,
                 ready

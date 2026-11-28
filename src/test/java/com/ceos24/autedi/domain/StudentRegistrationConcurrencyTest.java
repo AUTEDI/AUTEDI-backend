@@ -50,6 +50,15 @@ class StudentRegistrationConcurrencyTest {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    private com.ceos24.autedi.domain.academy.service.AcademySettingsService settings;
+
+    @Autowired
+    private com.ceos24.autedi.domain.academy.repository.AcademyGradeRepository gradeOptions;
+
+    @Autowired
+    private com.ceos24.autedi.domain.academy.repository.AcademyClassRepository classOptions;
+
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
@@ -72,6 +81,8 @@ class StudentRegistrationConcurrencyTest {
         String token = "Bearer "
                 + jwtTokenProvider.createAccessToken(
                         teacher.getId(), academy.getId(), teacher.getEmail(), Role.TEACHER.name());
+        var selection = new AcademySelectionFixture(settings, academy.getId());
+        String selectedBody = selection.request("{\"name\":\"김학생\",\"grade\":\"초등 3\"}");
         ExecutorService callers = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -85,7 +96,7 @@ class StudentRegistrationConcurrencyTest {
                 return mockMvc.perform(post("/api/v1/students")
                                 .header(HttpHeaders.AUTHORIZATION, token)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"name\":\"김학생\",\"grade\":\"초등 3\"}"))
+                                .content(selectedBody))
                         .andReturn();
             };
             Future<MvcResult> first = callers.submit(register);
@@ -114,7 +125,17 @@ class StudentRegistrationConcurrencyTest {
             assertThat(callers.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
             studentRepository.deleteAll(studentRepository.findByAcademyIdAndNameOrderByIdAsc(academy.getId(), "김학생"));
             userRepository.deleteById(teacher.getId());
+            deleteSettings(academy.getId());
             academyRepository.deleteById(academy.getId());
         }
+    }
+
+    private void deleteSettings(Long academyId) {
+        new org.springframework.transaction.support.TransactionTemplate(
+                        context.getBean(org.springframework.transaction.PlatformTransactionManager.class))
+                .executeWithoutResult(tx -> {
+                    classOptions.deleteByAcademyId(academyId);
+                    gradeOptions.deleteByAcademyId(academyId);
+                });
     }
 }

@@ -66,6 +66,11 @@ class StudentControllerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
+    @Autowired
+    private com.ceos24.autedi.domain.academy.service.AcademySettingsService settings;
+
+    private AcademySelectionFixture selection;
+
     private MockMvc mockMvc;
     private Academy academy;
     private String teacherToken;
@@ -78,6 +83,7 @@ class StudentControllerTest {
                 .build();
         academy = academyRepository.saveAndFlush(
                 Academy.builder().name("학생 API 테스트 기관").build());
+        selection = new AcademySelectionFixture(settings, academy.getId());
         teacherToken = createToken(Role.TEACHER);
         directorToken = createToken(Role.DIRECTOR);
     }
@@ -192,7 +198,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(selection.request(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
@@ -229,7 +235,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .content(selection.request("{}")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
         assertThat(studentRepository.count()).isEqualTo(previousCount);
@@ -246,19 +252,16 @@ class StudentControllerTest {
     }
 
     @Test
-    @DisplayName("Body에 다른 기관 ID를 넣어도 등록 기관은 로그인 정보로 결정한다")
+    @DisplayName("등록 요청에 기관 ID를 지정하면 400이며 학생을 만들지 않는다")
     void cannotChooseAnotherAcademyInRequestBody() throws Exception {
-        Academy other =
-                academyRepository.saveAndFlush(Academy.builder().name("다른 기관").build());
-        MvcResult result = create(Map.of("name", "김학생", "grade", "초등 3", "academyId", other.getId()), teacherToken);
-        long studentId = resultBody(result).get("studentId").asLong();
-
-        entityManager.flush();
-        entityManager.clear();
-        Student saved = studentRepository.findById(studentId).orElseThrow();
-        assertThat(saved.getAcademy().getId()).isEqualTo(academy.getId());
-        assertThat(studentRepository.findByIdAndAcademyId(studentId, other.getId()))
-                .isEmpty();
+        long before = studentRepository.count();
+        mockMvc.perform(post("/api/v1/students")
+                        .header(HttpHeaders.AUTHORIZATION, teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                selection.request(Map.of("name", "김학생", "grade", "초등 3", "academyId", Long.MAX_VALUE))))
+                .andExpect(status().isBadRequest());
+        assertThat(studentRepository.count()).isEqualTo(before);
     }
 
     @Test
@@ -289,7 +292,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, tokenOf(role))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("name", "  김학생  ", "grade", "초등 4"))))
+                        .content(selection.request(Map.of("name", "  김학생  ", "grade", "초등 4"))))
                 .andExpect(status().isConflict())
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
                 .andExpect(jsonPath("$.isSuccess").value(false))
@@ -326,7 +329,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(selection.request(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STUDENT_002"));
         assertThat(studentRepository.count()).isEqualTo(previousCount);
@@ -350,8 +353,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                Map.of("name", "김학생", "grade", "중등 1", "className", "저녁반"))))
+                        .content(selection.request(Map.of("name", "김학생", "grade", "중등 1", "className", "저녁반"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.candidates.length()").value(2))
                 .andExpect(jsonPath("$.error.candidates[0].studentId").value(first.getId()))
@@ -410,7 +412,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(selection.request(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.candidates[0].studentPhoneMatched").value(studentMatched))
                 .andExpect(
@@ -457,7 +459,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
+                        .content(selection.request(Map.of(
                                 "name", "김학생", "grade", "초등 3", "studentPhone", "wrong", "confirmDuplicate", true))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
@@ -521,7 +523,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content(selection.request(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
     }
@@ -532,7 +534,7 @@ class StudentControllerTest {
         long previousCount = studentRepository.count();
         mockMvc.perform(post("/api/v1/students")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"김학생\",\"grade\":\"초등 3\"}"))
+                        .content(selection.request("{\"name\":\"김학생\",\"grade\":\"초등 3\"}")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_001"));
         mockMvc.perform(get("/api/v1/students/{studentId}", Long.MAX_VALUE))
@@ -551,7 +553,7 @@ class StudentControllerTest {
         mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"김학생\",\"grade\":\"초등 3\"}"))
+                        .content(selection.request("{\"name\":\"김학생\",\"grade\":\"초등 3\"}")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("AUTH_002"));
         mockMvc.perform(get("/api/v1/students/{studentId}", Long.MAX_VALUE).header(HttpHeaders.AUTHORIZATION, token))
@@ -564,7 +566,7 @@ class StudentControllerTest {
         return mockMvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(selection.request(request)))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists(HttpHeaders.LOCATION))
                 .andExpect(jsonPath("$.isSuccess").value(true))

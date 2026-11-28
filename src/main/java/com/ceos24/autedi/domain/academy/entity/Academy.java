@@ -35,6 +35,10 @@ public class Academy extends BaseTimeEntity {
     @Column(name = "plan_expires_at")
     private LocalDateTime planExpiresAt;
 
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Column(name = "settings_initialized", nullable = false)
+    private boolean settingsInitialized;
+
     @Builder
     public Academy(String name, SubscriptionStatus subscriptionStatus, LocalDateTime planExpiresAt) {
         this.name = name;
@@ -44,6 +48,10 @@ public class Academy extends BaseTimeEntity {
 
     public void updateName(String name) {
         this.name = name;
+    }
+
+    public void markSettingsInitialized() {
+        this.settingsInitialized = true;
     }
 
     public boolean isActive() {

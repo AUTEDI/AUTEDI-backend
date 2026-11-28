@@ -8,6 +8,7 @@
     4. **마지막 저장본 (B5–B6)**: 학습지별 마지막 명시적 임시·최종 저장본 한 개, 저장 버전·저장자·원본 연결 및 편집 복원 데이터
     5. **피드백 분류 및 성장 집계 (B8)**: 교사 코멘트의 종류·대표 영역·오류 종류·보충 대상 카드 연결, 저장 JSON v1/v2 호환
     6. **수동 AI 인사이트 (B10·B11)**: 학생별 최신 인사이트·수업 추천 한 개, 입력 식별값·후보 근거·생성자·분석 범위 보관
+    7. **학원 학년·반 설정**: 학원별 기본·추가 학년 사용 여부, 반 목록 관리, 학생의 학년/반 ID 연결 및 기존 데이터 이관
 
 ---
 
@@ -19,6 +20,10 @@ erDiagram
     academies ||--o{ user_invitations : "1:N (학원 초대장)"
     academies ||--o{ worksheets : "1:N (학원 소유 학습지)"
     academies ||--o{ students : "1:N (소속 학생)"
+    academies ||--o{ academy_grades : "1:N (사용 학년 설정)"
+    academies ||--o{ academy_classes : "1:N (학원 반)"
+    academy_grades |o--o{ students : "1:N (학년 선택, 이관 전 NULL 허용)"
+    academy_classes |o--o{ students : "1:N (반 선택, 미배정 NULL)"
 
     users ||--o{ user_invitations : "1:N (원장이 초대 발송)"
     users ||--o{ refresh_tokens : "1:N (로그인 토큰)"
@@ -50,6 +55,7 @@ erDiagram
         VARCHAR name
         VARCHAR subscription_status
         DATETIME plan_expires_at
+        BOOLEAN settings_initialized
         DATETIME created_at
         DATETIME updated_at
     }
@@ -224,12 +230,32 @@ erDiagram
         DATETIME updated_at
     }
 
+    academy_grades {
+        BIGINT id PK
+        BIGINT academy_id FK
+        VARCHAR name
+        VARCHAR grade_group "ELEMENTARY / MIDDLE / CUSTOM"
+        BOOLEAN enabled
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    academy_classes {
+        BIGINT id PK
+        BIGINT academy_id FK
+        VARCHAR name
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
     students {
         BIGINT id PK
         BIGINT academy_id FK
         VARCHAR name
         VARCHAR grade
         VARCHAR class_name
+        BIGINT grade_id FK
+        BIGINT class_id FK
         VARCHAR student_phone
         VARCHAR guardian_phone
         INT version "낙관적 락 버전"
@@ -253,6 +279,7 @@ erDiagram
 | `name` | `VARCHAR(100)` | X | - | - | 학원명 |
 | `subscription_status` | `VARCHAR(20)` | X | `'ACTIVE'` | `INDEX` | 유료 서비스 상태 (`ACTIVE`: 이용중, `EXPIRED`: 만료, `SUSPENDED`: 정지) |
 | `plan_expires_at` | `DATETIME(3)` | O | `NULL` | - | 유료 이용권 만료 일시 |
+| `settings_initialized` | `BOOLEAN` | X | `FALSE` | 애플리케이션 관리 | 기본 학년·기존 학생 학년/반의 일회성 연결 완료 여부 |
 | `created_at` | `DATETIME(3)` | X | `CURRENT_TIMESTAMP(3)` | - | 등록 일시 |
 | `updated_at` | `DATETIME(3)` | X | `CURRENT_TIMESTAMP(3)` | `ON UPDATE` | 수정 일시 |
 
@@ -482,8 +509,10 @@ erDiagram
 | `id` | `BIGINT` | X | `AUTO_INCREMENT` | **PK** | 학생 고유 ID (`studentId`) |
 | `academy_id` | `BIGINT` | X | - | **FK** (`academies.id`, `fk_students_academy`), `INDEX(academy_id, name, id)` (`idx_students_academy_name_id`) | 소속 학원 ID. 기관 범위 조회에 사용 |
 | `name` | `VARCHAR(50)` | X | - | 애플리케이션 검증 (공백만 입력 불가·앞뒤 공백 제거·최대 50자) | 학생 이름. 이름 자체에 UNIQUE 제약 없음 |
-| `grade` | `VARCHAR(50)` | X | - | 애플리케이션 검증 (공백만 입력 불가·앞뒤 공백 제거·최대 50자) | 학년. 현재 문자열로 저장하며 특정 학년 enum으로 제한하지 않음 |
-| `class_name` | `VARCHAR(100)` | O | `NULL` | 애플리케이션 검증 (최대 100자) | 반 이름. 선택 입력 |
+| `grade` | `VARCHAR(50)` | X | - | 애플리케이션 검증 (공백만 입력 불가·앞뒤 공백 제거·최대 50자) | 기존 데이터 이관/호환용 표시값. 현재 API의 학년은 grade_id의 설정 이름으로 표시 |
+| `class_name` | `VARCHAR(100)` | O | `NULL` | 애플리케이션 검증 (최대 100자) | 기존 데이터 이관/호환용 표시값. 현재 API는 class_id로 반을 선택하고 현재 설정 이름으로 표시 |
+| `grade_id` | `BIGINT` | O | `NULL` | **FK** (`academy_grades.id`, `fk_students_grade`), `INDEX` (`idx_students_grade_id`) | 학원 설정의 학년. 기존 데이터 이관 전 NULL 허용, 신규 API 등록은 필수 |
+| `class_id` | `BIGINT` | O | `NULL` | **FK** (`academy_classes.id`, `fk_students_class`), `INDEX` (`idx_students_class_id`) | 학원 설정의 반. 미배정은 NULL, 학생이 배정된 반 삭제 차단 |
 | `student_phone` | `VARCHAR(20)` | O | `NULL` | 애플리케이션 검증 (최대 20자) | 학생 연락처. 선택 입력. 현재 모델은 길이만 검증 |
 | `guardian_phone` | `VARCHAR(20)` | O | `NULL` | 애플리케이션 검증 (최대 20자) | 보호자 연락처. 선택 입력. 현재 모델은 길이만 검증 |
 | `version` | `INT` | X | `0` | JPA `@Version` | 동시 수정 충돌을 감지하는 낙관적 락 버전 |
@@ -494,7 +523,7 @@ erDiagram
 
 ---
 
-## 5. 마지막 저장본·학생 인사이트 테이블 명세
+## 5. 마지막 저장본·학생 인사이트·학원 설정 테이블 명세
 
 ### ⑫ `worksheet_saved_results` (학습지별 마지막 명시적 저장본)
 
@@ -546,6 +575,41 @@ erDiagram
 
 - 생성·AI 호출은 DB 트랜잭션 밖에서 실행한다. 저장 시 학생 행을 잠그고 최신 후보 식별값을 재검사하며, 분석 중 입력이 바뀌면 409로 새 결과 저장을 거부한다.
 - 기존 학생·학습지·첨삭·저장본 컬럼은 변경하지 않는다. FK에 물리 삭제 cascade는 추가하지 않는다. [DB 변경 SQL](../infra/db/2026-11-28_student_insights.sql)은 운영 DB에 아직 적용하지 않았다.
+
+---
+
+### ⑭ `academy_grades` (학원별 학년 선택지)
+
+> **역할**: 학원별 기본·추가 학년 및 사용 여부 관리. 기본 초1~초6·중1~중3은 새 학원에서 사용 해제 상태, 추가 학년은 생성 즉시 사용한다.
+
+| 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | X | `AUTO_INCREMENT` | **PK** | 학년 선택 ID (`gradeId`) |
+| `academy_id` | `BIGINT` | X | - | **FK** (`academies.id`, `fk_academy_grades_academy`) | 소속 학원 |
+| `name` | `VARCHAR(50)` | X | - | **UNIQUE** (`academy_id, name`, `uk_academy_grades_name`) | 공백 제거 후 1~50자. 기존 학년 이름도 보존 |
+| `grade_group` | `VARCHAR(20)` | X | - | enum 문자열 | `ELEMENTARY` / `MIDDLE` / `CUSTOM` |
+| `enabled` | `BOOLEAN` | X | - | 애플리케이션 지정 | 신규 학생 배정 허용 여부. 해제해도 기존 학생 배정 유지 |
+| `created_at` | `DATETIME(6)` | X | - | JPA 감사 | 생성 시각 |
+| `updated_at` | `DATETIME(6)` | X | - | JPA 감사 | 변경 시각 |
+
+---
+
+### ⑮ `academy_classes` (학원별 반 목록)
+
+> **역할**: 원장이 관리하는 반 선택지. 학생은 반 ID로 연결하며 반 이름 변경 시 현재 학생 정보에 반영한다.
+
+| 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `BIGINT` | X | `AUTO_INCREMENT` | **PK** | 반 선택 ID (`classId`) |
+| `academy_id` | `BIGINT` | X | - | **FK** (`academies.id`, `fk_academy_classes_academy`) | 소속 학원 |
+| `name` | `VARCHAR(100)` | X | - | **UNIQUE** (`academy_id, name`, `uk_academy_classes_name`) | 공백 제거 후 1~100자 |
+| `created_at` | `DATETIME(6)` | X | - | JPA 감사 | 생성 시각 |
+| `updated_at` | `DATETIME(6)` | X | - | JPA 감사 | 변경 시각 |
+
+- 원장만 설정 변경, 같은 학원 원장·선생님이 선택지를 조회한다. 학생의 학년·반과 소속 기관의 일치는 애플리케이션에서 검증한다.
+- 학원 행 잠금으로 학생 배정·학년 사용 변경·반 생성/수정/삭제를 직렬화한다. 배정 학생이 있는 반은 409로 삭제를 차단한다.
+- 서버 시작 및 최초 접근에서 `settings_initialized=false`인 학원만 초기화한다. 기본 학년 생성 후 기존 학년·반의 서로 다른 이름을 등록하고 학생의 ID를 연결한다. 원래 문자열·학생 번호·연락처·첨삭 snapshot은 보존하며, 임의의 학년 이름 통합은 하지 않는다.
+- 신규 구조는 `infra/db/2026-11-28_academy_settings.sql`과 일치한다. FK에 물리 삭제 cascade를 추가하지 않는다.
 
 ---
 
