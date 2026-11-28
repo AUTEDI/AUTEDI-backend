@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 
@@ -13,13 +14,13 @@ import lombok.Getter;
 @Schema(description = "학생 기본 정보 부분 수정. 생략한 필드는 유지하고 선택 필드의 null·빈 값은 삭제합니다.")
 public class StudentUpdateRequest {
 
-    @Schema(description = "변경할 학년. 전달 시 null·공백 불가", example = "초등 4")
-    @Size(max = 50, message = "학년은 50자 이하여야 합니다.")
-    private String grade;
+    @Schema(description = "변경할 학년 ID. 전달 시 null 불가", example = "4")
+    @Positive
+    private Long gradeId;
 
-    @Schema(description = "변경할 반. null·빈 값이면 미배정", example = "오전반")
-    @Size(max = 100, message = "수강반은 100자 이하여야 합니다.")
-    private String className;
+    @Schema(description = "변경할 반 ID. null이면 미배정", example = "1")
+    @Positive
+    private Long classId;
 
     @Schema(description = "변경할 학생 연락처. null·빈 값이면 삭제", example = "010-1234-5678")
     @Size(max = 20, message = "학생 연락처는 20자 이하여야 합니다.")
@@ -37,11 +38,11 @@ public class StudentUpdateRequest {
 
     @JsonIgnore
     @Schema(hidden = true)
-    private boolean gradeProvided;
+    private boolean gradeIdProvided;
 
     @JsonIgnore
     @Schema(hidden = true)
-    private boolean classNameProvided;
+    private boolean classIdProvided;
 
     @JsonIgnore
     @Schema(hidden = true)
@@ -51,16 +52,16 @@ public class StudentUpdateRequest {
     @Schema(hidden = true)
     private boolean guardianPhoneProvided;
 
-    @JsonSetter("grade")
-    public void setGrade(String value) {
-        gradeProvided = true;
-        grade = value == null ? null : value.strip();
+    @JsonSetter("gradeId")
+    public void setGradeId(Long value) {
+        gradeIdProvided = true;
+        gradeId = value;
     }
 
-    @JsonSetter("className")
-    public void setClassName(String value) {
-        classNameProvided = true;
-        className = optionalText(value);
+    @JsonSetter("classId")
+    public void setClassId(Long value) {
+        classIdProvided = true;
+        classId = value;
     }
 
     @JsonSetter("studentPhone")
@@ -75,18 +76,18 @@ public class StudentUpdateRequest {
         guardianPhone = optionalText(value);
     }
 
-    @AssertTrue(message = "학년을 수정할 때는 null이나 공백을 사용할 수 없습니다.")
+    @AssertTrue(message = "학년을 수정할 때는 null을 사용할 수 없습니다.")
     @JsonIgnore
     @Schema(hidden = true)
     public boolean isGradeValid() {
-        return !gradeProvided || (grade != null && !grade.isBlank());
+        return !gradeIdProvided || gradeId != null;
     }
 
     @AssertTrue(message = "수정할 필드를 최소 한 개 전달해 주세요.")
     @JsonIgnore
     @Schema(hidden = true)
     public boolean isUpdatePresent() {
-        return gradeProvided || classNameProvided || studentPhoneProvided || guardianPhoneProvided;
+        return gradeIdProvided || classIdProvided || studentPhoneProvided || guardianPhoneProvided;
     }
 
     @JsonAnySetter

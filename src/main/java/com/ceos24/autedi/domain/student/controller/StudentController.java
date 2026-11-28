@@ -41,7 +41,7 @@ public class StudentController {
     @Operation(
             summary = "학생 목록 조회 (F08)",
             description =
-                    "같은 기관 학생을 이름 부분 검색·학년·반으로 필터링합니다. unassigned=true는 반 미배정만 조회합니다. 이름·학생 ID 오름차순이며 page는 0부터, size는 기본 20·최대 100입니다.")
+                    "같은 기관 학생을 이름 부분 검색·학년/반 이름 또는 ID로 필터링합니다. unassigned=true는 반 미배정만 조회합니다. 이름·학생 ID 오름차순이며 page는 0부터, size는 기본 20·최대 100입니다.")
     @GetMapping
     public ResponseEntity<ApiResponse<StudentListResponse>> getStudents(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -72,7 +72,7 @@ public class StudentController {
 
     @Operation(
             summary = "학생 상세 조회 (F09)",
-            description = "같은 기관 학생의 이름·학년·반·연락처를 조회합니다. 다른 기관 학생과 존재하지 않는 학생은 동일한 404 응답을 반환합니다.")
+            description = "같은 기관 학생의 이름·학년/반 ID·연락처를 조회합니다. 다른 기관 학생과 존재하지 않는 학생은 동일한 404 응답을 반환합니다.")
     @GetMapping("/{studentId}")
     public ResponseEntity<ApiResponse<StudentResponse>> getStudent(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -84,7 +84,7 @@ public class StudentController {
     @Operation(
             summary = "학생 기본 정보 수정 (F09)",
             description =
-                    "같은 기관 학생의 학년·반·연락처를 부분 수정합니다. 생략한 필드는 유지하고, 선택 필드의 null·빈 값은 삭제합니다. 학년은 전달 시 필수값 검증을 하며 이름·기관 변경은 허용하지 않습니다.")
+                    "같은 기관 학생의 학년/반 ID·연락처를 부분 수정합니다. 생략한 필드는 유지하고, 선택 필드의 null·빈 값은 삭제합니다. 학년은 전달 시 필수값 검증을 하며 이름·기관 변경은 허용하지 않습니다.")
     @PatchMapping("/{studentId}")
     public ResponseEntity<ApiResponse<StudentResponse>> updateStudent(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal principal,

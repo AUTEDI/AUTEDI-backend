@@ -93,6 +93,10 @@ class SavedWorksheetListApiTest {
 
     private final JsonMapper json = JsonMapper.builder().build();
     private MockMvc mvc;
+
+    @Autowired
+    private com.ceos24.autedi.domain.academy.service.AcademySettingsService settings;
+
     private User owner, peer, director, foreign;
     private Student student, otherStudent, foreignStudent;
     private static final LocalDateTime DAY = LocalDateTime.of(2026, 11, 20, 12, 0);
@@ -445,6 +449,22 @@ class SavedWorksheetListApiTest {
                                 .param("size", "100"),
                         owner)
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void classRenameUpdatesLiveResultListWithoutRewritingSavedSnapshot() throws Exception {
+        Long id = saved("saved", student, owner, WorksheetSaveStatus.COMPLETED, DAY);
+        Long academyId = owner.getAcademy().getId();
+        var configured = settings.get(academyId);
+        Long classId = configured.classes().getFirst().classId();
+        var before = savedResults.findById(id).orElseThrow().getSnapshot();
+        settings.renameClass(academyId, classId, "새 반 이름");
+        em.flush();
+        em.clear();
+        var row = result(list(owner)).at("/items/0/student");
+        assertThat(row.get("classId").asLong()).isEqualTo(classId);
+        assertThat(row.get("className").asText()).isEqualTo("새 반 이름");
+        assertThat(savedResults.findById(id).orElseThrow().getSnapshot()).isEqualTo(before);
     }
 
     private Long saved(String title, Student target, User uploader, WorksheetSaveStatus state, LocalDateTime date) {

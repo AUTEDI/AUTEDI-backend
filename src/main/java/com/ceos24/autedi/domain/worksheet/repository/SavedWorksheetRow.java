@@ -16,5 +16,7 @@ public record SavedWorksheetRow(
         String studentName,
         String grade,
         String className,
+        Long gradeId,
+        Long classId,
         Long teacherId,
         String teacherName) {}

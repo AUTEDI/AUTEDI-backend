@@ -66,6 +66,12 @@ class StudentManagementControllerTest {
     private EntityManager entityManager;
 
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+
+    @Autowired
+    private com.ceos24.autedi.domain.academy.service.AcademySettingsService settings;
+
+    private AcademySelectionFixture selection;
+
     private MockMvc mvc;
     private Academy academy;
     private String teacherToken;
@@ -77,6 +83,7 @@ class StudentManagementControllerTest {
                 .apply(springSecurity())
                 .build();
         academy = academies.saveAndFlush(Academy.builder().name("학생 관리 테스트 기관").build());
+        selection = new AcademySelectionFixture(settings, academy.getId());
         teacherToken = token(Role.TEACHER);
         directorToken = token(Role.DIRECTOR);
     }
@@ -323,7 +330,7 @@ class StudentManagementControllerTest {
         mvc.perform(patch("/api/v1/students/{id}", student.getId())
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(body)))
+                        .content(selection.request(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
         entityManager.flush();
@@ -357,7 +364,7 @@ class StudentManagementControllerTest {
         mvc.perform(patch("/api/v1/students/{id}", student.getId())
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("grade", "초등 4", field, "changed"))))
+                        .content(selection.request(Map.of("grade", "초등 4", field, "changed"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
         assertThat(student.getGrade()).isEqualTo("초등 3");
@@ -372,7 +379,7 @@ class StudentManagementControllerTest {
         mvc.perform(patch("/api/v1/students/{id}", student.getId())
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content(selection.request(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_001"));
     }
@@ -386,14 +393,14 @@ class StudentManagementControllerTest {
         MvcResult existing = mvc.perform(patch("/api/v1/students/{id}", target.getId())
                         .header(HttpHeaders.AUTHORIZATION, tokenOf(role))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"grade\":\"초등 4\"}"))
+                        .content(selection.request("{\"grade\":\"초등 4\"}")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("STUDENT_001"))
                 .andReturn();
         MvcResult missing = mvc.perform(patch("/api/v1/students/{id}", Long.MAX_VALUE)
                         .header(HttpHeaders.AUTHORIZATION, tokenOf(role))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"grade\":\"초등 4\"}"))
+                        .content(selection.request("{\"grade\":\"초등 4\"}")))
                 .andExpect(status().isNotFound())
                 .andReturn();
         assertThat(json.readTree(existing.getResponse().getContentAsByteArray()))
@@ -419,7 +426,7 @@ class StudentManagementControllerTest {
         mvc.perform(post("/api/v1/students")
                         .header(HttpHeaders.AUTHORIZATION, teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"김학생\",\"grade\":\"초등 3\"}"))
+                        .content(selection.request("{\"name\":\"김학생\",\"grade\":\"초등 3\"}")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.candidates[0].studentId").value(student.getId()))
                 .andExpect(jsonPath("$.error.candidates[0].grade").value("초등 4"))
@@ -434,7 +441,7 @@ class StudentManagementControllerTest {
         mvc.perform(get("/api/v1/students")).andExpect(status().isUnauthorized());
         mvc.perform(patch("/api/v1/students/{id}", target.getId())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"grade\":\"초등 4\"}"))
+                        .content(selection.request("{\"grade\":\"초등 4\"}")))
                 .andExpect(status().isUnauthorized());
         String unsupported =
                 "Bearer " + tokens.createAccessToken(Long.MAX_VALUE, academy.getId(), "other@test.com", "OTHER");
@@ -444,7 +451,7 @@ class StudentManagementControllerTest {
         mvc.perform(patch("/api/v1/students/{id}", target.getId())
                         .header(HttpHeaders.AUTHORIZATION, unsupported)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"grade\":\"초등 4\"}"))
+                        .content(selection.request("{\"grade\":\"초등 4\"}")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("AUTH_002"));
     }
@@ -468,7 +475,7 @@ class StudentManagementControllerTest {
         return mvc.perform(patch("/api/v1/students/{id}", id)
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(body)))
+                        .content(selection.request(body)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andReturn();

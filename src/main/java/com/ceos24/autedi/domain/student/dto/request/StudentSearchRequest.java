@@ -3,6 +3,7 @@ package com.ceos24.autedi.domain.student.dto.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 @Schema(description = "학생 목록 검색 조건")
@@ -14,7 +15,9 @@ public record StudentSearchRequest(
         @Schema(description = "반 이름 일치 필터. 비어 있으면 전체", example = "오후반")
                 @Size(max = 100, message = "수강반은 100자 이하여야 합니다.")
                 String className,
-        @Schema(description = "반 미배정만 조회. className과 동시 사용 불가", defaultValue = "false") Boolean unassigned,
+        @Schema(description = "학년 ID 필터. grade와 동시 사용 불가") @Positive Long gradeId,
+        @Schema(description = "반 ID 필터. className·unassigned와 동시 사용 불가") @Positive Long classId,
+        @Schema(description = "반 미배정만 조회. className·classId와 동시 사용 불가", defaultValue = "false") Boolean unassigned,
         @Schema(description = "0부터 시작하는 페이지", defaultValue = "0") @Min(value = 0, message = "페이지는 0 이상이어야 합니다.")
                 Integer page,
         @Schema(description = "페이지당 학생 수 (1~100)", defaultValue = "20")

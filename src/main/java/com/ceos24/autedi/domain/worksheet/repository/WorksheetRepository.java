@@ -34,8 +34,8 @@ public interface WorksheetRepository extends JpaRepository<Worksheet, Long> {
                     """
             select new com.ceos24.autedi.domain.worksheet.repository.SavedWorksheetRow(
                 w.id, w.title, w.saveStatus, w.status, w.lastSavedAt, w.updatedAt,
-                s.id, s.name, s.grade, s.className, u.id, u.name)
-            from Worksheet w join w.student s join w.user u
+                s.id, s.name, coalesce(g.name,s.grade), coalesce(c.name,s.className), g.id, c.id, u.id, u.name)
+            from Worksheet w join w.student s join w.user u left join s.gradeOption g left join s.schoolClass c
             where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
               and s.id = :studentId and w.deletedAt is null and w.lastSavedAt is not null
               and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
@@ -48,7 +48,7 @@ public interface WorksheetRepository extends JpaRepository<Worksheet, Long> {
             """,
             countQuery =
                     """
-            select count(w) from Worksheet w join w.student s join w.user u
+            select count(w) from Worksheet w join w.student s join w.user u left join s.gradeOption g left join s.schoolClass c
             where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
               and s.id = :studentId and w.deletedAt is null and w.lastSavedAt is not null
               and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
@@ -73,8 +73,8 @@ public interface WorksheetRepository extends JpaRepository<Worksheet, Long> {
                     """
             select new com.ceos24.autedi.domain.worksheet.repository.SavedWorksheetRow(
                 w.id, w.title, w.saveStatus, w.status, w.lastSavedAt, w.updatedAt,
-                s.id, s.name, s.grade, s.className, u.id, u.name)
-            from Worksheet w join w.student s join w.user u
+                s.id, s.name, coalesce(g.name,s.grade), coalesce(c.name,s.className), g.id, c.id, u.id, u.name)
+            from Worksheet w join w.student s join w.user u left join s.gradeOption g left join s.schoolClass c
             where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
               and w.deletedAt is null and w.lastSavedAt is not null
               and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED
@@ -84,7 +84,7 @@ public interface WorksheetRepository extends JpaRepository<Worksheet, Long> {
             """,
             countQuery =
                     """
-            select count(w) from Worksheet w join w.student s join w.user u
+            select count(w) from Worksheet w join w.student s join w.user u left join s.gradeOption g left join s.schoolClass c
             where w.academy.id = :academyId and s.academy.id = :academyId and u.academy.id = :academyId
               and w.deletedAt is null and w.lastSavedAt is not null
               and (w.saveStatus = com.ceos24.autedi.domain.worksheet.entity.WorksheetSaveStatus.COMPLETED

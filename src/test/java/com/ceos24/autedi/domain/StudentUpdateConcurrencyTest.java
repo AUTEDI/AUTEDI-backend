@@ -48,6 +48,15 @@ class StudentUpdateConcurrencyTest {
     @Autowired
     private JwtTokenProvider tokens;
 
+    @Autowired
+    private com.ceos24.autedi.domain.academy.service.AcademySettingsService settings;
+
+    @Autowired
+    private com.ceos24.autedi.domain.academy.repository.AcademyGradeRepository gradeOptions;
+
+    @Autowired
+    private com.ceos24.autedi.domain.academy.repository.AcademyClassRepository classOptions;
+
     @Test
     @Timeout(40)
     @DisplayName("동시에 서로 다른 기본 정보를 PATCH해도 생략한 필드의 최신 값이 보존된다")
@@ -75,11 +84,13 @@ class StudentUpdateConcurrencyTest {
                 .build());
         String token = "Bearer "
                 + tokens.createAccessToken(teacher.getId(), academy.getId(), teacher.getEmail(), Role.TEACHER.name());
+        var selection = new AcademySelectionFixture(settings, academy.getId());
+        String updateBody = selection.request("{\"grade\":\"초등 4\"}");
         ExecutorService callers = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         try {
-            var grade = callers.submit(() -> update(mvc, token, student.getId(), "{\"grade\":\"초등 4\"}", ready, start));
+            var grade = callers.submit(() -> update(mvc, token, student.getId(), updateBody, ready, start));
             var phone = callers.submit(
                     () -> update(mvc, token, student.getId(), "{\"guardianPhone\":\"02-123-4567\"}", ready, start));
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
@@ -102,6 +113,7 @@ class StudentUpdateConcurrencyTest {
             assertThat(callers.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
             students.deleteById(student.getId());
             users.deleteById(teacher.getId());
+            deleteSettings(academy.getId());
             academies.deleteById(academy.getId());
         }
     }
@@ -118,5 +130,14 @@ class StudentUpdateConcurrencyTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andReturn();
+    }
+
+    private void deleteSettings(Long academyId) {
+        new org.springframework.transaction.support.TransactionTemplate(
+                        context.getBean(org.springframework.transaction.PlatformTransactionManager.class))
+                .executeWithoutResult(tx -> {
+                    classOptions.deleteByAcademyId(academyId);
+                    gradeOptions.deleteByAcademyId(academyId);
+                });
     }
 }
