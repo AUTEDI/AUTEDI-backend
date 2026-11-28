@@ -1,0 +1,15 @@
+{
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "insights": {"type":"array","items":{"type":"object","additionalProperties":false,
+      "properties": {
+        "title":{"type":"string"}, "description":{"type":"string"},
+        "area":{"type":"string","enum":["GRAMMAR_SPELLING","VOCABULARY_EXPRESSION","SENTENCE_STRUCTURE","CONTENT_SUMMARY"]},
+        "kind":{"type":"string","enum":["ERROR_PATTERN","IMPROVEMENT"]},
+        "evidenceIds":{"type":"array","items":{"type":"string"}}
+      },"required":["title","description","area","kind","evidenceIds"]}},
+    "coachingPoints": {"type":"array","items":{"type":"object","additionalProperties":false,
+      "properties":{"content":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}}},
+      "required":["content","evidenceIds"]}}
+  },"required":["insights","coachingPoints"]
+}

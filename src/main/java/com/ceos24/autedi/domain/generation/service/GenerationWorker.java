@@ -21,10 +21,20 @@ public class GenerationWorker {
     private final CorrectionAiClient legacy;
     private final TerraGenerationClient terra;
     private final GenerationContractRouter contracts;
+    private final AiExecutionLimiter executionLimiter;
 
     /** 이 메서드와 클라이언트 대기에는 트랜잭션이 없다. DB 작업만 별도 빈에서 커밋한다. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void process(Long id) {
+        var permit = executionLimiter.tryCorrection();
+        // claim 전 거부하므로 PENDING을 유지한다. 기존 dispatcher가 다음 주기에 재배정한다.
+        if (permit == null) return;
+        try (permit) {
+            processAccepted(id);
+        }
+    }
+
+    private void processAccepted(Long id) {
         try {
             var work = store.claim(id);
             if (work == null) return;

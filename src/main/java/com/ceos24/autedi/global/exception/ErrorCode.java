@@ -87,6 +87,15 @@ public enum ErrorCode implements BaseErrorCode {
     AI_CONTRACT_NOT_READY(
             HttpStatus.SERVICE_UNAVAILABLE, "GENERATION_008", "선택한 AI 계약의 서비스 생성 경로가 아직 연결되지 않았습니다.", Level.ERROR),
 
+    // Student insight (manual generation)
+    INSIGHT_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "INSIGHT_001", "AI 작업이 처리 중입니다. 잠시 후 다시 시도해 주세요.", Level.ERROR),
+    INSIGHT_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "INSIGHT_002", "인사이트 AI 연결 설정을 확인해 주세요.", Level.ERROR),
+    INSIGHT_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "INSIGHT_003", "인사이트 생성에 실패했습니다. 다시 시도해 주세요.", Level.ERROR),
+    INSIGHT_INVALID_RESPONSE(HttpStatus.BAD_GATEWAY, "INSIGHT_004", "인사이트 응답을 검증할 수 없습니다. 다시 시도해 주세요.", Level.ERROR),
+    INSIGHT_INPUT_CHANGED(HttpStatus.CONFLICT, "INSIGHT_005", "분석 대상이 변경되었습니다. 최신 자료로 다시 요청해 주세요.", Level.WARN),
+    INSIGHT_RESULT_UNREADABLE(HttpStatus.INTERNAL_SERVER_ERROR, "INSIGHT_006", "저장한 인사이트를 읽을 수 없습니다.", Level.ERROR),
+    INSIGHT_INPUT_TOO_LARGE(HttpStatus.UNPROCESSABLE_ENTITY, "INSIGHT_007", "분석 입력량이 허용 범위를 초과했습니다.", Level.WARN),
+
     // Correction
     CORRECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "CORRECTION_001", "첨삭 항목을 찾을 수 없습니다.", Level.WARN),
     CANNOT_MODIFY_DELETED_CORRECTION(HttpStatus.CONFLICT, "CORRECTION_002", "삭제된 첨삭 항목은 수정할 수 없습니다.", Level.WARN),
