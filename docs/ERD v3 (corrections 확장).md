@@ -7,6 +7,7 @@
     3. **학생/학습지 공통 모델 (B1)**: 학생 기본 정보, 학습지 제목·학생 연결·업무 저장 상태·저장 시각·저장자·삭제 시각 (구현된 엔티티 및 변경 SQL 기준)
     4. **마지막 저장본 (B5–B6)**: 학습지별 마지막 명시적 임시·최종 저장본 한 개, 저장 버전·저장자·원본 연결 및 편집 복원 데이터
     5. **피드백 분류 및 성장 집계 (B8)**: 교사 코멘트의 종류·대표 영역·오류 종류·보충 대상 카드 연결, 저장 JSON v1/v2 호환
+    6. **수동 AI 인사이트 (B10·B11)**: 학생별 최신 인사이트·수업 추천 한 개, 입력 식별값·후보 근거·생성자·분석 범위 보관
 
 ---
 
@@ -27,6 +28,8 @@ erDiagram
     users ||--o{ comments : "1:N (교사 코멘트 작성)"
 
     students |o--o{ worksheets : "1:N (학생별 학습지, student_id NULL 허용)"
+    students ||--o| student_insights : "1:0..1 (최신 성공 인사이트)"
+    users ||--o{ student_insights : "1:N (인사이트 생성 요청자)"
 
     worksheets ||--o{ worksheet_pages : "1:N (페이지 미리보기/OCR)"
     worksheets ||--o{ worksheet_settings : "1:N (영역별 첨삭 설정)"
@@ -119,6 +122,25 @@ erDiagram
         BIGINT saved_by FK
         DATETIME saved_at
         JSON snapshot "검토 응답 및 삭제 행 포함 편집 상태"
+        INT version "JPA 낙관적 락"
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    student_insights {
+        BIGINT student_id PK, FK
+        VARCHAR input_hash "동일 입력 재사용 기준"
+        VARCHAR model
+        VARCHAR prompt_version
+        INT schema_version
+        VARCHAR status "READY / NO_FEEDBACK"
+        JSON source_results "최대 10개 후보 메타데이터"
+        JSON result "인사이트·수업 추천·실제 사용 근거"
+        INT used_result_count
+        DATE analysis_from
+        DATE analysis_to
+        DATETIME generated_at
+        BIGINT generated_by FK
         INT version "JPA 낙관적 락"
         DATETIME created_at
         DATETIME updated_at
@@ -472,7 +494,7 @@ erDiagram
 
 ---
 
-## 5. 마지막 저장본 테이블 명세
+## 5. 마지막 저장본·학생 인사이트 테이블 명세
 
 ### ⑫ `worksheet_saved_results` (학습지별 마지막 명시적 저장본)
 
@@ -499,6 +521,34 @@ erDiagram
 
 ---
 
+### ⑬ `student_insights` (학생별 최신 수동 인사이트)
+
+> **관련 API**: `GET /students/{studentId}/insights`, `POST /students/{studentId}/insights/generations`. 같은 기관 원장·선생님이 조회·수동 생성한다. 실패한 생성은 이전 성공 결과를 덮어쓰지 않는다. 자동 생성·작업 큐·과거 인사이트 이력은 없다.
+
+| 필드명 | 데이터 타입 | NULL 허용 | 기본값 | 제약 조건 / 인덱스 | 설명 및 비즈니스 조건 |
+| --- | --- | --- | --- | --- | --- |
+| `student_id` | `BIGINT` | X | - | **PK**, **FK** (`students.id`, `fk_student_insights_student`) | 학생당 최신 성공 결과 하나. JPA @MapsId |
+| `input_hash` | `VARCHAR(64)` | X | - | 애플리케이션 SHA-256 | 학생·기관·후보 ID/revision/원본/완료일·분석 정책·프롬프트·모델·출력 한도의 식별값 |
+| `model` | `VARCHAR(100)` | X | - | 애플리케이션 설정 | 결과 생성에 사용한 모델. 피드백 없음은 AI 호출 없이 같은 캐시 메타데이터 기록 |
+| `prompt_version` | `VARCHAR(60)` | X | - | 애플리케이션 관리 | 현재 AUTEDI-INSIGHT-PROMPT-v1 |
+| `schema_version` | `INT` | X | - | 애플리케이션 관리 | 인사이트 JSON 버전. 현재 1 |
+| `status` | `VARCHAR(20)` | X | - | 애플리케이션 검증 | READY 또는 NO_FEEDBACK 성공 결과만 저장. 실패·처리 중 상태는 저장하지 않음 |
+| `source_results` | `JSON` | X | - | 최대 10개 후보 메타데이터 | 입력 식별·출처 확인용 후보 ID/revision/schemaVersion/원본 해시/생성 ID/완료일. 손상 제외 후 사용 건수와는 별개 |
+| `result` | `JSON` | X | - | 응답·근거 검증 | insights 최대 3개, coachingPoints 최대 2개, 실제 사용한 발췌 근거. 원본 이미지·전체 스냅샷·학생 연락처는 저장하지 않음 |
+| `used_result_count` | `INT` | X | - | 애플리케이션 관리 | 손상 저장본 제외 후 실제 분석한 완료본 수 |
+| `analysis_from` | `DATE` | X | - | KST | 분석 요청 당시 최근 3개월 시작일 |
+| `analysis_to` | `DATE` | X | - | KST | 분석 요청 당시 오늘 |
+| `generated_at` | `DATETIME(6)` | X | - | 애플리케이션 기록 | 결과 생성 시각. 동일 입력 재사용·GET에서는 유지 |
+| `generated_by` | `BIGINT` | X | - | **FK** (`users.id`, `fk_student_insights_user`), `INDEX` (`idx_student_insights_generated_by`) | 수동 생성·업데이트를 요청한 같은 기관 회원 |
+| `version` | `INT` | X | `0` (SQL) | JPA @Version | 결과 행 낙관적 락 |
+| `created_at` | `DATETIME(6)` | X | - | JPA 감사 | 첫 결과 생성 시각 |
+| `updated_at` | `DATETIME(6)` | X | - | JPA 감사 | 최근 성공 결과 교체 시각 |
+
+- 생성·AI 호출은 DB 트랜잭션 밖에서 실행한다. 저장 시 학생 행을 잠그고 최신 후보 식별값을 재검사하며, 분석 중 입력이 바뀌면 409로 새 결과 저장을 거부한다.
+- 기존 학생·학습지·첨삭·저장본 컬럼은 변경하지 않는다. FK에 물리 삭제 cascade는 추가하지 않는다. [DB 변경 SQL](../infra/db/2026-11-28_student_insights.sql)은 운영 DB에 아직 적용하지 않았다.
+
+---
+
 ## 6. v2 대비 추가 사항
 
 - ⑨ `corrections` 설명 표에 `action`, `feedback_type`, `issue_kinds`, `anchor`, `location_uncertain`, `warnings`, `requires_review` 7개 필드를 추가했다. 원문 교체와 내용 안내, 첨삭 유형과 문제 종류, 원문 연결과 검토 경고를 구분한다.
@@ -511,3 +561,4 @@ erDiagram
 - B6는 B1의 `save_status`, `first_saved_at`, `last_saved_at`, `completed_at`, `last_saved_by`와 B5 저장본 테이블을 재사용한다. 기존 테이블·컬럼·관계·JSON 구조 버전 변경 및 신규 DDL은 없다. 임시저장 없는 완료는 저장본을 생성하고, 임시저장 후 완료는 같은 행을 최종 내용으로 갱신한다.
 - B7 학생 결과물·홈 최근 작업 목록은 기존 학습지·학생·업로더 필드와 저장본 존재 여부를 조회한다. 테이블·컬럼·관계·인덱스·JSON 구조 변경 및 신규 DDL은 없다. 완료 저장본의 기관 내 읽기 권한 확장만 관련 설명에 반영했다.
 - B8은 `comments`에 분류 관련 4개 컬럼·보충 대상 FK·인덱스를 추가했다. [B8 DB 변경 SQL](../infra/db/2026-11-27_comment_feedback_classification.sql)은 운영 DB에 아직 적용하지 않았다. 새 저장 JSON은 코멘트 분류를 포함하는 v2이고 v1 호환을 유지한다. 성장 전용 테이블·단어 수 컬럼은 추가하지 않고, 완료 스냅샷과 연결된 불변 전사문에서 조회 시 계산한다.
+- B10·B11 수동 인사이트 MVP에서 ⑬ `student_insights` 하나를 추가했다. 기존 테이블 컬럼과 학습지 저장 JSON 구조는 유지한다. 자동 생성·예약 갱신·생성 작업/인사이트 이력 테이블은 추가하지 않았다.
